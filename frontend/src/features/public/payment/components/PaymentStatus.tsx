@@ -9,17 +9,20 @@ import { StatusAnimation } from '@/components/shared/StatusAnimation';
 
 interface PaymentStatusProps {
   total: number;
+  packageId?: number;
   onRetry: () => void;
   onSuccess?: () => void;
 }
 
 export default function PaymentStatus({
   total,
+  packageId,
   onRetry,
   onSuccess,
 }: PaymentStatusProps) {
   const { status, qrisUrl, triggerStatus } = usePayment({
     total,
+    packageId,
     onSuccess,
   });
 

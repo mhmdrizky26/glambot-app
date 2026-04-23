@@ -1,6 +1,8 @@
 import type { Metadata } from 'next';
 import { Space_Grotesk, Changa_One } from 'next/font/google';
 import '@/styles/globals.css';
+import { Providers } from './providers';
+import { MSWInit } from './MSWInit';
 
 const spaceGrotesk = Space_Grotesk({
   variable: '--font-space-grotesk',
@@ -32,7 +34,10 @@ export default function RootLayout({
       className={`${spaceGrotesk.variable} ${changaOne.variable} h-full antialiased`}
     >
       <body className="font-grotesk min-h-screen  bg-[url('/bg.webp')] bg-cover bg-center">
-        {children}
+        <Providers>
+          <MSWInit />
+          {children}
+        </Providers>
       </body>
     </html>
   );

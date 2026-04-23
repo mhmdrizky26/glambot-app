@@ -8,6 +8,7 @@ export default function PayPage() {
   const router = useRouter();
 
   const total = Number(searchParams.get('total') ?? 0);
+  const packageId = Number(searchParams.get('packageId') ?? 0);
 
   const handleSuccess = () => {
     router.push('/instruction');
@@ -17,6 +18,7 @@ export default function PayPage() {
     <main className="flex flex-col items-center justify-center min-h-screen px-4">
       <PaymentStatus
         total={total}
+        packageId={packageId}
         onRetry={() => router.back()}
         onSuccess={handleSuccess}
       />

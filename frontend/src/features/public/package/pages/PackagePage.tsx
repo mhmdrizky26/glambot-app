@@ -4,12 +4,12 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PackageCard from '../components/PackageCard';
 import PrintQuantityModal from '../components/PrintQuantityModal';
-import { usePackages } from '../hooks/usePackages';
-import type { Package } from '../api/packageApi';
+import { usePackages } from '../api/getPackages';
+import type { Package } from '../api/getPackages';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 
 export default function PackagePage() {
-  const { packages, loading, error } = usePackages();
+  const { data: packages = [], isPending, isError } = usePackages();
   const [selectedPrintPkg, setSelectedPrintPkg] = useState<Package | null>(
     null,
   );
@@ -17,6 +17,7 @@ export default function PackagePage() {
 
   const navigateToSummary = (pkg: Package, printCount = 0) => {
     const params = new URLSearchParams({
+      packageId: pkg.id.toString(),
       title: pkg.title,
       type: pkg.type,
       basePrice: pkg.price.toString(),
@@ -53,12 +54,16 @@ export default function PackagePage() {
       </div>
 
       <div className="flex justify-center items-center mt-18.75 gap-12.25">
-        {loading && <StatusAnimation status="waiting" className="w-55 h-55" />}
+        {isPending && (
+          <StatusAnimation status="waiting" className="w-55 h-55" />
+        )}
 
-        {error && <p className="text-red-500 text-xl">{error}</p>}
+        {isError && (
+          <p className="text-red-500 text-xl">Failed to load packages</p>
+        )}
 
-        {!loading &&
-          !error &&
+        {!isPending &&
+          !isError &&
           packages.map((pkg) => (
             <PackageCard
               key={pkg.id}
@@ -66,7 +71,7 @@ export default function PackagePage() {
               description={pkg.description}
               price={pkg.price}
               imageSrc={pkg.imageSrc}
-              badge={pkg.badge}
+              isPopular={pkg.isPopular}
               onClick={() => handleCardClick(pkg)}
             />
           ))}

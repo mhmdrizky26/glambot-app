@@ -8,7 +8,7 @@ interface PackageCardProps {
   description: string;
   price: number;
   imageSrc: string;
-  badge?: string;
+  isPopular?: boolean;
   onClick?: () => void;
 }
 
@@ -17,7 +17,7 @@ export default function PackageCard({
   description,
   price,
   imageSrc,
-  badge,
+  isPopular,
   onClick,
 }: PackageCardProps) {
   return (
@@ -27,9 +27,9 @@ export default function PackageCard({
     >
       <div className="relative">
         <Image width={464} height={244} priority src={imageSrc} alt={title} />
-        {badge && (
+        {isPopular && (
           <div className="absolute top-2 left-2 gradient-primary text-white px-3.5 py-1 m-2 rounded-full text-sm font-medium">
-            {badge}
+            Popular
           </div>
         )}
       </div>

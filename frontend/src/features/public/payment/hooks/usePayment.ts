@@ -1,8 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createPayment, checkPaymentStatus } from '../api/paymentApi';
-import type { PaymentStatusResult } from '../api/paymentApi';
+import { useQuery } from '@tanstack/react-query';
+import { useCreatePayment } from '../api/createPayment';
+import { getPaymentStatus } from '../api/getPaymentStatus';
 
 export type PaymentState =
   | 'waiting'
@@ -18,6 +19,8 @@ const SUCCESS_REDIRECT_DELAY_MS = 3000;
 
 interface UsePaymentOptions {
   total: number;
+  packageId?: number;
+  voucherCode?: string;
   onSuccess?: () => void;
 }
 
@@ -33,14 +36,16 @@ interface UsePaymentReturn {
 
 export function usePayment({
   total,
+  packageId = 0,
+  voucherCode,
   onSuccess,
 }: UsePaymentOptions): UsePaymentReturn {
   const [status, setStatus] = useState<PaymentState>('waiting');
   const [qrisUrl, setQrisUrl] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(TIMEOUT_SECONDS);
-  const transactionIdRef = useRef<string | null>(null);
-  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [pollingEnabled, setPollingEnabled] = useState(false);
+
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -53,14 +58,7 @@ export function usePayment({
   }, []);
 
   const cleanup = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-    if (timerRef.current) {
-      clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
+    setPollingEnabled(false);
     if (redirectTimeoutRef.current) {
       clearTimeout(redirectTimeoutRef.current);
       redirectTimeoutRef.current = null;
@@ -71,110 +69,75 @@ export function usePayment({
     }
   }, []);
 
-  const initPayment = useCallback(async () => {
+  // Create payment mutation
+  const { mutate: initiatePayment } = useCreatePayment({
+    mutationConfig: {
+      onSuccess: (result) => {
+        setTransactionId(result.transactionId);
+        setQrisUrl(result.qrisUrl);
+        setPollingEnabled(true);
+      },
+      onError: () => {
+        setStatus('failed');
+      },
+    },
+  });
+
+  const initPayment = useCallback(() => {
     cleanup();
     setStatus('waiting');
     setQrisUrl(null);
     setTimeLeft(TIMEOUT_SECONDS);
-    transactionIdRef.current = null;
+    setTransactionId(null);
+    initiatePayment({ total, packageId, voucherCode });
+  }, [total, packageId, voucherCode, cleanup, initiatePayment]);
 
-    try {
-      const result = await createPayment(total);
-      transactionIdRef.current = result.transactionId;
-      setQrisUrl(result.qrisUrl);
-    } catch {
-      setStatus('failed');
-    }
-  }, [total, cleanup]);
-
-  // Init payment on mount
+  // Init on mount
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     initPayment();
     return cleanup;
-  }, [initPayment, cleanup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  // Countdown timer — disabled for now
-  // useEffect(() => {
-  //   if (status !== "waiting") return;
-  //   timerRef.current = setInterval(() => {
-  //     setTimeLeft((prev) => {
-  //       if (prev <= 1) { setStatus("expired"); return 0; }
-  //       return prev - 1;
-  //     });
-  //   }, 1000);
-  //   return () => {
-  //     if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
-  //   };
-  // }, [status]);
+  // Poll payment status
+  const { data: polledStatus } = useQuery({
+    queryKey: ['payment-status', transactionId],
+    queryFn: () => getPaymentStatus(transactionId!),
+    enabled: pollingEnabled && !!transactionId && status === 'waiting',
+    refetchInterval: POLL_INTERVAL_MS,
+    staleTime: 0,
+  });
 
-  // Polling — only when "waiting"
   useEffect(() => {
-    if (status !== 'waiting') return;
-    if (!transactionIdRef.current) return;
+    if (!polledStatus) return;
 
-    const poll = async () => {
-      if (!transactionIdRef.current) return;
+    const result = polledStatus.status;
 
-      try {
-        const result: PaymentStatusResult = await checkPaymentStatus(
-          transactionIdRef.current,
-        );
-
-        if (result === 'success') {
-          // Stop polling & timer, show processing first
-          if (pollingRef.current) {
-            clearInterval(pollingRef.current);
-            pollingRef.current = null;
-          }
-          if (timerRef.current) {
-            clearInterval(timerRef.current);
-            timerRef.current = null;
-          }
-
-          setStatus('processing');
-
-          // After processing delay, show success
-          processingTimeoutRef.current = setTimeout(() => {
-            setStatus('success');
-
-            // Auto-redirect after showing success
-            redirectTimeoutRef.current = setTimeout(() => {
-              onSuccess?.();
-            }, SUCCESS_REDIRECT_DELAY_MS);
-          }, PROCESSING_DELAY_MS);
-        } else if (result === 'failed') {
-          cleanup();
-          setStatus('processing');
-
-          processingTimeoutRef.current = setTimeout(() => {
-            setStatus('failed');
-          }, PROCESSING_DELAY_MS);
-        }
-      } catch {
-        // Silently retry on next poll
-      }
-    };
-
-    pollingRef.current = setInterval(poll, POLL_INTERVAL_MS);
-
-    return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current);
-        pollingRef.current = null;
-      }
-    };
-  }, [status, cleanup, onSuccess]);
+    if (result === 'paid') {
+      cleanup();
+      setStatus('processing');
+      processingTimeoutRef.current = setTimeout(() => {
+        setStatus('success');
+        redirectTimeoutRef.current = setTimeout(() => {
+          onSuccess?.();
+        }, SUCCESS_REDIRECT_DELAY_MS);
+      }, PROCESSING_DELAY_MS);
+    } else if (result === 'failed' || result === 'expired') {
+      cleanup();
+      setStatus('processing');
+      processingTimeoutRef.current = setTimeout(() => {
+        setStatus(result === 'expired' ? 'expired' : 'failed');
+      }, PROCESSING_DELAY_MS);
+    }
+  }, [polledStatus, cleanup, onSuccess]);
 
   const retry = useCallback(() => {
     initPayment();
   }, [initPayment]);
 
-  // Manual trigger for dev/testing — switch to any state
   const triggerStatus = useCallback(
     (state: PaymentState) => {
       cleanup();
-
       if (state === 'processing') {
         setStatus('processing');
         processingTimeoutRef.current = setTimeout(() => {

@@ -13,6 +13,7 @@ export default function SummaryPage() {
   const router = useRouter();
 
   // Read order data from URL params
+  const packageId = Number(searchParams.get('packageId') ?? 0);
   const packageTitle = searchParams.get('title') ?? 'Digital Package';
   const packageType = searchParams.get('type') ?? 'digital';
   const basePrice = Number(searchParams.get('basePrice') ?? 0);
@@ -29,6 +30,7 @@ export default function SummaryPage() {
 
   const handleProceed = () => {
     const params = new URLSearchParams({
+      packageId: packageId.toString(),
       title: packageTitle,
       type: packageType,
       total: total.toString(),
