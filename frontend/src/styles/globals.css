@@ -1,0 +1,91 @@
+@import 'tailwindcss';
+
+/* ─── shadcn/ui CSS Variables (mapped to Glambot theme) ─── */
+@layer base {
+  :root {
+    --background: 210 40% 98%;
+    --foreground: 213 55% 18%; /* #112D4E */
+
+    --card: 0 0% 100%;
+    --card-foreground: 213 55% 18%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 213 55% 18%;
+
+    --primary: 213 55% 18%; /* #112D4E */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 214 32% 91%; /* #DBE2EF */
+    --secondary-foreground: 213 55% 18%;
+
+    --muted: 214 32% 91%;
+    --muted-foreground: 215 16% 47%;
+
+    --accent: 214 32% 91%;
+    --accent-foreground: 213 55% 18%;
+
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 213 55% 18%;
+
+    --radius: 0.5rem;
+  }
+}
+
+
+@theme {
+  --color-primary: #112d4e;
+  --color-blue-100: #dbe2ef;
+  --color-white: #f9f7f7;
+
+  --font-grotesk: var(--font-space-grotesk);
+  --font-changa: var(--font-changa-one);
+}
+
+@layer utilities {
+  .gradient-primary {
+    background-image: linear-gradient(
+      to top left,
+      #112d4e 0%,
+      #274f7d 44%,
+      #3f72af 100%
+    );
+  }
+
+  .gradient-text {
+    background-image: linear-gradient(
+      to bottom right,
+      var(--color-primary, theme('colors.primary')) 0%,
+      #163A64 19%,
+      #2768B4 70%,
+      #DBE2EF 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+}
+
+/* ─── Glambot Animations ─── */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
