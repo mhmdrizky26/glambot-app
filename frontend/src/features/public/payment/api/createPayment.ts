@@ -3,9 +3,7 @@ import { apiClient } from '@/lib/api-client';
 import type { MutationConfig } from '@/lib/react-query';
 
 export interface CreatePaymentInput {
-  total: number;
-  packageId: number;
-  voucherCode?: string;
+  sessionId: string;
 }
 
 export interface CreatePaymentResult {

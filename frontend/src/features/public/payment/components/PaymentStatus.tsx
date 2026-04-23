@@ -3,26 +3,22 @@
 import Image from 'next/image';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
-import { formatRupiah } from '@/lib/formats';
 import { usePayment } from '../hooks/usePayment';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 
 interface PaymentStatusProps {
-  total: number;
-  packageId?: number;
+  sessionId: string;
   onRetry: () => void;
-  onSuccess?: () => void;
+  onSuccess?: (sessionId: string) => void;
 }
 
 export default function PaymentStatus({
-  total,
-  packageId,
+  sessionId,
   onRetry,
   onSuccess,
 }: PaymentStatusProps) {
   const { status, qrisUrl, triggerStatus } = usePayment({
-    total,
-    packageId,
+    sessionId,
     onSuccess,
   });
 
@@ -96,12 +92,6 @@ export default function PaymentStatus({
               className="rounded-lg"
             />
           </div>
-
-          <p className="text-white/60 text-base mt-8 mb-2">
-            <span className="text-white text-[33px] leading-12.5 font-bold">
-              Rp {formatRupiah(total)}
-            </span>
-          </p>
 
           {/* Dev Triggers */}
           <div className="flex gap-3 mt-6">

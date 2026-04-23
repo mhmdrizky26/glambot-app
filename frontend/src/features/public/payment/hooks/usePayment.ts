@@ -18,10 +18,8 @@ const PROCESSING_DELAY_MS = 2500;
 const SUCCESS_REDIRECT_DELAY_MS = 3000;
 
 interface UsePaymentOptions {
-  total: number;
-  packageId?: number;
-  voucherCode?: string;
-  onSuccess?: () => void;
+  sessionId: string;
+  onSuccess?: (sessionId: string) => void;
 }
 
 interface UsePaymentReturn {
@@ -29,15 +27,12 @@ interface UsePaymentReturn {
   qrisUrl: string | null;
   timeLeft: number;
   formattedTime: string;
-  total: number;
   retry: () => void;
   triggerStatus: (state: PaymentState) => void;
 }
 
 export function usePayment({
-  total,
-  packageId = 0,
-  voucherCode,
+  sessionId,
   onSuccess,
 }: UsePaymentOptions): UsePaymentReturn {
   const [status, setStatus] = useState<PaymentState>('waiting');
@@ -89,8 +84,8 @@ export function usePayment({
     setQrisUrl(null);
     setTimeLeft(TIMEOUT_SECONDS);
     setTransactionId(null);
-    initiatePayment({ total, packageId, voucherCode });
-  }, [total, packageId, voucherCode, cleanup, initiatePayment]);
+    initiatePayment({ sessionId });
+  }, [sessionId, cleanup, initiatePayment]);
 
   // Init on mount
   useEffect(() => {
@@ -119,7 +114,7 @@ export function usePayment({
       processingTimeoutRef.current = setTimeout(() => {
         setStatus('success');
         redirectTimeoutRef.current = setTimeout(() => {
-          onSuccess?.();
+          onSuccess?.(sessionId);
         }, SUCCESS_REDIRECT_DELAY_MS);
       }, PROCESSING_DELAY_MS);
     } else if (result === 'failed' || result === 'expired') {
@@ -129,7 +124,7 @@ export function usePayment({
         setStatus(result === 'expired' ? 'expired' : 'failed');
       }, PROCESSING_DELAY_MS);
     }
-  }, [polledStatus, cleanup, onSuccess]);
+  }, [polledStatus, cleanup, onSuccess, sessionId]);
 
   const retry = useCallback(() => {
     initPayment();
@@ -143,19 +138,19 @@ export function usePayment({
         processingTimeoutRef.current = setTimeout(() => {
           setStatus('success');
           redirectTimeoutRef.current = setTimeout(() => {
-            onSuccess?.();
+            onSuccess?.(sessionId);
           }, SUCCESS_REDIRECT_DELAY_MS);
         }, PROCESSING_DELAY_MS);
       } else {
         setStatus(state);
         if (state === 'success') {
           redirectTimeoutRef.current = setTimeout(() => {
-            onSuccess?.();
+            onSuccess?.(sessionId);
           }, SUCCESS_REDIRECT_DELAY_MS);
         }
       }
     },
-    [cleanup, onSuccess],
+    [cleanup, onSuccess, sessionId],
   );
 
   return {
@@ -163,7 +158,6 @@ export function usePayment({
     qrisUrl,
     timeLeft,
     formattedTime: formatTime(timeLeft),
-    total,
     retry,
     triggerStatus,
   };

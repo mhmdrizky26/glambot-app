@@ -1,5 +1,4 @@
 import { http, HttpResponse } from 'msw';
-import { nanoid } from 'nanoid';
 import { db } from '../db';
 import { networkDelay } from '../utils';
 
@@ -34,31 +33,25 @@ export const paymentHandlers = [
   http.post('/api/payments', async ({ request }) => {
     await networkDelay();
 
-    const body = (await request.json()) as {
-      total: number;
-      packageId: number;
-      voucherCode?: string;
-    };
+    const body = (await request.json()) as { sessionId: string };
+
+    const session = db.session.findFirst({
+      where: { id: { equals: body.sessionId } },
+    });
+
+    if (!session) {
+      return HttpResponse.json(
+        { message: 'Session not found' },
+        { status: 404 },
+      );
+    }
 
     const now = new Date();
-    const expiresAt = new Date(now.getTime() + 15 * 60 * 1000); // 15 minutes
-
-    const session = db.session.create({
-      packageId: body.packageId,
-      voucherCode: body.voucherCode ?? '',
-      discount: 0,
-      finalPrice: body.total,
-      status: 'pending',
-      frameId: '',
-      createdAt: now.toISOString(),
-      expiresAt: expiresAt.toISOString(),
-      completedAt: '',
-    });
 
     const transaction = db.transaction.create({
       sessionId: session.id,
-      midtransOrderId: `ORDER-${nanoid(8).toUpperCase()}`,
-      amount: body.total,
+      midtransOrderId: `ORDER-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+      amount: session.finalPrice,
       status: 'pending',
       qrisUrl: '/PaymentFlow.svg',
       qrisRawString: '',
@@ -66,7 +59,14 @@ export const paymentHandlers = [
       createdAt: now.toISOString(),
     });
 
-    return HttpResponse.json({ transaction, session }, { status: 201 });
+    return HttpResponse.json(
+      {
+        transactionId: transaction.id,
+        sessionId: session.id,
+        qrisUrl: transaction.qrisUrl,
+      },
+      { status: 201 },
+    );
   }),
 
   http.get('/api/payments/:transactionId/status', async ({ params }) => {
@@ -78,7 +78,10 @@ export const paymentHandlers = [
     });
 
     if (!transaction) {
-      return HttpResponse.json({ message: 'Transaction not found' }, { status: 404 });
+      return HttpResponse.json(
+        { message: 'Transaction not found' },
+        { status: 404 },
+      );
     }
 
     return HttpResponse.json({ status: transaction.status }, { status: 200 });
@@ -100,7 +103,11 @@ export const paymentHandlers = [
     }
 
     return HttpResponse.json(
-      { valid: true, discount: voucher.discountValue, message: voucher.description },
+      {
+        valid: true,
+        discount: voucher.discountValue,
+        message: voucher.description,
+      },
       { status: 200 },
     );
   }),

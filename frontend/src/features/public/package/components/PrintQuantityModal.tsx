@@ -12,6 +12,7 @@ interface PrintQuantityModalProps {
   pricePerPrint: number;
   onClose: () => void;
   onConfirm: (quantity: number) => void;
+  isConfirming?: boolean;
 }
 
 export default function PrintQuantityModal({
@@ -20,6 +21,7 @@ export default function PrintQuantityModal({
   pricePerPrint,
   onClose,
   onConfirm,
+  isConfirming = false,
 }: PrintQuantityModalProps) {
   const [quantity, setQuantity] = useState(1);
 
@@ -105,8 +107,12 @@ export default function PrintQuantityModal({
           </p>
 
           {/* Confirm Button */}
-          <Button variant="outline" onClick={() => onConfirm(quantity)}>
-            Confirm
+          <Button
+            variant="outline"
+            onClick={() => onConfirm(quantity)}
+            disabled={isConfirming}
+          >
+            {isConfirming ? 'Processing...' : 'Confirm'}
           </Button>
         </div>
       </GlassCard>

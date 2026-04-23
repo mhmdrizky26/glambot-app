@@ -7,37 +7,40 @@ import PrintQuantityModal from '../components/PrintQuantityModal';
 import { usePackages } from '../api/getPackages';
 import type { Package } from '../api/getPackages';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
+import { useCreateSession } from '@/shared/api/session';
 
 export default function PackagePage() {
   const { data: packages = [], isPending, isError } = usePackages();
   const [selectedPrintPkg, setSelectedPrintPkg] = useState<Package | null>(
     null,
   );
+  const [createError, setCreateError] = useState<{ message?: string } | null>(
+    null,
+  );
   const router = useRouter();
 
-  const navigateToSummary = (pkg: Package, printCount = 0) => {
-    const params = new URLSearchParams({
-      packageId: pkg.id.toString(),
-      title: pkg.title,
-      type: pkg.type,
-      basePrice: pkg.price.toString(),
-      printCount: printCount.toString(),
-      pricePerPrint: (pkg.pricePerPrint ?? 0).toString(),
-    });
-    router.push(`/payment/summary?${params.toString()}`);
-  };
+  const { mutate: createSession, isPending: isCreating } = useCreateSession({
+    mutationConfig: {
+      onSuccess: (data) => {
+        router.push(`/payment/summary?sessionId=${data.sessionId}`);
+      },
+      onError: (error: unknown) => {
+        setCreateError(error as { message?: string });
+      },
+    },
+  });
 
   const handleCardClick = (pkg: Package) => {
     if (pkg.type === 'print') {
       setSelectedPrintPkg(pkg);
     } else {
-      navigateToSummary(pkg);
+      createSession({ packageId: pkg.id, printCount: 0 });
     }
   };
 
   const handleModalConfirm = (quantity: number) => {
     if (selectedPrintPkg) {
-      navigateToSummary(selectedPrintPkg, quantity);
+      createSession({ packageId: selectedPrintPkg.id, printCount: quantity });
     }
     setSelectedPrintPkg(null);
   };
@@ -83,7 +86,14 @@ export default function PackagePage() {
         pricePerPrint={selectedPrintPkg?.pricePerPrint ?? 15000}
         onClose={() => setSelectedPrintPkg(null)}
         onConfirm={handleModalConfirm}
+        isConfirming={isCreating}
       />
+
+      {createError && (
+        <p className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-6 py-3 rounded-lg text-sm">
+          {createError.message ?? 'Failed to create session. Please try again.'}
+        </p>
+      )}
     </main>
   );
 }

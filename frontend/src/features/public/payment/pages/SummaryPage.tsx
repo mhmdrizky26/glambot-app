@@ -1,9 +1,12 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { useGetSession } from '@/shared/api/session';
 import { useVoucher } from '../hooks/useVoucher';
 import { formatRupiah } from '@/lib/formats';
 import GlassCard from '@/components/shared/GlassCard';
+import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TicketIcon } from 'lucide-react';
@@ -12,31 +15,68 @@ export default function SummaryPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  // Read order data from URL params
-  const packageId = Number(searchParams.get('packageId') ?? 0);
-  const packageTitle = searchParams.get('title') ?? 'Digital Package';
-  const packageType = searchParams.get('type') ?? 'digital';
-  const basePrice = Number(searchParams.get('basePrice') ?? 0);
-  const printCount = Number(searchParams.get('printCount') ?? 0);
-  const pricePerPrint = Number(searchParams.get('pricePerPrint') ?? 0);
+  const sessionId = searchParams.get('sessionId') ?? '';
 
-  const extraPrintCost = printCount * pricePerPrint;
+  useEffect(() => {
+    if (!sessionId) {
+      router.replace('/package');
+    }
+  }, [sessionId, router]);
 
-  const { code, setCode, discount, message, isValid, loading, applyVoucher } =
-    useVoucher();
+  const {
+    data: session,
+    isLoading,
+    error: getError,
+  } = useGetSession({
+    sessionId,
+    queryConfig: { enabled: !!sessionId },
+  });
 
-  const subtotal = basePrice + extraPrintCost;
-  const total = Math.max(0, subtotal - discount);
+  const isNotFound = !!(
+    getError && (getError as { statusCode?: number }).statusCode === 404
+  );
+
+  const { code, setCode, message, isValid, loading, applyVoucher } =
+    useVoucher(sessionId);
 
   const handleProceed = () => {
-    const params = new URLSearchParams({
-      packageId: packageId.toString(),
-      title: packageTitle,
-      type: packageType,
-      total: total.toString(),
-    });
-    router.push(`/payment/pay?${params.toString()}`);
+    router.push(`/payment/pay?sessionId=${sessionId}`);
   };
+
+  if (!sessionId) return null;
+
+  if (isLoading) {
+    return (
+      <main className="flex flex-col items-center justify-center min-h-screen px-4">
+        <StatusAnimation status="waiting" className="w-37.5 h-37.5" />
+      </main>
+    );
+  }
+
+  if (isNotFound) {
+    return (
+      <main className="flex flex-col items-center justify-center min-h-screen px-4">
+        <GlassCard className="p-8 max-w-[699px]">
+          <p className="text-white text-center text-xl mb-6">
+            Session not found
+          </p>
+          <Button
+            variant="outline"
+            onClick={() => router.push('/package')}
+            className="w-full"
+          >
+            Back to Packages
+          </Button>
+        </GlassCard>
+      </main>
+    );
+  }
+
+  const packageTitle = session?.packageTitle ?? '';
+  const basePrice = session?.basePrice ?? 0;
+  const extraPrintCost = session?.extraPrintCost ?? 0;
+  const discount = session?.discount ?? 0;
+  const finalPrice = session?.finalPrice ?? 0;
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen px-4">
@@ -59,10 +99,10 @@ export default function SummaryPage() {
           </div>
 
           {/* Extra Prints */}
-          {packageType === 'print' && printCount > 0 && (
+          {extraPrintCost > 0 && (
             <div className="flex justify-between items-center">
               <span className="text-blue-100/50 text-[22.8px] leading-[34px]">
-                Extra prints (×{printCount})
+                Extra prints
               </span>
               <span className="text-white text-[22.8px] leading-[34px]">
                 Rp {formatRupiah(extraPrintCost)}
@@ -71,7 +111,7 @@ export default function SummaryPage() {
           )}
 
           {/* Discount */}
-          {isValid && discount > 0 && (
+          {discount > 0 && (
             <div className="flex justify-between items-center">
               <span className="text-green-400 text-base">Voucher discount</span>
               <span className="text-green-400 text-base">
@@ -88,19 +128,18 @@ export default function SummaryPage() {
               Total
             </span>
             <span className="text-white text-[29px] leading-11 font-bold">
-              Rp {formatRupiah(total)}
+              Rp {formatRupiah(finalPrice)}
             </span>
           </div>
         </div>
 
         {/* Voucher Input */}
         <div className="flex gap-4 mb-8">
-          <div className="flex-1  relative">
+          <div className="flex-1 relative">
             <TicketIcon
               size={26}
               className="absolute left-4 top-1/2 -translate-y-1/2 z-10 text-blue-100"
             />
-
             <Input
               type="text"
               placeholder="Voucher code"

@@ -1,24 +1,31 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 import PaymentStatus from '../components/PaymentStatus';
 
 export default function PayPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const total = Number(searchParams.get('total') ?? 0);
-  const packageId = Number(searchParams.get('packageId') ?? 0);
+  const sessionId = searchParams.get('sessionId') ?? '';
 
-  const handleSuccess = () => {
-    router.push('/instruction');
+  useEffect(() => {
+    if (!sessionId) {
+      router.replace('/package');
+    }
+  }, [sessionId, router]);
+
+  if (!sessionId) return null;
+
+  const handleSuccess = (sid: string) => {
+    router.push(`/instruction?sessionId=${sid}`);
   };
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen px-4">
       <PaymentStatus
-        total={total}
-        packageId={packageId}
+        sessionId={sessionId}
         onRetry={() => router.back()}
         onSuccess={handleSuccess}
       />

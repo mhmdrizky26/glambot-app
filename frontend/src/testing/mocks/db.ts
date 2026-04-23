@@ -17,6 +17,8 @@ export const db = factory({
   session: {
     id: primaryKey(nanoid),
     packageId: Number,
+    printCount: Number,
+    basePrice: Number,
     voucherCode: String,
     discount: Number,
     finalPrice: Number,

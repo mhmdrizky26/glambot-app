@@ -1,38 +1,45 @@
 'use client';
 
 import { useState } from 'react';
-import { useValidateVoucher } from '../api/validateVoucher';
+import { useQueryClient } from '@tanstack/react-query';
+import { usePatchSession, getSessionQueryOptions } from '@/shared/api/session';
 
-export function useVoucher() {
+export function useVoucher(sessionId: string) {
   const [code, setCode] = useState('');
-  const [discount, setDiscount] = useState(0);
   const [message, setMessage] = useState<string | null>(null);
   const [isValid, setIsValid] = useState(false);
 
-  const { isPending: loading, mutate } = useValidateVoucher({
+  const queryClient = useQueryClient();
+
+  const { isPending: loading, mutate } = usePatchSession({
     mutationConfig: {
       onSuccess: (result) => {
-        setDiscount(result.discount);
-        setIsValid(result.valid);
-        setMessage(result.message);
+        const applied = result.discount > 0;
+        setIsValid(applied);
+        setMessage(
+          applied
+            ? 'Voucher applied successfully'
+            : 'Voucher code is invalid or inactive',
+        );
+        queryClient.invalidateQueries({
+          queryKey: getSessionQueryOptions(sessionId).queryKey,
+        });
       },
       onError: () => {
-        setMessage('Failed to validate voucher');
+        setMessage('Failed to apply voucher');
         setIsValid(false);
-        setDiscount(0);
       },
     },
   });
 
   const applyVoucher = () => {
-    if (!code.trim()) return;
+    if (!code.trim() || !sessionId) return;
     setMessage(null);
-    mutate({ code });
+    mutate({ sessionId, voucherCode: code });
   };
 
   const resetVoucher = () => {
     setCode('');
-    setDiscount(0);
     setMessage(null);
     setIsValid(false);
   };
@@ -40,7 +47,6 @@ export function useVoucher() {
   return {
     code,
     setCode,
-    discount,
     message,
     isValid,
     loading,
