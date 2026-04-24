@@ -56,7 +56,7 @@ export default function SummaryPage() {
   if (isNotFound) {
     return (
       <main className="flex flex-col items-center justify-center min-h-screen px-4">
-        <GlassCard className="p-8 max-w-[699px]">
+        <GlassCard className="p-8 max-w-174.75">
           <p className="text-white text-center text-xl mb-6">
             Session not found
           </p>
@@ -80,9 +80,9 @@ export default function SummaryPage() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen px-4">
-      <GlassCard className="p-8 max-w-[699px]">
+      <GlassCard className="p-8 max-w-174.75">
         {/* Title */}
-        <h1 className="text-[48px] leading-[72px] font-bold text-white text-center mb-8">
+        <h1 className="text-[48px] leading-18 font-bold text-white text-center mb-8">
           Order Summary
         </h1>
 
@@ -90,10 +90,10 @@ export default function SummaryPage() {
         <div className="space-y-4 mb-6">
           {/* Package */}
           <div className="flex justify-between items-center">
-            <span className="text-blue-100/50 text-[22.8px] leading-[34px]">
+            <span className="text-blue-100/50 text-[22.8px] leading-8.5">
               {packageTitle}
             </span>
-            <span className="text-white text-[22.8px] leading-[34px]">
+            <span className="text-white text-[22.8px] leading-8.5">
               Rp {formatRupiah(basePrice)}
             </span>
           </div>
@@ -101,10 +101,10 @@ export default function SummaryPage() {
           {/* Extra Prints */}
           {extraPrintCost > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-blue-100/50 text-[22.8px] leading-[34px]">
+              <span className="text-blue-100/50 text-[22.8px] leading-8.5">
                 Extra prints
               </span>
-              <span className="text-white text-[22.8px] leading-[34px]">
+              <span className="text-white text-[22.8px] leading-8.5">
                 Rp {formatRupiah(extraPrintCost)}
               </span>
             </div>

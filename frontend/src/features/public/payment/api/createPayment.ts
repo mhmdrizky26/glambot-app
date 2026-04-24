@@ -6,10 +6,20 @@ export interface CreatePaymentInput {
   sessionId: string;
 }
 
-export interface CreatePaymentResult {
-  transactionId: string;
+interface Transaction {
+  id: string;
   sessionId: string;
+  midtransOrderId: string;
+  amount: number;
+  status: string;
   qrisUrl: string;
+  qrisRawString: string;
+  paidAt: string;
+  createdAt: string;
+}
+
+export interface CreatePaymentResult {
+  transaction: Transaction;
 }
 
 export const createPayment = async (
