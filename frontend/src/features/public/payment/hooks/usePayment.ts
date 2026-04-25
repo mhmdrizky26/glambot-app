@@ -38,7 +38,7 @@ export function usePayment({
   const [status, setStatus] = useState<PaymentState>('waiting');
   const [qrisUrl, setQrisUrl] = useState<string | null>(null);
   const [timeLeft, setTimeLeft] = useState(TIMEOUT_SECONDS);
-  const [transactionId, setTransactionId] = useState<string | null>(null);
+  const [midtransOrderId, setMidtransOrderId] = useState<string | null>(null);
   const [pollingEnabled, setPollingEnabled] = useState(false);
 
   const redirectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -68,8 +68,12 @@ export function usePayment({
   const { mutate: initiatePayment } = useCreatePayment({
     mutationConfig: {
       onSuccess: (result) => {
-        setTransactionId(result.transactionId);
-        setQrisUrl(result.qrisUrl);
+        if (!result.transaction.qrisUrl) {
+          setStatus('failed');
+          return;
+        }
+        setMidtransOrderId(result.transaction.midtransOrderId);
+        setQrisUrl(result.transaction.qrisUrl);
         setPollingEnabled(true);
       },
       onError: () => {
@@ -83,7 +87,7 @@ export function usePayment({
     setStatus('waiting');
     setQrisUrl(null);
     setTimeLeft(TIMEOUT_SECONDS);
-    setTransactionId(null);
+    setMidtransOrderId(null);
     initiatePayment({ sessionId });
   }, [sessionId, cleanup, initiatePayment]);
 
@@ -96,9 +100,9 @@ export function usePayment({
 
   // Poll payment status
   const { data: polledStatus } = useQuery({
-    queryKey: ['payment-status', transactionId],
-    queryFn: () => getPaymentStatus(transactionId!),
-    enabled: pollingEnabled && !!transactionId && status === 'waiting',
+    queryKey: ['payment-status', midtransOrderId],
+    queryFn: () => getPaymentStatus(midtransOrderId!),
+    enabled: pollingEnabled && !!midtransOrderId && status === 'waiting',
     refetchInterval: POLL_INTERVAL_MS,
     staleTime: 0,
   });

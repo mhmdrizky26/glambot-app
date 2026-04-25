@@ -61,20 +61,19 @@ export const paymentHandlers = [
 
     return HttpResponse.json(
       {
-        transactionId: transaction.id,
         sessionId: session.id,
-        qrisUrl: transaction.qrisUrl,
+        transaction,
       },
       { status: 201 },
     );
   }),
 
-  http.get('/api/payments/:transactionId/status', async ({ params }) => {
+  http.get('/api/payments/:midtransOrderId/status', async ({ params }) => {
     await networkDelay();
 
-    const { transactionId } = params as { transactionId: string };
+    const { midtransOrderId } = params as { midtransOrderId: string };
     const transaction = db.transaction.findFirst({
-      where: { id: { equals: transactionId } },
+      where: { midtransOrderId: { equals: midtransOrderId } },
     });
 
     if (!transaction) {
