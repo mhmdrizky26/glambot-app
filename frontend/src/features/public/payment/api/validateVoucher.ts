@@ -2,31 +2,39 @@ import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { MutationConfig } from '@/lib/react-query';
 
-export interface VoucherResult {
+export interface ApplyVoucherResponse {
   valid: boolean;
-  discount: number;
   message: string;
+  discountAmount: number;
+  finalPrice: number;
+  voucher: {
+    code: string;
+    description: string;
+    discountType: string;
+    discountValue: number;
+  } | null;
 }
 
-export const validateVoucher = async (data: {
-  code: string;
-}): Promise<VoucherResult> => {
-  const response = await apiClient.post<VoucherResult>(
-    '/api/vouchers/validate',
+export const applyVoucher = async (data: {
+  sessionId: string;
+  voucherCode: string;
+}): Promise<ApplyVoucherResponse> => {
+  const response = await apiClient.post<ApplyVoucherResponse>(
+    '/api/voucher/apply',
     data,
   );
   return response.data;
 };
 
-type UseValidateVoucherOptions = {
-  mutationConfig?: MutationConfig<typeof validateVoucher>;
+type UseApplyVoucherOptions = {
+  mutationConfig?: MutationConfig<typeof applyVoucher>;
 };
 
-export const useValidateVoucher = ({
+export const useApplyVoucher = ({
   mutationConfig,
-}: UseValidateVoucherOptions = {}) => {
+}: UseApplyVoucherOptions = {}) => {
   return useMutation({
     ...mutationConfig,
-    mutationFn: validateVoucher,
+    mutationFn: applyVoucher,
   });
 };

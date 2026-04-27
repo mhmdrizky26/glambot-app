@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePatchSession, getSessionQueryOptions } from '@/shared/api/session';
+import { useApplyVoucher } from '../api/validateVoucher';
+import { getSessionQueryOptions } from '@/shared/api/session';
 
 export function useVoucher(sessionId: string) {
   const [code, setCode] = useState('');
@@ -11,16 +12,13 @@ export function useVoucher(sessionId: string) {
 
   const queryClient = useQueryClient();
 
-  const { isPending: loading, mutate } = usePatchSession({
+  const { isPending: loading, mutate } = useApplyVoucher({
     mutationConfig: {
       onSuccess: (result) => {
-        const applied = result.discount > 0;
-        setIsValid(applied);
-        setMessage(
-          applied
-            ? 'Voucher applied successfully'
-            : 'Voucher code is invalid or inactive',
-        );
+        setIsValid(result.valid);
+        setMessage(result.message);
+
+        // Invalidate session query to refresh data
         queryClient.invalidateQueries({
           queryKey: getSessionQueryOptions(sessionId).queryKey,
         });
@@ -38,19 +36,5 @@ export function useVoucher(sessionId: string) {
     mutate({ sessionId, voucherCode: code });
   };
 
-  const resetVoucher = () => {
-    setCode('');
-    setMessage(null);
-    setIsValid(false);
-  };
-
-  return {
-    code,
-    setCode,
-    message,
-    isValid,
-    loading,
-    applyVoucher,
-    resetVoucher,
-  };
+  return { code, setCode, message, isValid, loading, applyVoucher };
 }

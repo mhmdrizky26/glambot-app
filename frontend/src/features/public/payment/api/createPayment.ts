@@ -18,7 +18,23 @@ interface Transaction {
   createdAt: string;
 }
 
+interface Session {
+  id: string;
+  packageId: number;
+  printCount: number;
+  basePrice: number;
+  voucherCode: string;
+  discount: number;
+  finalPrice: number;
+  status: string;
+  frameId: string;
+  createdAt: string;
+  expiresAt: string;
+  completedAt: string;
+}
+
 export interface CreatePaymentResult {
+  session: Session;
   transaction: Transaction;
 }
 
@@ -26,7 +42,7 @@ export const createPayment = async (
   data: CreatePaymentInput,
 ): Promise<CreatePaymentResult> => {
   const response = await apiClient.post<CreatePaymentResult>(
-    '/api/payments',
+    '/api/payment',
     data,
   );
   return response.data;

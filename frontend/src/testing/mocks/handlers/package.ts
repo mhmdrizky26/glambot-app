@@ -7,7 +7,8 @@ db.package.create({
   id: 1,
   type: 'digital',
   title: 'Digital Package',
-  description: 'HD photos & slow-motion video delivered to your phone via WhatsApp',
+  description:
+    'HD photos & slow-motion video delivered to your phone via WhatsApp',
   price: 45000,
   pricePerPrint: 0,
   imageSrc: '/Container.svg',
@@ -30,7 +31,7 @@ db.package.create({
 });
 
 export const packageHandlers = [
-  http.get('/api/packages', async () => {
+  http.get('/api/package', async () => {
     await networkDelay();
     const packages = db.package.findMany({});
     return HttpResponse.json(packages, { status: 200 });

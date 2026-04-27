@@ -16,7 +16,7 @@ export interface Package {
 }
 
 export const getPackages = async (): Promise<Package[]> => {
-  const response = await apiClient.get<Package[]>('/api/packages');
+  const response = await apiClient.get<Package[]>('/api/package');
   return response.data;
 };
 

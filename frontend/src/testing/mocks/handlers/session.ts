@@ -3,7 +3,7 @@ import { db } from '../db';
 import { networkDelay } from '../utils';
 
 export const sessionHandlers = [
-  http.post('/api/sessions', async ({ request }) => {
+  http.post('/api/session', async ({ request }) => {
     await networkDelay();
 
     const { packageId, printCount } = (await request.json()) as {
@@ -31,7 +31,7 @@ export const sessionHandlers = [
       printCount,
       basePrice,
       finalPrice,
-      status: 'pending',
+      status: 'pending_payment',
       voucherCode: '',
       discount: 0,
       frameId: '',
@@ -53,7 +53,7 @@ export const sessionHandlers = [
     );
   }),
 
-  http.get('/api/sessions/:sessionId', async ({ params }) => {
+  http.get('/api/session/:sessionId', async ({ params }) => {
     await networkDelay();
 
     const { sessionId } = params as { sessionId: string };
@@ -94,11 +94,11 @@ export const sessionHandlers = [
     );
   }),
 
-  http.patch('/api/sessions/:sessionId', async ({ params, request }) => {
+  http.patch('/api/session/:sessionId/status', async ({ params, request }) => {
     await networkDelay();
 
     const { sessionId } = params as { sessionId: string };
-    const { voucherCode } = (await request.json()) as { voucherCode: string };
+    const { status } = (await request.json()) as { status: string };
 
     const session = db.session.findFirst({
       where: { id: { equals: sessionId } },
@@ -116,29 +116,11 @@ export const sessionHandlers = [
     });
     const extraPrintCost = session.printCount * pkg!.pricePerPrint;
 
-    const voucher = db.voucher.findFirst({
-      where: { code: { equals: voucherCode } },
-    });
-
-    let discount = 0;
-    let finalPrice = session.finalPrice;
-    let updatedSession = session;
-
-    if (voucher && voucher.isActive) {
-      if (voucher.discountType === 'percentage') {
-        discount = Math.floor(
-          ((session.basePrice + extraPrintCost) * voucher.discountValue) / 100,
-        );
-      } else {
-        discount = voucher.discountValue;
-      }
-      finalPrice = Math.max(0, session.basePrice + extraPrintCost - discount);
-
-      updatedSession = db.session.update({
-        where: { id: { equals: sessionId } },
-        data: { voucherCode, discount, finalPrice },
-      })!;
-    }
+    // Update only session status
+    const updatedSession = db.session.update({
+      where: { id: { equals: sessionId } },
+      data: { status },
+    })!;
 
     return HttpResponse.json(
       {
