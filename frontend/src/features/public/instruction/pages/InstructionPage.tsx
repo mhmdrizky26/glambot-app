@@ -1,25 +1,41 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { instructionSteps } from '../data/steps';
 import {
   GetReadyCard,
   SafetyRulesCard,
   GestureControlsCard,
 } from '../components/InstructionCards';
+import { usePatchSessionStatus } from '@/shared/api/session';
 
 export default function InstructionPage() {
   const [currentStep, setCurrentStep] = useState(0);
   const router = useRouter();
   const touchStartX = useRef(0);
+  const searchParams = useSearchParams();
+
+  const sessionId = searchParams.get('sessionId') ?? '';
+
+  useEffect(() => {
+    if (!sessionId) {
+      router.replace('/package');
+    }
+  }, [sessionId, router]);
+
+  if (!sessionId) return null;
 
   const step = instructionSteps[currentStep];
   const isLast = currentStep === instructionSteps.length - 1;
 
+  const { mutate } = usePatchSessionStatus();
+
   const handleNext = () => {
     if (isLast) {
-      router.push('/');
+      mutate({ sessionId, status: 'shooting' });
+
+      router.push(`/photo-session?sessionId=${sessionId}`);
     } else {
       setCurrentStep((prev) => prev + 1);
     }

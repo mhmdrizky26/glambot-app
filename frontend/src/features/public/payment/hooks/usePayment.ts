@@ -24,6 +24,7 @@ interface UsePaymentOptions {
 
 interface UsePaymentReturn {
   status: PaymentState;
+  isPending: boolean;
   qrisUrl: string | null;
   retry: () => void;
   triggerStatus: (state: PaymentState) => void;
@@ -59,7 +60,7 @@ export function usePayment({
   const { mutate: updateSessionStatus } = usePatchSessionStatus();
 
   // Create payment mutation
-  const { mutate: initiatePayment } = useCreatePayment({
+  const { mutate: initiatePayment, isPending } = useCreatePayment({
     mutationConfig: {
       onSuccess: (result) => {
         if (!result.transaction.qrisUrl) {
@@ -158,6 +159,7 @@ export function usePayment({
   );
 
   return {
+    isPending,
     status,
     qrisUrl,
     retry,
