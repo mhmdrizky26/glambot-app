@@ -15,7 +15,7 @@ export interface SessionResponse {
   printCount: number;
   basePrice: number;
   finalPrice: number;
-  status: 'pending' | 'active' | 'completed' | 'expired';
+  status: 'pending_payment' | 'paid' | 'shooting' | 'completed' | 'expired';
 }
 
 export interface SessionDetailResponse {
@@ -35,7 +35,7 @@ export interface SessionDetailResponse {
 
 export interface PatchSessionInput {
   sessionId: string;
-  voucherCode: string;
+  status: 'pending_payment' | 'paid' | 'shooting' | 'completed' | 'expired';
 }
 
 // --- API functions ---
@@ -43,10 +43,7 @@ export interface PatchSessionInput {
 export const createSession = async (
   input: CreateSessionInput,
 ): Promise<SessionResponse> => {
-  const response = await apiClient.post<SessionResponse>(
-    '/api/sessions',
-    input,
-  );
+  const response = await apiClient.post<SessionResponse>('/api/session', input);
   return response.data;
 };
 
@@ -54,18 +51,18 @@ export const getSession = async (
   sessionId: string,
 ): Promise<SessionDetailResponse> => {
   const response = await apiClient.get<SessionDetailResponse>(
-    `/api/sessions/${sessionId}`,
+    `/api/session/${sessionId}`,
   );
   return response.data;
 };
 
-export const patchSession = async ({
+export const patchSessionStatus = async ({
   sessionId,
-  voucherCode,
+  status,
 }: PatchSessionInput): Promise<SessionDetailResponse> => {
   const response = await apiClient.patch<SessionDetailResponse>(
-    `/api/sessions/${sessionId}`,
-    { voucherCode },
+    `/api/session/${sessionId}/status`,
+    { status },
   );
   return response.data;
 };
@@ -105,15 +102,15 @@ export const useGetSession = ({
   });
 };
 
-type UsePatchSessionOptions = {
-  mutationConfig?: MutationConfig<typeof patchSession>;
+type UsePatchSessionStatusOptions = {
+  mutationConfig?: MutationConfig<typeof patchSessionStatus>;
 };
 
-export const usePatchSession = ({
+export const usePatchSessionStatus = ({
   mutationConfig,
-}: UsePatchSessionOptions = {}) => {
+}: UsePatchSessionStatusOptions = {}) => {
   return useMutation({
     ...mutationConfig,
-    mutationFn: patchSession,
+    mutationFn: patchSessionStatus,
   });
 };

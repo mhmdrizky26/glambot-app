@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useCreatePayment } from '../api/createPayment';
 import { getPaymentStatus } from '../api/getPaymentStatus';
+import { usePatchSessionStatus } from '@/shared/api/session';
 
 export type PaymentState =
   | 'waiting'
@@ -12,7 +13,6 @@ export type PaymentState =
   | 'failed'
   | 'expired';
 
-const TIMEOUT_SECONDS = 300;
 const POLL_INTERVAL_MS = 3000;
 const PROCESSING_DELAY_MS = 2500;
 const SUCCESS_REDIRECT_DELAY_MS = 3000;
@@ -24,9 +24,8 @@ interface UsePaymentOptions {
 
 interface UsePaymentReturn {
   status: PaymentState;
+  isPending: boolean;
   qrisUrl: string | null;
-  timeLeft: number;
-  formattedTime: string;
   retry: () => void;
   triggerStatus: (state: PaymentState) => void;
 }
@@ -37,7 +36,6 @@ export function usePayment({
 }: UsePaymentOptions): UsePaymentReturn {
   const [status, setStatus] = useState<PaymentState>('waiting');
   const [qrisUrl, setQrisUrl] = useState<string | null>(null);
-  const [timeLeft, setTimeLeft] = useState(TIMEOUT_SECONDS);
   const [midtransOrderId, setMidtransOrderId] = useState<string | null>(null);
   const [pollingEnabled, setPollingEnabled] = useState(false);
 
@@ -45,12 +43,6 @@ export function usePayment({
   const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
-
-  const formatTime = useCallback((seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  }, []);
 
   const cleanup = useCallback(() => {
     setPollingEnabled(false);
@@ -64,8 +56,11 @@ export function usePayment({
     }
   }, []);
 
+  // Update session status mutation
+  const { mutate: updateSessionStatus } = usePatchSessionStatus();
+
   // Create payment mutation
-  const { mutate: initiatePayment } = useCreatePayment({
+  const { mutate: initiatePayment, isPending } = useCreatePayment({
     mutationConfig: {
       onSuccess: (result) => {
         if (!result.transaction.qrisUrl) {
@@ -86,7 +81,6 @@ export function usePayment({
     cleanup();
     setStatus('waiting');
     setQrisUrl(null);
-    setTimeLeft(TIMEOUT_SECONDS);
     setMidtransOrderId(null);
     initiatePayment({ sessionId });
   }, [sessionId, cleanup, initiatePayment]);
@@ -115,6 +109,9 @@ export function usePayment({
     if (result === 'paid') {
       cleanup();
       setStatus('processing');
+
+      updateSessionStatus({ sessionId, status: 'paid' });
+
       processingTimeoutRef.current = setTimeout(() => {
         setStatus('success');
         redirectTimeoutRef.current = setTimeout(() => {
@@ -128,7 +125,7 @@ export function usePayment({
         setStatus(result === 'expired' ? 'expired' : 'failed');
       }, PROCESSING_DELAY_MS);
     }
-  }, [polledStatus, cleanup, onSuccess, sessionId]);
+  }, [polledStatus, cleanup, onSuccess, sessionId, updateSessionStatus]);
 
   const retry = useCallback(() => {
     initPayment();
@@ -139,6 +136,10 @@ export function usePayment({
       cleanup();
       if (state === 'processing') {
         setStatus('processing');
+
+        // Update session status to 'paid' when triggered
+        updateSessionStatus({ sessionId, status: 'paid' });
+
         processingTimeoutRef.current = setTimeout(() => {
           setStatus('success');
           redirectTimeoutRef.current = setTimeout(() => {
@@ -154,14 +155,13 @@ export function usePayment({
         }
       }
     },
-    [cleanup, onSuccess, sessionId],
+    [cleanup, onSuccess, sessionId, updateSessionStatus],
   );
 
   return {
+    isPending,
     status,
     qrisUrl,
-    timeLeft,
-    formattedTime: formatTime(timeLeft),
     retry,
     triggerStatus,
   };

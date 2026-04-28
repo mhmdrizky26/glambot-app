@@ -6,7 +6,7 @@ export const getPaymentStatus = async (
   midtransOrderId: string,
 ): Promise<{ status: PaymentStatusResult }> => {
   const response = await apiClient.get<{ status: PaymentStatusResult }>(
-    `/api/payments/${midtransOrderId}/status`,
+    `/api/payment/${midtransOrderId}/status`,
   );
   return response.data;
 };

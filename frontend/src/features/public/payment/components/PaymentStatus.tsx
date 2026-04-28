@@ -17,7 +17,7 @@ export default function PaymentStatus({
   onRetry,
   onSuccess,
 }: PaymentStatusProps) {
-  const { status, qrisUrl, triggerStatus } = usePayment({
+  const { status, qrisUrl, triggerStatus, isPending } = usePayment({
     sessionId,
     onSuccess,
   });
@@ -72,6 +72,20 @@ export default function PaymentStatus({
     );
   }
 
+  if (isPending) {
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-125">
+        <StatusAnimation status="waiting" />
+        <h1 className="text-5xl font-bold text-primary leading-20 mb-1">
+          Preparing payment...
+        </h1>
+        <p className="text-primary/50 text-2xl leading-10">
+          Please wait a moment
+        </p>
+      </div>
+    );
+  }
+
   // Waiting state — QRIS displayed immediately
   return (
     <div className="p-8 flex flex-col items-center justify-center min-h-159.25 w-149.25">
@@ -83,15 +97,17 @@ export default function PaymentStatus({
           </p>
 
           {/* QR Code */}
-          <div className="bg-white rounded-2xl p-4 mb-6 mt-9.5">
-            <Image
-              src={qrisUrl ?? '/PaymentFlow.svg'}
-              alt="QRIS Payment"
-              width={280}
-              height={280}
-              className="rounded-lg"
-            />
-          </div>
+          {qrisUrl && (
+            <div className="bg-white rounded-2xl p-4 mb-6 mt-9.5">
+              <Image
+                src={qrisUrl}
+                alt="QRIS Payment"
+                width={280}
+                height={280}
+                className="rounded-lg"
+              />
+            </div>
+          )}
 
           {/* Dev Triggers */}
           <div className="flex gap-3 mt-6">
