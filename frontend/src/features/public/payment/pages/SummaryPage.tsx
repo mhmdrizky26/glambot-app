@@ -9,7 +9,7 @@ import GlassCard from '@/components/shared/GlassCard';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { TicketIcon } from 'lucide-react';
+import { TicketIcon, Timer } from 'lucide-react';
 
 export default function SummaryPage() {
   const searchParams = useSearchParams();
@@ -56,6 +56,7 @@ export default function SummaryPage() {
   if (isNotFound) {
     return (
       <main className="flex flex-col items-center justify-center min-h-screen px-4">
+        <Timer />
         <GlassCard className="p-8 max-w-174.75">
           <p className="text-white text-center text-xl mb-6">
             Session not found

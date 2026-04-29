@@ -8,7 +8,7 @@ interface GestureDetectionPanelProps {
   gestureState?: GestureState;
   activeName?: string;
   lockTimeLeft?: number;
-  maxLockTime?: number; 
+  maxLockTime?: number;
 }
 
 export function GestureDetectionPanel({
@@ -19,24 +19,22 @@ export function GestureDetectionPanel({
   maxLockTime = 15, // Default 15 detik
 }: GestureDetectionPanelProps) {
   const isLocked = gestureState === 'locked';
-  
 
   const progressPercentage = isLocked ? (lockTimeLeft / maxLockTime) * 100 : 0;
 
   return (
     <div className="bg-primary/75 border border-white/10 rounded-2xl overflow-hidden shadow-lg flex flex-col h-full">
-     
       <div className="relative bg-black/40">
         <video
           ref={videoRef}
           autoPlay
           muted
           playsInline
-          className="w-full h-[180px] object-cover"
+          className="w-full h-45 object-cover"
         />
 
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-[160px] h-[110px] border border-dashed border-white/25 rounded-xl" />
+          <div className="w-40 h-27.5 border border-dashed border-white/25 rounded-xl" />
         </div>
 
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">

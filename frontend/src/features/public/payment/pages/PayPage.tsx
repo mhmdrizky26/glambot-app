@@ -3,6 +3,7 @@
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import PaymentStatus from '../components/PaymentStatus';
+import Timer from '@/components/shared/Timer';
 
 export default function PayPage() {
   const searchParams = useSearchParams();
@@ -24,6 +25,7 @@ export default function PayPage() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-screen px-4">
+      <Timer />
       <PaymentStatus
         sessionId={sessionId}
         onRetry={() => router.back()}

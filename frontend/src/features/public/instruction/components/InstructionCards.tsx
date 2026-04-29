@@ -64,7 +64,7 @@ export function SafetyRulesCard({ step, onNext, buttonLabel }: CardProps) {
 
         <div className="grid grid-cols-2 gap-6">
           {/* Do column */}
-          <GlassCard variant="secondary" className="w-85 p-4">
+          <GlassCard variant="secondary" className="w-85 p-4 bg-[#3F72AF]/45">
             <div className="flex items-center gap-2 mb-3">
               <ThumbsUp size={16} className="text-blue-100" />
               <span className="text-lg font-bold leading-7 text-white">Do</span>
@@ -83,7 +83,7 @@ export function SafetyRulesCard({ step, onNext, buttonLabel }: CardProps) {
           </GlassCard>
 
           {/* Don't column */}
-          <GlassCard variant="secondary" className="w-85 p-4">
+          <GlassCard variant="secondary" className="w-85 p-4 bg-[#D62F2F]/35">
             <div className="flex items-center gap-1.5 mb-3">
               <ThumbsDown size={16} className="text-red-400 shrink-0" />
               <span className="text-sm font-semibold text-red-400">
@@ -115,14 +115,50 @@ export function SafetyRulesCard({ step, onNext, buttonLabel }: CardProps) {
 /** "Gesture Controls" step. */
 export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [hasCompletedFirstLoop, setHasCompletedFirstLoop] = useState(false);
 
   useEffect(() => {
     if (!step.gestures || step.gestures.length === 0) return;
     const interval = setInterval(() => {
-      setActiveIndex((prev) => (prev + 1) % step.gestures!.length);
+      setActiveIndex((prev) => {
+        const nextIndex = (prev + 1) % step.gestures!.length;
+        if (nextIndex === 0 && prev === step.gestures!.length - 1) {
+          setHasCompletedFirstLoop(true);
+        }
+        return nextIndex;
+      });
     }, 2500);
     return () => clearInterval(interval);
   }, [step.gestures]);
+
+  // Get current gesture animation class
+  const getAnimationClass = () => {
+    if (!step.gestures) return '';
+    const gesture = step.gestures[activeIndex];
+
+    switch (gesture.name) {
+      case 'Move Up':
+        return 'animate-[moveUp_2.2s_ease-in-out]';
+      case 'Move Down':
+        return 'animate-[moveDown_2.2s_ease-in-out]';
+      case 'Move Left':
+        return 'animate-[moveLeft_2.2s_ease-in-out]';
+      case 'Move Right':
+        return 'animate-[moveRight_2.2s_ease-in-out]';
+      case 'Move Forward':
+        return 'animate-[zoomIn_2.2s_ease-in-out]';
+      case 'Move Backward':
+        return 'animate-[zoomOut_2.2s_ease-in-out]';
+      case 'Rotate CW':
+        return 'animate-[rotateCW_2.2s_ease-in-out]';
+      case 'Rotate CCW':
+        return 'animate-[rotateCCW_2.2s_ease-in-out]';
+      case 'Stop':
+        return ''; // No animation for stop
+      default:
+        return '';
+    }
+  };
 
   return (
     <div className="flex flex-col items-center">
@@ -144,7 +180,13 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
             {/* Camera icon centred over horizontal line */}
             <div className="w-full flex justify-center items-center flex-1 relative min-h-35">
               <div className="absolute w-full h-px bg-white/20" />
-              <div className="relative z-10 w-16 h-12 bg-[#DBE2EF] rounded-xl flex items-center justify-center shadow-lg">
+              <div
+                key={activeIndex}
+                className={cn(
+                  'relative z-10 w-16 h-12 bg-blue-100 rounded-xl flex items-center justify-center shadow-lg',
+                  getAnimationClass(),
+                )}
+              >
                 <Camera className="text-primary" size={24} />
                 <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white" />
               </div>
@@ -181,8 +223,7 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
                   >
                     <div
                       className={cn(
-                        'mb-2.5 flex h-11 w-11 items-center justify-center rounded-xl transition-colors',
-                        isActive ? 'bg-white/20' : 'bg-white/8',
+                        'mb-2.5 flex h-11 w-11 items-center justify-center rounded-xl transition-colors bg-white/15',
                       )}
                     >
                       {Icon ? (
@@ -208,15 +249,11 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
 
       <div className="flex flex-row items-center gap-8">
         <Button
-          variant="ghost"
           onClick={onNext}
-          className="text-[#F9F7F7] text-2xl font-medium"
-        >
-          Skip
-        </Button>
-        <Button
-          onClick={onNext}
-          className="rounded-full px-8 py-6 text-xl bg-primary hover:bg-primary/90 text-white border-0 shadow-[0_4px_20px_rgba(17,45,78,0.5)]"
+          className={cn(
+            'rounded-full px-8 py-6 text-xl bg-primary hover:bg-primary/90 text-white border-0 shadow-[0_4px_20px_rgba(17,45,78,0.5)] transition-opacity duration-300',
+            !hasCompletedFirstLoop && 'opacity-0 pointer-events-none',
+          )}
         >
           {buttonLabel}
         </Button>
