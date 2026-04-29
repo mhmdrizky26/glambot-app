@@ -4,7 +4,7 @@ interface SessionHeaderProps {
   sessionTimeLeft?: number;
 }
 
-export function SessionHeader({ sessionTimeLeft = 600 }: SessionHeaderProps) {
+export function SessionHeader({ sessionTimeLeft = 60 }: SessionHeaderProps) {
   // Format seconds to MM:SS
   const minutes = Math.floor(sessionTimeLeft / 60);
   const seconds = sessionTimeLeft % 60;
@@ -19,13 +19,13 @@ export function SessionHeader({ sessionTimeLeft = 600 }: SessionHeaderProps) {
         <div className="w-7 h-7 rounded-lg bg-[#3f72af]/80 flex items-center justify-center shadow-inner">
           <Camera size={15} className="text-white" />
         </div>
-        <span className="text-white font-semibold text-[14px] tracking-wide">
+        <span className="text-white font-normal text-2xl leading-5.75  tracking-[0.38px]">
           Photo Session
         </span>
       </div>
 
       {/* Right: timer */}
-      <div className="text-white font-mono text-[22px] tracking-widest font-medium">
+      <div className="text-white text-[36px] tracking-[0.38px] leading-5.75 font-normal">
         {formattedTime}
       </div>
     </div>

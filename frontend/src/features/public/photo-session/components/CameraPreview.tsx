@@ -7,7 +7,9 @@ interface CameraPreviewProps {
 
 export function CameraPreview({ videoRef, className }: CameraPreviewProps) {
   return (
-    <div className={`h-full w-full relative rounded-3xl overflow-hidden bg-black/30 border-8 border-solid border-primary shadow-2xl ${className || ''}`}>
+    <div
+      className={`h-full w-full relative rounded-3xl overflow-hidden bg-black/30 border-8 border-solid border-primary shadow-2xl ${className || ''}`}
+    >
       <video
         ref={videoRef}
         autoPlay
