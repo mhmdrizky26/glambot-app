@@ -30,13 +30,17 @@ db.voucher.create({
 });
 
 export const paymentHandlers = [
-  http.post('/api/payment', async ({ request }) => {
+  http.post('/api/payment/create', async ({ request }) => {
     await networkDelay();
 
-    const body = (await request.json()) as { sessionId: string };
+    const body = (await request.json()) as {
+      sessionId?: string;
+      session_id?: string;
+    };
+    const sessionId = body.session_id ?? body.sessionId ?? '';
 
     const session = db.session.findFirst({
-      where: { id: { equals: body.sessionId } },
+      where: { id: { equals: sessionId } },
     });
 
     if (!session) {
@@ -81,6 +85,79 @@ export const paymentHandlers = [
     );
   }),
 
+  http.post('/api/payment', async ({ request }) => {
+    await networkDelay();
+
+    const body = (await request.json()) as {
+      sessionId?: string;
+      session_id?: string;
+    };
+    const sessionId = body.session_id ?? body.sessionId ?? '';
+
+    const session = db.session.findFirst({
+      where: { id: { equals: sessionId } },
+    });
+
+    if (!session) {
+      return HttpResponse.json(
+        { message: 'Session not found' },
+        { status: 404 },
+      );
+    }
+
+    const now = new Date();
+
+    const transaction = db.transaction.create({
+      sessionId: session.id,
+      midtransOrderId: `ORDER-${Math.random().toString(36).slice(2, 10).toUpperCase()}`,
+      amount: session.finalPrice,
+      status: 'pending',
+      qrisUrl: '/PaymentFlow.svg',
+      qrisRawString: '',
+      paidAt: '',
+      createdAt: now.toISOString(),
+    });
+
+    return HttpResponse.json(
+      {
+        session: {
+          id: session.id,
+          packageId: session.packageId,
+          printCount: session.printCount,
+          basePrice: session.basePrice,
+          voucherCode: session.voucherCode,
+          discount: session.discount,
+          finalPrice: session.finalPrice,
+          status: session.status,
+          frameId: session.frameId,
+          createdAt: session.createdAt,
+          expiresAt: session.expiresAt,
+          completedAt: session.completedAt,
+        },
+        transaction,
+      },
+      { status: 201 },
+    );
+  }),
+
+  http.get('/api/payment/status/:midtransOrderID', async ({ params }) => {
+    await networkDelay();
+
+    const { midtransOrderID } = params as { midtransOrderID: string };
+    const transaction = db.transaction.findFirst({
+      where: { midtransOrderId: { equals: midtransOrderID } },
+    });
+
+    if (!transaction) {
+      return HttpResponse.json(
+        { message: 'Transaction not found' },
+        { status: 404 },
+      );
+    }
+
+    return HttpResponse.json({ status: transaction.status }, { status: 200 });
+  }),
+
   http.get('/api/payment/:midtransOrderID/status', async ({ params }) => {
     await networkDelay();
 
@@ -103,12 +180,16 @@ export const paymentHandlers = [
     await networkDelay();
 
     const body = (await request.json()) as {
-      sessionId: string;
-      voucherCode: string;
+      sessionId?: string;
+      session_id?: string;
+      voucherCode?: string;
+      voucher_code?: string;
     };
+    const sessionId = body.session_id ?? body.sessionId ?? '';
+    const voucherCode = body.voucher_code ?? body.voucherCode ?? '';
 
     const session = db.session.findFirst({
-      where: { id: { equals: body.sessionId } },
+      where: { id: { equals: sessionId } },
     });
 
     if (!session) {
@@ -119,7 +200,7 @@ export const paymentHandlers = [
     }
 
     const voucher = db.voucher.findFirst({
-      where: { code: { equals: body.voucherCode } },
+      where: { code: { equals: voucherCode } },
     });
 
     if (!voucher || !voucher.isActive) {
@@ -169,9 +250,9 @@ export const paymentHandlers = [
 
     // Update session with voucher
     db.session.update({
-      where: { id: { equals: body.sessionId } },
+      where: { id: { equals: sessionId } },
       data: {
-        voucherCode: body.voucherCode,
+        voucherCode,
         discount: discountAmount,
         finalPrice,
       },
