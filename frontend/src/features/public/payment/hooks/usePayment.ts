@@ -26,6 +26,7 @@ interface UsePaymentReturn {
   status: PaymentState;
   isPending: boolean;
   qrisUrl: string | null;
+  totalPrice: number | null;
   retry: () => void;
   triggerStatus: (state: PaymentState) => void;
 }
@@ -36,6 +37,7 @@ export function usePayment({
 }: UsePaymentOptions): UsePaymentReturn {
   const [status, setStatus] = useState<PaymentState>('waiting');
   const [qrisUrl, setQrisUrl] = useState<string | null>(null);
+  const [totalPrice, setTotalPrice] = useState<number | null>(null);
   const [midtransOrderId, setMidtransOrderId] = useState<string | null>(null);
   const [pollingEnabled, setPollingEnabled] = useState(false);
 
@@ -69,6 +71,7 @@ export function usePayment({
         }
         setMidtransOrderId(result.transaction.midtransOrderId);
         setQrisUrl(result.transaction.qrisUrl);
+        setTotalPrice(result.session.finalPrice ?? result.transaction.amount ?? null);
         setPollingEnabled(true);
       },
       onError: () => {
@@ -81,6 +84,7 @@ export function usePayment({
     cleanup();
     setStatus('waiting');
     setQrisUrl(null);
+    setTotalPrice(null);
     setMidtransOrderId(null);
     initiatePayment({ sessionId });
   }, [sessionId, cleanup, initiatePayment]);
@@ -162,6 +166,7 @@ export function usePayment({
     isPending,
     status,
     qrisUrl,
+    totalPrice,
     retry,
     triggerStatus,
   };

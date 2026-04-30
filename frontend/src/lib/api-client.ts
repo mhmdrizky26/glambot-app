@@ -11,7 +11,13 @@ export const apiClient = axios.create({
 });
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    const body = (response as any).data;
+    if (body && typeof body === 'object' && Object.prototype.hasOwnProperty.call(body, 'data')) {
+      (response as any).data = body.data;
+    }
+    return response;
+  },
   (error: AxiosError) => {
     const apiError: ApiError = {
       message:

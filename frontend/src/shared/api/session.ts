@@ -2,6 +2,87 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { MutationConfig, QueryConfig } from '@/lib/react-query';
 
+type BackendSessionShape = {
+  id?: string;
+  sessionId?: string;
+  package_id?: number;
+  packageId?: number;
+  package_code?: string;
+  packageCode?: string;
+  duration_secs?: number;
+  durationSecs?: number;
+  print_count?: number;
+  printCount?: number;
+  price?: number;
+  basePrice?: number;
+  discount?: number;
+  final_price?: number;
+  finalPrice?: number;
+  status?: string;
+  frame_id?: string;
+  frameId?: string;
+  created_at?: string;
+  createdAt?: string;
+  expires_at?: string;
+  expiresAt?: string;
+  completed_at?: string | null;
+  completedAt?: string | null;
+  packageTitle?: string;
+};
+
+type BackendSessionStatusShape = BackendSessionShape & {
+  session_id?: string;
+};
+
+const packageTitleByCode: Record<string, string> = {
+  regular: 'Regular',
+  vip: 'VIP',
+};
+
+const getPrintUnitPrice = (packageCode: string) => {
+  switch (packageCode) {
+    case 'vip':
+      return 15000;
+    default:
+      return 0;
+  }
+};
+
+const normalizeSession = (session: BackendSessionShape): SessionDetailResponse => {
+  const packageCode = session.package_code ?? session.packageCode ?? '';
+  const packageTitle = packageTitleByCode[packageCode] ?? packageCode;
+  const price = session.price ?? session.basePrice ?? 0;
+  const finalPrice = session.final_price ?? session.finalPrice ?? price;
+  const printCount = session.print_count ?? session.printCount ?? 0;
+  const extraPrintCost = printCount * getPrintUnitPrice(packageCode);
+
+  return {
+    id: session.id ?? session.sessionId ?? '',
+    packageId: session.package_id ?? session.packageId ?? 0,
+    packageTitle: session.packageTitle ?? packageTitle,
+    printCount,
+    basePrice: price,
+    extraPrintCost,
+    voucherCode: '',
+    discount: session.discount ?? 0,
+    finalPrice,
+    status: (session.status ?? 'pending_payment') as SessionDetailResponse['status'],
+    createdAt: session.created_at ?? session.createdAt ?? '',
+    expiresAt: session.expires_at ?? session.expiresAt ?? '',
+  };
+};
+
+const normalizeCreateSessionResponse = (
+  session: BackendSessionShape,
+): SessionResponse => ({
+  sessionId: session.id ?? session.sessionId ?? '',
+  packageId: session.package_id ?? session.packageId ?? 0,
+  printCount: session.print_count ?? session.printCount ?? 0,
+  basePrice: session.price ?? session.basePrice ?? 0,
+  finalPrice: session.final_price ?? session.finalPrice ?? session.price ?? session.basePrice ?? 0,
+  status: (session.status ?? 'pending_payment') as SessionResponse['status'],
+});
+
 // --- Types ---
 
 export interface CreateSessionInput {
@@ -43,28 +124,72 @@ export interface PatchSessionInput {
 export const createSession = async (
   input: CreateSessionInput,
 ): Promise<SessionResponse> => {
-  const response = await apiClient.post<SessionResponse>('/api/session', input);
-  return response.data;
+  try {
+    const response = await apiClient.post<SessionResponse>('/api/session/create', input);
+    return normalizeCreateSessionResponse(response.data as unknown as BackendSessionShape);
+  } catch (error) {
+    const apiError = error as { statusCode?: number };
+    if (apiError.statusCode !== 404) {
+      throw error;
+    }
+
+    const fallbackResponse = await apiClient.post<SessionResponse>(
+      '/api/session',
+      input,
+    );
+    return normalizeCreateSessionResponse(
+      fallbackResponse.data as unknown as BackendSessionShape,
+    );
+  }
 };
 
 export const getSession = async (
   sessionId: string,
 ): Promise<SessionDetailResponse> => {
-  const response = await apiClient.get<SessionDetailResponse>(
-    `/api/session/${sessionId}`,
-  );
-  return response.data;
+  try {
+    const response = await apiClient.get<SessionDetailResponse>(
+      `/api/session/${sessionId}`,
+    );
+    return normalizeSession(response.data as unknown as BackendSessionShape);
+  } catch (error) {
+    const apiError = error as { statusCode?: number };
+    if (apiError.statusCode !== 404) {
+      throw error;
+    }
+
+    const fallbackResponse = await apiClient.get<SessionDetailResponse>(
+      `/api/session/create/${sessionId}`,
+    );
+    return normalizeSession(
+      fallbackResponse.data as unknown as BackendSessionShape,
+    );
+  }
 };
 
 export const patchSessionStatus = async ({
   sessionId,
   status,
 }: PatchSessionInput): Promise<SessionDetailResponse> => {
-  const response = await apiClient.patch<SessionDetailResponse>(
-    `/api/session/${sessionId}/status`,
-    { status },
-  );
-  return response.data;
+  try {
+    const response = await apiClient.patch<SessionDetailResponse>(
+      `/api/session/${sessionId}/status`,
+      { status },
+    );
+    return normalizeSession(response.data as unknown as BackendSessionStatusShape);
+  } catch (error) {
+    const apiError = error as { statusCode?: number };
+    if (apiError.statusCode !== 404) {
+      throw error;
+    }
+
+    const fallbackResponse = await apiClient.patch<SessionDetailResponse>(
+      `/api/session/create/${sessionId}/status`,
+      { status },
+    );
+    return normalizeSession(
+      fallbackResponse.data as unknown as BackendSessionStatusShape,
+    );
+  }
 };
 
 // --- React Query hooks ---
