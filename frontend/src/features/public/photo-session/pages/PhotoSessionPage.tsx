@@ -27,7 +27,7 @@ export function PhotoSessionPage() {
     'waiting' | 'locked' | 'ended'
   >('waiting');
   const [lockTimeLeft, setLockTimeLeft] = useState(0);
-  const [sessionTimeLeft, setSessionTimeLeft] = useState(600); // 10 menit
+  const [sessionTimeLeft, setSessionTimeLeft] = useState(10); // 10 menit
 
   const mainVideoRef = useRef<HTMLVideoElement>(null);
   const detectionVideoRef = useRef<HTMLVideoElement>(null);
