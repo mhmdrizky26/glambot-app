@@ -1,10 +1,11 @@
 'use client';
 
-import Image from 'next/image';
+import { useState } from 'react';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import { usePayment } from '../hooks/usePayment';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
+import { formatRupiah } from '@/lib/formats';
 
 interface PaymentStatusProps {
   sessionId: string;
@@ -12,12 +13,40 @@ interface PaymentStatusProps {
   onSuccess?: (sessionId: string) => void;
 }
 
+function QrisPreview({ src }: { src: string }) {
+  const [loadFailed, setLoadFailed] = useState(false);
+
+  if (loadFailed) {
+    return (
+      <div className="w-[280px] h-[280px] rounded-lg bg-slate-100 flex items-center justify-center px-6 text-center">
+        <p className="text-slate-600 text-sm leading-6">
+          QR image gagal dimuat. Tunggu beberapa detik lalu refresh atau buat
+          ulang payment.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    // Midtrans QRIS comes from an external URL and is intentionally rendered as a plain image.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={src}
+      alt="QRIS Payment"
+      width={280}
+      height={280}
+      className="rounded-lg block"
+      onError={() => setLoadFailed(true)}
+    />
+  );
+}
+
 export default function PaymentStatus({
   sessionId,
   onRetry,
   onSuccess,
 }: PaymentStatusProps) {
-  const { status, qrisUrl, triggerStatus, isPending } = usePayment({
+  const { status, qrisUrl, totalPrice, isPending } = usePayment({
     sessionId,
     onSuccess,
   });
@@ -88,42 +117,35 @@ export default function PaymentStatus({
 
   // Waiting state — QRIS displayed immediately
   return (
-    <div className="p-8 flex flex-col items-center justify-center min-h-159.25 w-149.25">
-      <GlassCard>
-        <div className="p-8 flex flex-col items-center">
-          <h1 className="text-[28px] font-bold text-white mb-2">Scan to Pay</h1>
-          <p className="text-[19px] text-[#ffffff]/40 leading-7">
+    <div className="w-full max-w-[430px] px-4 py-6 flex justify-center">
+      <GlassCard className="shadow-[0px_10px_30px_rgba(17,45,78,0.35)]">
+        <div className="flex min-h-[640px] flex-col items-center px-8 pt-8 pb-7 text-center">
+          <h1 className="text-[32px] font-bold leading-none text-white">
+            Scan to Pay
+          </h1>
+          <p className="mt-4 text-[18px] leading-7 text-white/45">
             Use any QRIS-compatible payment app
           </p>
 
           {/* QR Code */}
           {qrisUrl && (
-            <div className="bg-white rounded-2xl p-4 mb-6 mt-9.5">
-              <Image
-                src={qrisUrl}
-                alt="QRIS Payment"
-                width={280}
-                height={280}
-                className="rounded-lg"
-              />
+            <div className="mt-10 rounded-2xl bg-white p-4 shadow-[0px_0px_0px_1px_rgba(255,255,255,0.25)]">
+              <QrisPreview key={qrisUrl} src={qrisUrl} />
             </div>
           )}
 
-          {/* Dev Triggers */}
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => triggerStatus('processing')}
-              className="px-4 py-2 rounded-lg bg-green-500/20 border border-green-500/40 text-green-400 text-sm hover:bg-green-500/30 transition-colors cursor-pointer"
-            >
-              ✓ Trigger Success
-            </button>
-            <button
-              onClick={() => triggerStatus('failed')}
-              className="px-4 py-2 rounded-lg bg-red-500/20 border border-red-500/40 text-red-400 text-sm hover:bg-red-500/30 transition-colors cursor-pointer"
-            >
-              ✗ Trigger Failed
-            </button>
-          </div>
+          {!qrisUrl && (
+            <div className="mt-10 rounded-2xl border border-white/15 bg-white/5 px-6 py-8 text-center">
+              <p className="text-sm text-white">
+                QRIS belum siap. Payment masih diproses, silakan tunggu.
+              </p>
+            </div>
+          )}
+          {totalPrice !== null && (
+            <p className="mt-3 pt-10 text-[26px] font-semibold leading-none text-white">
+              Rp {formatRupiah(totalPrice)}
+            </p>
+          )}
         </div>
       </GlassCard>
     </div>
