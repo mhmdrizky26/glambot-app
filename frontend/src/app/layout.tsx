@@ -35,8 +35,7 @@ export default function RootLayout({
     >
       <body className="font-grotesk min-h-screen  bg-[url('/bg.webp')] bg-cover bg-center">
         <Providers>
-          <MSWInit />
-          {children}
+          <MSWInit>{children}</MSWInit>
         </Providers>
       </body>
     </html>

@@ -65,6 +65,16 @@ export function PhotoSessionPage() {
   }, [sessionId]);
 
   useEffect(() => {
+    if (sessionTimeLeft === 0 && sessionId) {
+      const timeout = setTimeout(() => {
+        router.push(`/photo-editor?sessionId=${sessionId}`);
+      }, 1000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [sessionTimeLeft, sessionId, router]);
+
+  useEffect(() => {
     if (sessionTimeLeft <= 0) return;
 
     const timer = setInterval(() => {

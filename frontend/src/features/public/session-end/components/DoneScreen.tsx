@@ -24,9 +24,6 @@ export function DoneScreen({ onSessionEnd }: DoneScreenProps) {
         <div className="w-37.5 h-37.5">
           <Lottie animationData={loadingAnimation} loop={true} />
         </div>
-        <p className="text-primary/60 text-lg font-medium tracking-wide animate-pulse">
-          Processing your photos...
-        </p>
       </div>
     );
   }

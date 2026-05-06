@@ -13,7 +13,7 @@ export interface Photo {
 export const getPhotos = async (sessionId: string): Promise<Photo[]> => {
   console.log('[API] Fetching photos for sessionId:', sessionId);
   const response = await apiClient.get<Photo[]>(
-    `/api/photo-session/${sessionId}/photos`,
+    `/api/photo/session/${sessionId}`,
   );
   console.log('[API] Photos response:', response.data);
   return response.data;

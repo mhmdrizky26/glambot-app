@@ -2,11 +2,25 @@ import { useQuery, queryOptions } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { QueryConfig } from '@/lib/react-query';
 
-// Frame model
+export type SlotShape = 'rect' | 'ellipse';
+
+export interface FrameSlot {
+  id: string;
+  shape: SlotShape;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  label?: string;
+}
+
 export interface Frame {
   id: string;
   name: string;
   imageUrl: string;
+  canvasWidth: number;
+  canvasHeight: number;
+  slots: FrameSlot[];
 }
 
 export const getFrames = async (): Promise<Frame[]> => {

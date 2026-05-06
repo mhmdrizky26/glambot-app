@@ -1,12 +1,20 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { initializeMocks } from '@/testing/mocks/initialize';
 
-export function MSWInit() {
+export function MSWInit({ children }: { children: React.ReactNode }) {
+  const [mswReady, setMswReady] = useState(
+    process.env.NEXT_PUBLIC_ENABLE_API_MOCKING !== 'true',
+  );
+
   useEffect(() => {
-    initializeMocks();
+    if (process.env.NEXT_PUBLIC_ENABLE_API_MOCKING !== 'true') return;
+
+    initializeMocks().then(() => setMswReady(true));
   }, []);
 
-  return null;
+  if (!mswReady) return null;
+
+  return <>{children}</>;
 }

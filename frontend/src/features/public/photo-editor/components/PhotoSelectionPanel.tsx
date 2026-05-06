@@ -1,5 +1,6 @@
 'use client';
 
+import { useCallback, useState } from 'react';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import GlassCard from '@/components/shared/GlassCard';
 import type { Photo } from '../api/getPhotos';
@@ -15,10 +16,38 @@ interface PhotoItemProps {
 }
 
 function PhotoItem({ photo }: PhotoItemProps) {
+  const [isDragging, setIsDragging] = useState(false);
+
+  const handleDragStart = useCallback(
+    (e: React.DragEvent) => {
+      e.dataTransfer.effectAllowed = 'copy';
+      e.dataTransfer.setData(
+        'application/json',
+        JSON.stringify({
+          photoId: photo.id,
+          photoUrl: photo.url,
+        }),
+      );
+      setIsDragging(true);
+    },
+    [photo.id, photo.url],
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setIsDragging(false);
+  }, []);
+
   return (
     <div
       data-testid={`photo-thumbnail-${photo.id}`}
-      className="relative aspect-square w-full rounded-xl overflow-hidden transition-all duration-150 shadow-md"
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
+      className={`relative aspect-square w-full rounded-xl overflow-hidden transition-all duration-150 shadow-md cursor-grab active:cursor-grabbing ${
+        isDragging
+          ? 'opacity-50 scale-95'
+          : 'opacity-100 hover:scale-[1.03] hover:shadow-lg'
+      }`}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -49,9 +78,6 @@ export default function PhotoSelectionPanel({
     return (
       <GlassCard className="flex flex-col h-full max-w-none">
         <div className="flex flex-col items-center justify-center h-full gap-3 px-4 py-8 text-center">
-          <div className="w-12 h-12 rounded-xl bg-[#F9F7F7]/10 border border-[#F9F7F7]/15 flex items-center justify-center">
-            <span className="text-[#3F72AF] text-xl opacity-60">🖼️</span>
-          </div>
           <p className="text-[#F9F7F7]/60 text-sm font-medium">
             No photos available.
           </p>

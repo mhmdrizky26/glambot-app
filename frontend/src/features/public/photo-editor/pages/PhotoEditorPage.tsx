@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { fabric } from 'fabric';
 
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import PhotoSelectionPanel from '../components/PhotoSelectionPanel';
@@ -12,6 +13,9 @@ import ConfirmPrintButton from '../components/ConfirmPrintButton';
 import { usePhotos } from '../api/getPhotos';
 import { useFrames } from '../api/getFrames';
 import type { Frame } from '../api/getFrames';
+import { exportComposition } from '../lib/exportComposition';
+import { useSaveComposition } from '../api/saveComposition';
+import { usePhotoComposition } from '../hooks/usePhotoComposition';
 
 // Filter type
 export type FilterType = 'original' | 'warm' | 'cool' | 'vintage' | 'dramatic';
@@ -27,6 +31,15 @@ export default function PhotoEditorPage() {
   const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('original');
   const [activeTab, setActiveTab] = useState<TabType>('frame');
+  const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+
+  // Photo composition tracking
+  const {
+    slots,
+    addPhotoToSlot,
+    setFrame: setCompositionFrame,
+    setFilter: setCompositionFilter,
+  } = usePhotoComposition();
 
   // Fetch data
   const { data: photos = [], isLoading: photosLoading } = usePhotos({
@@ -34,6 +47,9 @@ export default function PhotoEditorPage() {
   });
 
   const { data: frames = [], isLoading: framesLoading } = useFrames();
+
+  // Save composition mutation
+  const { mutate: saveComposition, isPending: isSaving } = useSaveComposition();
 
   // Loading state
   if (photosLoading || framesLoading) {
@@ -52,31 +68,92 @@ export default function PhotoEditorPage() {
     });
 
     setSelectedFrame(frame);
+    setCompositionFrame(frame);
   };
 
   const handleFilterSelect = (filter: FilterType) => {
     setSelectedFilter(filter);
+    setCompositionFilter(filter);
   };
 
   const handleTabChange = (tab: TabType) => {
     setActiveTab(tab);
   };
 
+  // Handle photo dropped into slot
+  const handlePhotoDropped = (
+    slotId: string,
+    photoId: string,
+    photoUrl: string,
+  ) => {
+    console.log('[PhotoEditorPage] Photo dropped:', {
+      slotId,
+      photoId,
+      photoUrl,
+    });
+    addPhotoToSlot(slotId, photoId, photoUrl);
+  };
+
   // Confirm Print logic
   const isConfirmEnabled = selectedFrame !== null;
 
-  const handleConfirmPrint = () => {
-    if (!isConfirmEnabled) return;
+  const handleConfirmPrint = async () => {
+    if (!isConfirmEnabled || !fabricCanvasRef.current) return;
 
-    // TODO: Save composition
-    console.log('Composition saved:', {
-      sessionId,
-      frameId: selectedFrame?.id,
-      filter: selectedFilter,
-    });
+    try {
+      // Collect photo IDs from slots
+      const photoIds = Object.values(slots)
+        .filter((slot) => slot.photoId !== null)
+        .map((slot) => slot.photoId as string);
 
-    // Navigate to session-end screen (get-photos -> done)
-    router.push(`/session-end?sessionId=${sessionId}`);
+      console.log(
+        '[PhotoEditorPage] Saving composition with photo IDs:',
+        photoIds,
+      );
+
+      // Export canvas at high resolution
+      const exported = await exportComposition(fabricCanvasRef.current, {
+        format: 'jpeg',
+        quality: 0.95,
+        multiplier: 3,
+      });
+
+      console.log(
+        'Export size:',
+        (exported.fileSize / 1024 / 1024).toFixed(2),
+        'MB',
+      );
+
+      const downloadLink = document.createElement('a');
+      downloadLink.href = exported.dataUrl;
+      downloadLink.download = `photo-composition-${sessionId}-${Date.now()}.jpg`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      document.body.removeChild(downloadLink);
+
+      // Save to backend
+      saveComposition(
+        {
+          sessionId,
+          frameId: selectedFrame!.id,
+          filter: selectedFilter,
+          photoIds, // Now tracking photo IDs from composition state
+          composedImage: exported.blob,
+        },
+        {
+          onSuccess: () => {
+            router.push(`/session-end?sessionId=${sessionId}`);
+          },
+          onError: (error) => {
+            console.error('Failed to save composition:', error);
+            alert('Failed to save composition. Please try again.');
+          },
+        },
+      );
+    } catch (error) {
+      console.error('Export failed:', error);
+      alert('Failed to export composition. Please try again.');
+    }
   };
 
   return (
@@ -100,6 +177,10 @@ export default function PhotoEditorPage() {
           <PreviewArea
             selectedFrame={selectedFrame}
             selectedFilter={selectedFilter}
+            onPhotoDropped={handlePhotoDropped}
+            onCanvasReady={(canvas) => {
+              fabricCanvasRef.current = canvas;
+            }}
           />
         </div>
 
@@ -124,6 +205,15 @@ export default function PhotoEditorPage() {
           />
         </div>
       </div>
+
+      {/* Loading overlay during save */}
+      {isSaving && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6">
+            <StatusAnimation status="waiting" className="w-16 h-16" />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
