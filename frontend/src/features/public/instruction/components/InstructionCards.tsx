@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import type { InstructionStep } from '../data/steps';
@@ -208,28 +209,29 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
             <div className="grid grid-cols-5 gap-3">
               {step.gestures?.map((gesture, i) => {
                 const isActive = i === activeIndex;
-                const Icon = gesture.icon;
 
                 return (
                   <GlassCard
                     key={i}
                     variant="secondary"
                     className={cn(
-                      'flex h-32.5 flex-col items-center justify-center rounded-2xl px-2 py-3 text-center transition-all duration-300',
+                      'flex h-38 w-[125px] flex-col items-center justify-center rounded-2xl px-2 py-3 text-center transition-all duration-300',
                       isActive
                         ? 'scale-[1.04] border-white/10 bg-[#3f72af]/65 shadow-md'
                         : 'border-transparent',
                     )}
                   >
-                    <div
-                      className={cn(
-                        'mb-2.5 flex h-11 w-11 items-center justify-center rounded-xl transition-colors bg-white/15',
-                      )}
-                    >
-                      {Icon ? (
-                        <Icon className="text-white" size={22} />
+                    <div className="mb-2.5 flex items-center justify-center">
+                      {gesture.icon ? (
+                        <Image
+                          src={gesture.icon}
+                          alt={gesture.name}
+                          width={55}
+                          height={55}
+                          className="object-contain"
+                        />
                       ) : (
-                        <span className="inline-block h-5 w-5" />
+                        <span className="inline-block h-14 w-14" />
                       )}
                     </div>
 

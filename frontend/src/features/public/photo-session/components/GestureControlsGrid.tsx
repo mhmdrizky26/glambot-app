@@ -1,8 +1,10 @@
 import { ShieldAlert } from 'lucide-react';
+import Image from 'next/image';
 
 interface SessionGesture {
   name: string;
-  emoji: string;
+  icon: string;
+  fingers: string;
 }
 
 interface GestureControlsGridProps {
@@ -18,7 +20,7 @@ export function GestureControlsGrid({
 }: GestureControlsGridProps) {
   return (
     <div className="bg-primary/75 border border-white/10 rounded-2xl p-4 shadow-lg flex flex-col flex-1 h-full">
-      <div className="grid grid-cols-5 gap-2 mb-auto">
+      <div className="grid grid-cols-5 gap-3 mb-auto">
         {gestures.map((gesture, i) => {
           const isActive = i === activeGestureIndex;
           const isUnlock = gesture.name === 'Unlock';
@@ -27,15 +29,23 @@ export function GestureControlsGrid({
             <button
               key={i}
               onClick={() => onTrigger?.(i)}
-              className={`flex flex-col items-center justify-center text-center px-[11.49px] py-[9.58px] h-18.75 rounded-xl transition-all duration-200 border ${
+              className={`flex flex-col items-center justify-center text-center px-3 py-3.5 min-w-18.75 rounded-xl transition-all duration-200 border ${
                 isActive
                   ? 'bg-[#ffff]/35 border-[#ffff]/45  shadow-md scale-105'
                   : 'bg-[#ffff]/5 hover:bg-white/10 border-white/8'
               }`}
             >
-              <div className="text-[22px] mb-1.25">{gesture.emoji}</div>
+              <div className="mb-2 flex items-center justify-center">
+                <Image
+                  src={gesture.icon}
+                  alt={gesture.name}
+                  width={34}
+                  height={34}
+                  className="object-contain"
+                />
+              </div>
               <h4
-                className={`text-sm leading-3.25 font-normal ${
+                className={`text-sm leading-tight font-normal ${
                   isUnlock ? 'text-white' : 'text-white/70'
                 }`}
               >
