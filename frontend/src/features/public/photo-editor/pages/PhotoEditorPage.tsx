@@ -170,7 +170,7 @@ export default function PhotoEditorPage() {
         {/* Panels row */}
         <div className="flex-1 flex items-stretch gap-3 min-h-0">
           {/* Left Panel */}
-          <div className="w-[337px] shrink-0">
+          <div className="w-84.25 shrink-0">
             <PhotoSelectionPanel photos={photos} isLoading={photosLoading} />
           </div>
 
@@ -187,7 +187,7 @@ export default function PhotoEditorPage() {
           </div>
 
           {/* Right Panel */}
-          <div className="w-[337px] shrink-0">
+          <div className="w-84.25 shrink-0">
             <FrameSelectionPanel
               frames={frames}
               selectedFrame={selectedFrame}
@@ -202,7 +202,7 @@ export default function PhotoEditorPage() {
 
         {/* Confirm Print Button — below right panel, aligned right */}
         <div className="flex justify-end">
-          <div className="w-[337px]">
+          <div className="w-84.25">
             <ConfirmPrintButton
               disabled={!isConfirmEnabled}
               onClick={handleConfirmPrint}
