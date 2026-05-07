@@ -24,7 +24,7 @@ export default function PayPage() {
   };
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-4">
+    <main className="flex flex-col items-center justify-center min-h-full px-4">
       <Timer />
       <PaymentStatus
         sessionId={sessionId}

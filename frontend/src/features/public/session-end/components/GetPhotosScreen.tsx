@@ -21,7 +21,7 @@ export function GetPhotosScreen({ onComplete }: GetPhotosScreenProps) {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center gap-4">
+      <div className="min-h-full w-full flex flex-col items-center justify-center gap-4">
         <div className="w-37.5 h-37.5">
           <Lottie animationData={loadingAnimation} loop={true} />
         </div>
@@ -33,7 +33,7 @@ export function GetPhotosScreen({ onComplete }: GetPhotosScreenProps) {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center relative overflow-hidden">
+    <div className="min-h-full w-full flex flex-col items-center relative overflow-hidden">
       <Timer duration={10} onTimeUp={onComplete} />
       {/* Header */}
       <div className="w-full flex items-center justify-center pt-10 pb-2 relative px-10">

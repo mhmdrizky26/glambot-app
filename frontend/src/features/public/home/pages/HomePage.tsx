@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button';
 
 export default function Home() {
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen">
+    <main className="flex flex-col items-center justify-center min-h-full">
       <p className="text-primary text-[24px] tracking-[9px]">Experience The</p>
 
       <h1 className="mt-4 font-changa text-[140px] leading-none font-black gradient-text select-none">

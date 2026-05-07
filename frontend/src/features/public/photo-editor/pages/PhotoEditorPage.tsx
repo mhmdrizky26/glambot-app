@@ -54,7 +54,7 @@ export default function PhotoEditorPage() {
   // Loading state
   if (photosLoading || framesLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="flex items-center justify-center min-h-full">
         <StatusAnimation status="waiting" className="w-24 h-24" />
       </div>
     );
@@ -157,7 +157,7 @@ export default function PhotoEditorPage() {
   };
 
   return (
-    <div className="h-screen w-full flex flex-col">
+    <div className="h-full w-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="w-full text-center py-1 shrink-0">
         <h1 className="text-primary text-[60px] font-bold tracking-tight">
@@ -165,44 +165,49 @@ export default function PhotoEditorPage() {
         </h1>
       </div>
 
-      {/* Main Content - 3 equal height panels */}
-      <div className="flex-1 flex items-center justify-center gap-6  px-6 pb-10 overflow-hidden relative">
-        {/* Left Panel */}
-        <div className="w-84.25 h-full max-h-137.5">
-          <PhotoSelectionPanel photos={photos} isLoading={photosLoading} />
+      {/* Main Content - 3 panels + confirm button */}
+      <div className="flex-1 flex flex-col min-h-0 px-6 pb-6 gap-3">
+        {/* Panels row */}
+        <div className="flex-1 flex items-stretch gap-3 min-h-0">
+          {/* Left Panel */}
+          <div className="w-[337px] shrink-0">
+            <PhotoSelectionPanel photos={photos} isLoading={photosLoading} />
+          </div>
+
+          {/* Center Panel */}
+          <div className="flex-1 min-w-0 flex items-center justify-center">
+            <PreviewArea
+              selectedFrame={selectedFrame}
+              selectedFilter={selectedFilter}
+              onPhotoDropped={handlePhotoDropped}
+              onCanvasReady={(canvas) => {
+                fabricCanvasRef.current = canvas;
+              }}
+            />
+          </div>
+
+          {/* Right Panel */}
+          <div className="w-[337px] shrink-0">
+            <FrameSelectionPanel
+              frames={frames}
+              selectedFrame={selectedFrame}
+              selectedFilter={selectedFilter}
+              activeTab={activeTab}
+              onFrameSelect={handleFrameSelect}
+              onFilterSelect={handleFilterSelect}
+              onTabChange={handleTabChange}
+            />
+          </div>
         </div>
 
-        {/* Center Panel */}
-        <div className="w-120 h-full max-h-137.5 flex items-center justify-center">
-          <PreviewArea
-            selectedFrame={selectedFrame}
-            selectedFilter={selectedFilter}
-            onPhotoDropped={handlePhotoDropped}
-            onCanvasReady={(canvas) => {
-              fabricCanvasRef.current = canvas;
-            }}
-          />
-        </div>
-
-        {/* Right Panel */}
-        <div className="w-84.25 h-full max-h-137.5">
-          <FrameSelectionPanel
-            frames={frames}
-            selectedFrame={selectedFrame}
-            selectedFilter={selectedFilter}
-            activeTab={activeTab}
-            onFrameSelect={handleFrameSelect}
-            onFilterSelect={handleFilterSelect}
-            onTabChange={handleTabChange}
-          />
-        </div>
-
-        {/* Confirm Print Button - positioned below right panel */}
-        <div className="absolute bottom-4 right-27 w-84.25">
-          <ConfirmPrintButton
-            disabled={!isConfirmEnabled}
-            onClick={handleConfirmPrint}
-          />
+        {/* Confirm Print Button — below right panel, aligned right */}
+        <div className="flex justify-end">
+          <div className="w-[337px]">
+            <ConfirmPrintButton
+              disabled={!isConfirmEnabled}
+              onClick={handleConfirmPrint}
+            />
+          </div>
         </div>
       </div>
 

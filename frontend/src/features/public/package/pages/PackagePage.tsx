@@ -47,7 +47,7 @@ export default function PackagePage() {
   };
 
   return (
-    <main className="flex flex-col items-center min-h-screen">
+    <main className="flex flex-col items-center min-h-full">
       <Timer />
       <div className="py-3.5 text-center">
         <h1 className="font-bold text-primary text-[62px]">

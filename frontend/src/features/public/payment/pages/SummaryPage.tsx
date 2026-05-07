@@ -47,7 +47,7 @@ export default function SummaryPage() {
 
   if (isLoading) {
     return (
-      <main className="flex flex-col items-center justify-center min-h-screen px-4">
+      <main className="flex flex-col items-center justify-center min-h-full px-4">
         <StatusAnimation status="waiting" className="w-37.5 h-37.5" />
       </main>
     );
@@ -55,7 +55,7 @@ export default function SummaryPage() {
 
   if (isNotFound) {
     return (
-      <main className="flex flex-col items-center justify-center min-h-screen px-4">
+      <main className="flex flex-col items-center justify-center min-h-full px-4">
         <Timer />
         <GlassCard className="p-8 max-w-174.75">
           <p className="text-white text-center text-xl mb-6">
@@ -80,7 +80,7 @@ export default function SummaryPage() {
   const finalPrice = session?.finalPrice ?? 0;
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-4">
+    <main className="flex flex-col items-center justify-center min-h-full px-4">
       <GlassCard className="p-8 max-w-174.75">
         {/* Title */}
         <h1 className="text-[48px] leading-18 font-bold text-white text-center mb-8">

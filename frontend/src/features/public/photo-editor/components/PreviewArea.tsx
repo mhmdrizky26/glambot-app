@@ -223,12 +223,11 @@ export default function PreviewArea({
             className="border-4 border-dashed border-[#3F72AF]/30 rounded-2xl bg-transparent flex items-center justify-center"
             style={{
               aspectRatio: '464/696',
-              width: '100%',
-              maxWidth: '320px',
+              width: '380px',
               maxHeight: '100%',
             }}
           >
-            <p className="gradient-text text-center text-[13px] leading-5 tracking[1.33px]">
+            <p className="gradient-text text-center text-[16px] leading-5">
               Add Frame First
             </p>
           </div>

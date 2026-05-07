@@ -59,7 +59,7 @@ export default function InstructionPage() {
 
   return (
     <main
-      className="flex flex-col items-center min-h-screen"
+      className="flex flex-col items-center min-h-full"
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >

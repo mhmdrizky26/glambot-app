@@ -4,7 +4,7 @@ import GlassCard from '@/components/shared/GlassCard';
 
 export default function NotFound() {
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-4">
+    <main className="flex flex-col items-center justify-center min-h-full px-4">
       <GlassCard className="p-10 flex flex-col items-center text-center">
         <h1 className="text-8xl font-bold text-white/20 mb-4">404</h1>
         <h2 className="text-2xl font-bold text-white mb-2">Page Not Found</h2>

@@ -18,7 +18,7 @@ function QrisPreview({ src }: { src: string }) {
 
   if (loadFailed) {
     return (
-      <div className="w-[280px] h-[280px] rounded-lg bg-slate-100 flex items-center justify-center px-6 text-center">
+      <div className="w-70 h-70 rounded-lg bg-slate-100 flex items-center justify-center px-6 text-center">
         <p className="text-slate-600 text-sm leading-6">
           QR image gagal dimuat. Tunggu beberapa detik lalu refresh atau buat
           ulang payment.
@@ -117,9 +117,9 @@ export default function PaymentStatus({
 
   // Waiting state — QRIS displayed immediately
   return (
-    <div className="w-full max-w-[430px] px-4 py-6 flex justify-center">
+    <div className="w-full max-w-107.5 px-4 py-6 flex justify-center">
       <GlassCard className="shadow-[0px_10px_30px_rgba(17,45,78,0.35)]">
-        <div className="flex min-h-[640px] flex-col items-center px-8 pt-8 pb-7 text-center">
+        <div className="flex min-h-160 flex-col items-center px-8 pt-8 pb-7 text-center">
           <h1 className="text-[32px] font-bold leading-none text-white">
             Scan to Pay
           </h1>

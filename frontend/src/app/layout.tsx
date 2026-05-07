@@ -33,9 +33,13 @@ export default function RootLayout({
       lang="en"
       className={`${spaceGrotesk.variable} ${changaOne.variable} h-full antialiased`}
     >
-      <body className="font-grotesk min-h-screen  bg-[url('/bg.webp')] bg-cover bg-center">
+      <body className="font-grotesk h-full bg-[url('/bg.webp')] bg-cover bg-center bg-fixed">
         <Providers>
-          <MSWInit>{children}</MSWInit>
+          <MSWInit>
+            <div className="max-w-360 mx-auto h-full overflow-y-auto relative">
+              {children}
+            </div>
+          </MSWInit>
         </Providers>
       </body>
     </html>

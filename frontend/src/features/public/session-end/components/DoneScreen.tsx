@@ -20,7 +20,7 @@ export function DoneScreen({ onSessionEnd }: DoneScreenProps) {
   // Loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen w-full flex flex-col items-center justify-center gap-4">
+      <div className="min-h-full w-full flex flex-col items-center justify-center gap-4">
         <div className="w-37.5 h-37.5">
           <Lottie animationData={loadingAnimation} loop={true} />
         </div>
@@ -29,7 +29,7 @@ export function DoneScreen({ onSessionEnd }: DoneScreenProps) {
   }
 
   return (
-    <div className="min-h-screen w-full flex flex-col items-center justify-center relative overflow-hidden">
+    <div className="min-h-full w-full flex flex-col items-center justify-center relative overflow-hidden">
       <Timer duration={10} onTimeUp={onSessionEnd} />
 
       {/* Robot Icon */}
