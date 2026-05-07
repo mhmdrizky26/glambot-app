@@ -48,7 +48,9 @@ const getPrintUnitPrice = (packageCode: string) => {
   }
 };
 
-const normalizeSession = (session: BackendSessionShape): SessionDetailResponse => {
+const normalizeSession = (
+  session: BackendSessionShape,
+): SessionDetailResponse => {
   const packageCode = session.package_code ?? session.packageCode ?? '';
   const packageTitle = packageTitleByCode[packageCode] ?? packageCode;
   const price = session.price ?? session.basePrice ?? 0;
@@ -59,6 +61,7 @@ const normalizeSession = (session: BackendSessionShape): SessionDetailResponse =
   return {
     id: session.id ?? session.sessionId ?? '',
     packageId: session.package_id ?? session.packageId ?? 0,
+    packageCode,
     packageTitle: session.packageTitle ?? packageTitle,
     printCount,
     basePrice: price,
@@ -66,7 +69,8 @@ const normalizeSession = (session: BackendSessionShape): SessionDetailResponse =
     voucherCode: '',
     discount: session.discount ?? 0,
     finalPrice,
-    status: (session.status ?? 'pending_payment') as SessionDetailResponse['status'],
+    status: (session.status ??
+      'pending_payment') as SessionDetailResponse['status'],
     createdAt: session.created_at ?? session.createdAt ?? '',
     expiresAt: session.expires_at ?? session.expiresAt ?? '',
   };
@@ -79,7 +83,12 @@ const normalizeCreateSessionResponse = (
   packageId: session.package_id ?? session.packageId ?? 0,
   printCount: session.print_count ?? session.printCount ?? 0,
   basePrice: session.price ?? session.basePrice ?? 0,
-  finalPrice: session.final_price ?? session.finalPrice ?? session.price ?? session.basePrice ?? 0,
+  finalPrice:
+    session.final_price ??
+    session.finalPrice ??
+    session.price ??
+    session.basePrice ??
+    0,
   status: (session.status ?? 'pending_payment') as SessionResponse['status'],
 });
 
@@ -102,6 +111,7 @@ export interface SessionResponse {
 export interface SessionDetailResponse {
   id: string;
   packageId: number;
+  packageCode: string;
   packageTitle: string;
   printCount: number;
   basePrice: number;
@@ -125,8 +135,13 @@ export const createSession = async (
   input: CreateSessionInput,
 ): Promise<SessionResponse> => {
   try {
-    const response = await apiClient.post<SessionResponse>('/api/session/create', input);
-    return normalizeCreateSessionResponse(response.data as unknown as BackendSessionShape);
+    const response = await apiClient.post<SessionResponse>(
+      '/api/session/create',
+      input,
+    );
+    return normalizeCreateSessionResponse(
+      response.data as unknown as BackendSessionShape,
+    );
   } catch (error) {
     const apiError = error as { statusCode?: number };
     if (apiError.statusCode !== 404) {
@@ -175,7 +190,9 @@ export const patchSessionStatus = async ({
       `/api/session/${sessionId}/status`,
       { status },
     );
-    return normalizeSession(response.data as unknown as BackendSessionStatusShape);
+    return normalizeSession(
+      response.data as unknown as BackendSessionStatusShape,
+    );
   } catch (error) {
     const apiError = error as { statusCode?: number };
     if (apiError.statusCode !== 404) {

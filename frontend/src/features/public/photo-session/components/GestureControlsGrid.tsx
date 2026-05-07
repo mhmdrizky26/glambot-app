@@ -19,8 +19,8 @@ export function GestureControlsGrid({
   onTrigger,
 }: GestureControlsGridProps) {
   return (
-    <div className="bg-primary/75 border border-white/10 rounded-2xl p-4 shadow-lg flex flex-col flex-1 h-full">
-      <div className="grid grid-cols-5 gap-3 mb-auto">
+    <div className="bg-primary/75 border border-white/10 rounded-2xl p-4 shadow-lg flex flex-col h-full overflow-hidden">
+      <div className="grid grid-cols-5 gap-3 flex-1 content-start">
         {gestures.map((gesture, i) => {
           const isActive = i === activeGestureIndex;
           const isUnlock = gesture.name === 'Unlock';
@@ -56,7 +56,7 @@ export function GestureControlsGrid({
         })}
       </div>
 
-      <div className="flex items-start gap-2.5 mt-4 pt-3.5 border-t border-white/5">
+      <div className="flex items-start gap-2.5 mt-auto pt-3.5 border-t border-white/5 shrink-0">
         <ShieldAlert size={13} className="text-[#d4a373] shrink-0 mt-0.5" />
         <div className="flex flex-col text-xs text-white/35 leading-4">
           <span>Stay at least 3 meters away from robot arm</span>
