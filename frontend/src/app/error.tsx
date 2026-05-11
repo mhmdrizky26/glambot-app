@@ -11,7 +11,7 @@ export default function Error({
   reset: () => void;
 }) {
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-4">
+    <main className="flex flex-col items-center justify-center min-h-full px-4">
       <GlassCard className="p-10 flex flex-col items-center text-center">
         <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mb-6">
           <svg

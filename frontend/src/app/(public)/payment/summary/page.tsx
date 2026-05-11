@@ -9,7 +9,7 @@ export const metadata: Metadata = {
 
 function SummaryFallback() {
   return (
-    <main className="flex flex-col items-center justify-center min-h-screen px-4">
+    <main className="flex flex-col items-center justify-center min-h-full px-4">
       <div className="w-full max-w-120 rounded-3xl bg-primary/80 backdrop-blur-xl border border-white/10 shadow-2xl p-8 animate-pulse">
         <div className="h-10 bg-white/10 rounded-lg w-3/4 mx-auto mb-8" />
         <div className="space-y-4 mb-6">

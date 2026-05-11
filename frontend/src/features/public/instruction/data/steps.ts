@@ -1,17 +1,3 @@
-import { type LucideIcon } from 'lucide-react';
-import {
-  ArrowLeft,
-  ArrowRight,
-  ArrowUp,
-  ArrowDown,
-  RotateCw,
-  RotateCcw,
-  ZoomIn,
-  ZoomOut,
-  CircleStop,
-  Hand,
-} from 'lucide-react';
-
 export interface ActivityItem {
   label: string;
 }
@@ -23,7 +9,7 @@ export interface RuleItem {
 export interface GestureItem {
   name: string;
   fingers: string;
-  icon?: LucideIcon;
+  icon?: string; // Path to SVG icon
 }
 
 export interface InstructionStep {
@@ -44,7 +30,7 @@ export const instructionSteps: InstructionStep[] = [
     type: 'get-ready',
     heading: 'Get Ready!',
     subheading: 'Your session lasts',
-    sessionDuration: 8,
+    sessionDuration: 10,
     activities: [
       { label: 'Strike a pose' },
       { label: 'Use gestures' },
@@ -59,6 +45,7 @@ export const instructionSteps: InstructionStep[] = [
       { text: 'Stay 3m away from the robot' },
       { text: 'Stay in detection area' },
       { text: 'Use clear hand gestures' },
+      { text: 'Have fun and be creative!' },
     ],
     dontRules: [
       { text: 'Don’t get too close' },
@@ -73,28 +60,40 @@ export const instructionSteps: InstructionStep[] = [
     heading: 'Gesture Controls',
     subheading: 'Use these hand gestures to control the camera',
     gestures: [
-      { name: 'Move Up', fingers: 'Index', icon: ArrowUp },
-      { name: 'Move Forward', fingers: 'Index + Middle', icon: ZoomIn },
+      { name: 'Move Up', fingers: 'Index', icon: '/finger/MOVE UP.svg' },
+      {
+        name: 'Move Forward',
+        fingers: 'Index + Middle',
+        icon: '/finger/FORWARD.svg',
+      },
       {
         name: 'Move Right',
         fingers: 'Index + Middle + Ring',
-        icon: ArrowRight,
+        icon: '/finger/RIGHT.svg',
       },
       {
         name: 'Move Down',
         fingers: 'Index + Middle + Ring + Pinky',
-        icon: ArrowDown,
+        icon: '/finger/DOWN.svg',
       },
-      { name: 'Stop', fingers: 'Open hand', icon: Hand },
-      { name: 'Move Left', fingers: 'Thumb', icon: ArrowLeft },
-      { name: 'Move Backward', fingers: 'Thumb + Index', icon: ZoomOut },
-      { name: 'Rotate CW', fingers: 'Thumb + Index + Middle', icon: RotateCw },
+      { name: 'Stop', fingers: 'Open hand', icon: '/finger/STOP.svg' },
+      { name: 'Move Left', fingers: 'Thumb', icon: '/finger/MOVELEFT.svg' },
+      {
+        name: 'Move Backward',
+        fingers: 'Thumb + Index',
+        icon: '/finger/BACKWARD.svg',
+      },
+      {
+        name: 'Rotate CW',
+        fingers: 'Thumb + Index + Middle',
+        icon: '/finger/ROTATECW.svg',
+      },
       {
         name: 'Rotate CCW',
         fingers: 'Thumb + Index + Middle + Ring',
-        icon: RotateCcw,
+        icon: '/finger/ROTATECCW.svg',
       },
-      { name: 'Stop', fingers: 'Fist (No finger)', icon: CircleStop },
+      { name: 'Stop', fingers: 'Fist (No finger)', icon: '/finger/STOP2.svg' },
     ],
   },
 ];

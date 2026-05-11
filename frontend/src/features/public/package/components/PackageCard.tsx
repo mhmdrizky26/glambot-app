@@ -23,7 +23,7 @@ export default function PackageCard({
   return (
     <div
       onClick={onClick}
-      className="overflow-hidden w-116 h-134.25 bg-white-400 bg-clip-padding backdrop-filter backdrop-blur-sm bg-opacity-10 border border-gray-100 hover:border-2 hover:border-primary rounded-[29px] cursor-pointer transition-all duration-300"
+      className="overflow-hidden w-116 h-134.25 bg-white-400 bg-clip-padding backdrop-filter backdrop-blur-sm bg-opacity-10 border border-gray-100 hover:border-2 hover:border-primary rounded-[29.31px] cursor-pointer transition-all duration-300"
     >
       <div className="relative">
         <Image width={464} height={244} priority src={imageSrc} alt={title} />
@@ -34,7 +34,7 @@ export default function PackageCard({
         )}
       </div>
 
-      <div className="p-9.5">
+      <div className="p-9.75 pb-90">
         <h3 className="text-primary font-bold text-[26px] mb-3">{title}</h3>
         <p className="text-primary text-[18px] leading-6.75">{description}</p>
         <p className="text-primary text-[58px] font-bold mt-6">

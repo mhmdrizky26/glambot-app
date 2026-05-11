@@ -79,6 +79,7 @@ export const sessionHandlers = [
       {
         id: session.id,
         packageId: session.packageId,
+        packageCode: pkg!.type === 'print' ? 'vip' : 'regular',
         packageTitle: pkg!.title,
         printCount: session.printCount,
         basePrice: session.basePrice,
@@ -126,6 +127,7 @@ export const sessionHandlers = [
       {
         id: updatedSession.id,
         packageId: updatedSession.packageId,
+        packageCode: pkg!.type === 'print' ? 'vip' : 'regular',
         packageTitle: pkg!.title,
         printCount: updatedSession.printCount,
         basePrice: updatedSession.basePrice,

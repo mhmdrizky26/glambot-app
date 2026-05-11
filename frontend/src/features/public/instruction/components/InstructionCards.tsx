@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import type { InstructionStep } from '../data/steps';
@@ -14,13 +15,13 @@ interface CardProps {
 /** "Get Ready" step — session duration + numbered activity list. */
 export function GetReadyCard({ step, onNext, buttonLabel }: CardProps) {
   return (
-    <GlassCard maxWidth="max-w-[724px]" className="p-8">
+    <GlassCard maxWidth="max-w-[724px]" className="p-9.5 ">
       <div className="flex flex-col items-center">
         <Clock4Icon size={98} className="text-white mb-6" />
         <h2 className="text-[52px] font-bold text-white leading-19.5 mb-2">
           {step.heading}
         </h2>
-        <p className="text-white/40 text-[20px] mb-8">
+        <p className="text-white/40 text-[20px] leading-7.5 mb-8 ">
           {step.subheading}{' '}
           <span className="text-white font-semibold">
             {step.sessionDuration} minutes
@@ -208,28 +209,29 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
             <div className="grid grid-cols-5 gap-3">
               {step.gestures?.map((gesture, i) => {
                 const isActive = i === activeIndex;
-                const Icon = gesture.icon;
 
                 return (
                   <GlassCard
                     key={i}
                     variant="secondary"
                     className={cn(
-                      'flex h-32.5 flex-col items-center justify-center rounded-2xl px-2 py-3 text-center transition-all duration-300',
+                      'flex h-38 w-31.25 flex-col items-center justify-center rounded-2xl px-2 py-3 text-center transition-all duration-300',
                       isActive
                         ? 'scale-[1.04] border-white/10 bg-[#3f72af]/65 shadow-md'
                         : 'border-transparent',
                     )}
                   >
-                    <div
-                      className={cn(
-                        'mb-2.5 flex h-11 w-11 items-center justify-center rounded-xl transition-colors bg-white/15',
-                      )}
-                    >
-                      {Icon ? (
-                        <Icon className="text-white" size={22} />
+                    <div className="mb-2.5 flex items-center justify-center">
+                      {gesture.icon ? (
+                        <Image
+                          src={gesture.icon}
+                          alt={gesture.name}
+                          width={55}
+                          height={55}
+                          className="object-contain"
+                        />
                       ) : (
-                        <span className="inline-block h-5 w-5" />
+                        <span className="inline-block h-14 w-14" />
                       )}
                     </div>
 

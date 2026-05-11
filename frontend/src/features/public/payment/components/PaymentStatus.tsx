@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import { usePayment } from '../hooks/usePayment';
@@ -18,7 +18,7 @@ function QrisPreview({ src }: { src: string }) {
 
   if (loadFailed) {
     return (
-      <div className="w-[280px] h-[280px] rounded-lg bg-slate-100 flex items-center justify-center px-6 text-center">
+      <div className="w-70 h-70 rounded-lg bg-slate-100 flex items-center justify-center px-6 text-center">
         <p className="text-slate-600 text-sm leading-6">
           QR image gagal dimuat. Tunggu beberapa detik lalu refresh atau buat
           ulang payment.
@@ -117,13 +117,13 @@ export default function PaymentStatus({
 
   // Waiting state — QRIS displayed immediately
   return (
-    <div className="w-full max-w-[430px] px-4 py-6 flex justify-center">
-      <GlassCard className="shadow-[0px_10px_30px_rgba(17,45,78,0.35)]">
-        <div className="flex min-h-[640px] flex-col items-center px-8 pt-8 pb-7 text-center">
-          <h1 className="text-[32px] font-bold leading-none text-white">
+    <div className="w-full max-w-149.25 h-159.25 px-4 py-6 flex justify-center">
+      <GlassCard className="shadow-[0px_10px_30px_rgba(17,45,78,0.35)] ">
+        <div className="flex min-h-160 flex-col items-center px-8 pt-8 pb-7 text-center">
+          <h1 className="text-[42.82px] font-bold leading-[62.2px] text-white">
             Scan to Pay
           </h1>
-          <p className="mt-4 text-[18px] leading-7 text-white/45">
+          <p className="mt-[8.8px] text-[19px] leading-7 text-[#ffff]/40">
             Use any QRIS-compatible payment app
           </p>
 
@@ -142,7 +142,7 @@ export default function PaymentStatus({
             </div>
           )}
           {totalPrice !== null && (
-            <p className="mt-3 pt-10 text-[26px] font-semibold leading-none text-white">
+            <p className="pt-[38.06px] text-[33.3px] font-semibold leading-12.5 text-white">
               Rp {formatRupiah(totalPrice)}
             </p>
           )}

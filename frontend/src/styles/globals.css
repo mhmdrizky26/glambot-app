@@ -33,6 +33,11 @@
 
     --radius: 0.5rem;
   }
+
+  html,
+  body {
+    height: 100%;
+  }
 }
 
 @theme {
@@ -65,6 +70,15 @@
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
+  }
+
+  .scrollbar-none {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  .scrollbar-none::-webkit-scrollbar {
+    display: none; /* Chrome, Safari and Opera */
   }
 }
 
@@ -156,7 +170,7 @@
     transform: rotate(0deg);
   }
   50% {
-    transform: rotate(90deg);
+    transform: rotate(55deg);
   }
 }
 
@@ -166,6 +180,6 @@
     transform: rotate(0deg);
   }
   50% {
-    transform: rotate(-90deg);
+    transform: rotate(-55deg);
   }
 }
