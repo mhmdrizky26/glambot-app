@@ -10,11 +10,11 @@ export default function Home() {
         GLAMBOT
       </h1>
 
-      <p className="mt-2 text-[#2b4260] text-base font-medium tracking-[2.5px]">
+      <p className="mt-2 text-[#2b4260] text-[24px] font-medium tracking-[3px]">
         Control the camera with your gestures
       </p>
 
-      <Button asChild size="lg" className="mt-20 w-88.5 h-30">
+      <Button asChild size="lg" className="mt-20 w-88.5 h-30 rounded-[60px]">
         <Link href="/package">Tap to Start</Link>
       </Button>
     </main>

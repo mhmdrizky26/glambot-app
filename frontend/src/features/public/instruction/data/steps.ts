@@ -45,6 +45,7 @@ export const instructionSteps: InstructionStep[] = [
       { text: 'Stay 3m away from the robot' },
       { text: 'Stay in detection area' },
       { text: 'Use clear hand gestures' },
+      { text: 'Have fun and be creative!' },
     ],
     dontRules: [
       { text: 'Don’t get too close' },

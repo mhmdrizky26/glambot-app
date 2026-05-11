@@ -9,6 +9,7 @@ import {
   GestureControlsCard,
 } from '../components/InstructionCards';
 import { usePatchSessionStatus } from '@/shared/api/session';
+import { sendSessionBroadcast } from '@/features/public/photo-session/lib/broadcastChannel';
 
 export default function InstructionPage() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -34,6 +35,9 @@ export default function InstructionPage() {
   const handleNext = () => {
     if (isLast) {
       mutate({ sessionId, status: 'shooting' });
+
+      // Broadcast SESSION_START ke Monitor 2 yang sudah standby
+      sendSessionBroadcast({ type: 'SESSION_START', sessionId });
 
       router.push(`/photo-session?sessionId=${sessionId}`);
     } else {

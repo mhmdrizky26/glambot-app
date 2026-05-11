@@ -34,7 +34,7 @@ export function GetPhotosScreen({ onComplete }: GetPhotosScreenProps) {
 
   return (
     <div className="min-h-full w-full flex flex-col items-center relative overflow-hidden">
-      <Timer duration={10} onTimeUp={onComplete} />
+      <Timer duration={60} onTimeUp={onComplete} />
       {/* Header */}
       <div className="w-full flex items-center justify-center pt-10 pb-2 relative px-10">
         <div className="text-center">

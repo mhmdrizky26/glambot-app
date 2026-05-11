@@ -10,15 +10,17 @@ type ScreenType = 'get-photos' | 'done';
 export function SessionEndPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  // const sessionId = searchParams.get('sessionId') ?? '';
+  const sessionId = searchParams.get('sessionId') ?? '';
 
   const [currentScreen, setCurrentScreen] = useState<ScreenType>('get-photos');
 
-  // useEffect(() => {
-  //   if (!sessionId) {
-  //     router.replace('/package');
-  //   }
-  // }, [sessionId, router]);
+  useEffect(() => {
+    if (!sessionId) {
+      router.replace('/package');
+    }
+  }, [sessionId, router]);
+
+  if (!sessionId) return null;
 
   const handleGetPhotosComplete = () => {
     setCurrentScreen('done');
@@ -27,9 +29,6 @@ export function SessionEndPage() {
   const handleSessionEnd = () => {
     router.push('/');
   };
-  // if (!sessionId) {
-  //   return null;
-  // }
 
   return (
     <>

@@ -15,13 +15,13 @@ interface CardProps {
 /** "Get Ready" step — session duration + numbered activity list. */
 export function GetReadyCard({ step, onNext, buttonLabel }: CardProps) {
   return (
-    <GlassCard maxWidth="max-w-[724px]" className="p-8">
+    <GlassCard maxWidth="max-w-[724px]" className="p-9.5 ">
       <div className="flex flex-col items-center">
         <Clock4Icon size={98} className="text-white mb-6" />
         <h2 className="text-[52px] font-bold text-white leading-19.5 mb-2">
           {step.heading}
         </h2>
-        <p className="text-white/40 text-[20px] mb-8">
+        <p className="text-white/40 text-[20px] leading-[30px] mb-8 ">
           {step.subheading}{' '}
           <span className="text-white font-semibold">
             {step.sessionDuration} minutes

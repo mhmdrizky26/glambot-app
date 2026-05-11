@@ -9,7 +9,8 @@ import GlassCard from '@/components/shared/GlassCard';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { TicketIcon, Timer } from 'lucide-react';
+import { TicketIcon, Timer as TimerIcon } from 'lucide-react';
+import Timer from '@/components/shared/Timer';
 
 export default function SummaryPage() {
   const searchParams = useSearchParams();
@@ -56,7 +57,7 @@ export default function SummaryPage() {
   if (isNotFound) {
     return (
       <main className="flex flex-col items-center justify-center min-h-full px-4">
-        <Timer />
+        <TimerIcon />
         <GlassCard className="p-8 max-w-174.75">
           <p className="text-white text-center text-xl mb-6">
             Session not found
@@ -81,9 +82,10 @@ export default function SummaryPage() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-full px-4">
-      <GlassCard className="p-8 max-w-174.75">
+      <Timer />
+      <GlassCard className="px-13.5 pb-[56.59px] pt-[54.92px] max-w-174.75">
         {/* Title */}
-        <h1 className="text-[48px] leading-18 font-bold text-white text-center mb-8">
+        <h1 className="text-[48.46px] leading-[72.7px] font-bold text-white text-center mb-10.75">
           Order Summary
         </h1>
 
@@ -156,7 +158,7 @@ export default function SummaryPage() {
             size="default"
             onClick={applyVoucher}
             disabled={loading || !code.trim() || isValid}
-            className="px-6 py-3.5 text-white disabled:text-white/40"
+            className="px-6 py-3.5 text-white disabled:text-white/40 rounded-[18.85px]"
           >
             {loading ? '...' : 'Apply'}
           </Button>
@@ -174,7 +176,11 @@ export default function SummaryPage() {
         )}
 
         {/* Proceed Button */}
-        <Button variant="outline" onClick={handleProceed} className="w-full">
+        <Button
+          variant="outline"
+          onClick={handleProceed}
+          className="w-[592.29px] py-[26.58px] px-[58.48px] rounded-[45.9px] text-[26.45px] leading-[39.7px] font-medium"
+        >
           Proceed to Payment
         </Button>
       </GlassCard>

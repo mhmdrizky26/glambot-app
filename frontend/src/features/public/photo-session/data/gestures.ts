@@ -6,10 +6,16 @@ interface SessionGesture {
 
 export const Gestures: SessionGesture[] = [
   { name: 'Move Up', icon: '/finger/MOVE UP.svg', fingers: 'Index' },
+  { name: 'Move Left', icon: '/finger/MOVELEFT.svg', fingers: 'Thumb' },
   {
     name: 'Move Forward',
     icon: '/finger/FORWARD.svg',
     fingers: 'Index + Middle',
+  },
+  {
+    name: 'Move Backward',
+    icon: '/finger/BACKWARD.svg',
+    fingers: 'Thumb + Index',
   },
   {
     name: 'Move Right',
@@ -17,22 +23,16 @@ export const Gestures: SessionGesture[] = [
     fingers: 'Index + Middle + Ring',
   },
   {
+    name: 'Rotate CW',
+    icon: '/finger/ROTATECW.svg',
+    fingers: 'Thumb + Index + Middle',
+  },
+  {
     name: 'Move Down',
     icon: '/finger/DOWN.svg',
     fingers: 'Index + Middle + Ring + Pinky',
   },
   { name: 'Stop', icon: '/finger/STOP.svg', fingers: 'Open hand' },
-  { name: 'Move Left', icon: '/finger/MOVELEFT.svg', fingers: 'Thumb' },
-  {
-    name: 'Move Backward',
-    icon: '/finger/BACKWARD.svg',
-    fingers: 'Thumb + Index',
-  },
-  {
-    name: 'Rotate CW',
-    icon: '/finger/ROTATECW.svg',
-    fingers: 'Thumb + Index + Middle',
-  },
   {
     name: 'Rotate CCW',
     icon: '/finger/ROTATECCW.svg',

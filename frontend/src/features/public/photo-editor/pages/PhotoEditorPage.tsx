@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { fabric } from 'fabric';
 
@@ -25,7 +25,13 @@ type TabType = 'frame' | 'filter';
 export default function PhotoEditorPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const sessionId = searchParams.get('sessionId') || 'test-session';
+  const sessionId = searchParams.get('sessionId') ?? '';
+
+  useEffect(() => {
+    if (!sessionId) router.replace('/package');
+  }, [sessionId, router]);
+
+  if (!sessionId) return null;
 
   // State
   const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
