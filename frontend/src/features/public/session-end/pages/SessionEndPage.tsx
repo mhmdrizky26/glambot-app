@@ -33,7 +33,10 @@ export function SessionEndPage() {
   return (
     <>
       {currentScreen === 'get-photos' && (
-        <GetPhotosScreen onComplete={handleGetPhotosComplete} />
+        <GetPhotosScreen
+          onComplete={handleGetPhotosComplete}
+          sessionId={sessionId}
+        />
       )}
       {currentScreen === 'done' && (
         <DoneScreen onSessionEnd={handleSessionEnd} />

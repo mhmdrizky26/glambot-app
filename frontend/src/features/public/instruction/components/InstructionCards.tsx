@@ -21,7 +21,7 @@ export function GetReadyCard({ step, onNext, buttonLabel }: CardProps) {
         <h2 className="text-[52px] font-bold text-white leading-19.5 mb-2">
           {step.heading}
         </h2>
-        <p className="text-white/40 text-[20px] leading-[30px] mb-8 ">
+        <p className="text-white/40 text-[20px] leading-7.5 mb-8 ">
           {step.subheading}{' '}
           <span className="text-white font-semibold">
             {step.sessionDuration} minutes
@@ -215,7 +215,7 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
                     key={i}
                     variant="secondary"
                     className={cn(
-                      'flex h-38 w-[125px] flex-col items-center justify-center rounded-2xl px-2 py-3 text-center transition-all duration-300',
+                      'flex h-38 w-31.25 flex-col items-center justify-center rounded-2xl px-2 py-3 text-center transition-all duration-300',
                       isActive
                         ? 'scale-[1.04] border-white/10 bg-[#3f72af]/65 shadow-md'
                         : 'border-transparent',

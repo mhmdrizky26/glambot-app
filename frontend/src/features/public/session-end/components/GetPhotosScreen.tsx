@@ -3,14 +3,19 @@
 import { Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Lottie from 'lottie-react';
+import Link from 'next/link';
 import loadingAnimation from '@/assets/loading.json';
 import Timer from '@/components/shared/Timer';
 
 interface GetPhotosScreenProps {
   onComplete: () => void;
+  sessionId: string;
 }
 
-export function GetPhotosScreen({ onComplete }: GetPhotosScreenProps) {
+export function GetPhotosScreen({
+  onComplete,
+  sessionId,
+}: GetPhotosScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -34,7 +39,7 @@ export function GetPhotosScreen({ onComplete }: GetPhotosScreenProps) {
 
   return (
     <div className="min-h-full w-full flex flex-col items-center relative overflow-hidden">
-      <Timer duration={60} onTimeUp={onComplete} />
+      <Timer duration={30} onTimeUp={onComplete} />
       {/* Header */}
       <div className="w-full flex items-center justify-center pt-10 pb-2 relative px-10">
         <div className="text-center">
@@ -77,18 +82,30 @@ export function GetPhotosScreen({ onComplete }: GetPhotosScreenProps) {
           </div>
         </div>
 
-        {/* Right — QR Code panel */}
-        <div className="bg-primary/80 backdrop-blur-xl rounded-2xl p-6 flex flex-col items-center justify-center gap-3 min-w-95 h-100">
-          <h2 className="text-white text-xl font-bold">Scan to download</h2>
-          <p className="text-white/60 text-xs text-center">
-            Point your phone&apos;s camera at this QR code.
-          </p>
-          <div className="rounded-xl p-3">
-            <img src="/qr-code 1.svg" alt="QR Code" className="w-65 h-65" />
+        {/* Right — QR Code panel + dev link */}
+        <div className="flex flex-col items-center gap-3">
+          <div className="bg-primary/80 backdrop-blur-xl rounded-2xl p-6 flex flex-col items-center justify-center gap-3 min-w-95 h-100">
+            <h2 className="text-white text-xl font-bold">Scan to download</h2>
+            <p className="text-white/60 text-xs text-center">
+              Point your phone&apos;s camera at this QR code.
+            </p>
+            <div className="rounded-xl p-3">
+              <img
+                src="/qr-code 1.svg"
+                alt={`QR Code untuk /download-photos/${sessionId}`}
+                className="w-65 h-65"
+              />
+            </div>
           </div>
-          <p className="text-white/50 text-[11px]">
-            Google Drive is active for 7 days
-          </p>
+
+          {process.env.NODE_ENV === 'development' && (
+            <Link
+              href={`/download-photos/${sessionId}`}
+              className="text-primary/50 underline text-sm hover:text-primary/80 transition-colors"
+            >
+              Buka Halaman Download (Dev)
+            </Link>
+          )}
         </div>
       </div>
     </div>

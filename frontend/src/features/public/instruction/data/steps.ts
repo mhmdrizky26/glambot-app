@@ -30,7 +30,7 @@ export const instructionSteps: InstructionStep[] = [
     type: 'get-ready',
     heading: 'Get Ready!',
     subheading: 'Your session lasts',
-    sessionDuration: 8,
+    sessionDuration: 10,
     activities: [
       { label: 'Strike a pose' },
       { label: 'Use gestures' },

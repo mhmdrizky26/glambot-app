@@ -46,14 +46,10 @@ export default function PaymentStatus({
   onRetry,
   onSuccess,
 }: PaymentStatusProps) {
-  const { status, qrisUrl, totalPrice, isPending, triggerStatus } = usePayment({
+  const { status, qrisUrl, totalPrice, isPending } = usePayment({
     sessionId,
     onSuccess,
   });
-
-  useEffect(() => {
-    triggerStatus('success');
-  }, []);
 
   // Processing state — user has paid, verifying payment
   if (status === 'processing') {

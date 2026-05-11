@@ -30,7 +30,7 @@ export function DoneScreen({ onSessionEnd }: DoneScreenProps) {
 
   return (
     <div className="min-h-full w-full flex flex-col items-center justify-center relative overflow-hidden">
-      <Timer duration={60} onTimeUp={onSessionEnd} />
+      <Timer duration={30} onTimeUp={onSessionEnd} />
 
       {/* Robot Icon */}
       <div className="mb-4">
