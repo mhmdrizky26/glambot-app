@@ -19,14 +19,13 @@
     "fabric": "^5.5.2",
     "lottie-react": "^2.4.1",
     "lucide-react": "^1.8.0",
-    "nanoid": "^5.1.9",
     "next": "^16.2.4",
+    "qrcode.react": "^4.2.0",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "tailwind-merge": "^3.5.0"
   },
   "devDependencies": {
-    "@mswjs/data": "^0.16.2",
     "@tailwindcss/postcss": "^4",
     "@types/fabric": "^5.3.11",
     "@types/node": "^20",
@@ -35,13 +34,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.2",
     "eslint-plugin-unused-imports": "^4.4.1",
-    "msw": "^2.13.5",
     "tailwindcss": "^4",
     "typescript": "^5"
-  },
-  "msw": {
-    "workerDirectory": [
-      "public"
-    ]
   }
 }

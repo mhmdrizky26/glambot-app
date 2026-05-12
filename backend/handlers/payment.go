@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"photobooth/database"
 	"photobooth/models"
@@ -341,15 +340,8 @@ func markTransactionPaid(orderID string) (string, error) {
 	}
 	rollback = false
 
-	// ── Aktifkan robot setelah pembayaran lunas ──────────────────────────
-	// Dijalankan di goroutine agar tidak block response ke frontend
-	go func() {
-		if err := services.EnableRobot(); err != nil {
-			log.Printf("⚠️  Robot enable gagal (session: %s): %v", sessionID, err)
-		} else {
-			log.Printf("🤖 Robot enabled (session: %s)", sessionID)
-		}
-	}()
+	// Robot enable dipindah ke frontend (tombol "Got it, Let's Go!" di
+	// instruction page) supaya hanya 1 kali fire dan user-controlled.
 
 	return sessionID, nil
 }
@@ -432,14 +424,7 @@ func createOrGetFreePaidTransaction(session *models.Session) (*models.Transactio
 	}
 	rollback = false
 
-	// ── Aktifkan robot untuk free transaction juga ────────────────────────
-	go func() {
-		if err := services.EnableRobot(); err != nil {
-			log.Printf("⚠️  Robot enable gagal (free session: %s): %v", session.ID, err)
-		} else {
-			log.Printf("🤖 Robot enabled (free session: %s)", session.ID)
-		}
-	}()
+	// Robot enable dipindah ke frontend (tombol "Got it, Let's Go!").
 
 	return &existing, nil
 }

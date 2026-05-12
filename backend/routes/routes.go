@@ -36,9 +36,6 @@ func Setup(storagePath string) http.Handler {
 		storageFS.ServeHTTP(w, r)
 	})
 
-	// ── Gallery Public Route ───────────────────────────────────────────────
-	r.Get("/gallery/{sessionID}", handlers.ServeGallery)
-
 	// ─── API Routes ───────────────────────────────────────────────────────────
 	r.Route("/api", func(r chi.Router) {
 
@@ -104,19 +101,16 @@ func Setup(storagePath string) http.Handler {
 			// Trigger preset gerakan robot
 			r.Post("/preset", handlers.TriggerPreset)
 
+			// Robot webhook endpoints
+			r.Post("/webhook", handlers.RobotWebhook)
+			r.Post("/moving", handlers.RobotMoving)
+			r.Post("/move", handlers.RobotMoving) // alias untuk /moving
+			r.Post("/done", handlers.RobotDone)
+
 			// Cek konfigurasi robot saat ini
 			r.Get("/config", handlers.GetRobotConfig)
 		})
 
-		// ── Gallery (legacy API path) ──────────────────────────────────────
-		r.Get("/gallery/{sessionID}", handlers.GetGalleryData)
-
-		// ── Admin ───────────────────────────────────────────────────────────
-		r.Route("/admin", func(r chi.Router) {
-			r.Get("/vouchers", handlers.ListVouchers)
-			r.Post("/vouchers", handlers.CreateVoucher)
-			r.Delete("/vouchers/{code}", handlers.DeleteVoucher)
-		})
 	})
 
 	return r

@@ -16,7 +16,8 @@ import (
 // GET /api/package
 func GetPackages(w http.ResponseWriter, r *http.Request) {
 	rows, err := database.DB.Query(`
-		SELECT id, code, name, base_price, duration_secs, COALESCE(description, '')
+		SELECT id, code, name, base_price, duration_secs, COALESCE(description, ''),
+		       COALESCE(image_src, ''), is_popular, print_count
 		FROM packages
 		WHERE is_active = 1
 		ORDER BY sort_order ASC, code ASC`)
@@ -29,10 +30,15 @@ func GetPackages(w http.ResponseWriter, r *http.Request) {
 	packages := make([]models.PackageInfo, 0)
 	for rows.Next() {
 		var pkg models.PackageInfo
-		if err := rows.Scan(&pkg.ID, &pkg.Code, &pkg.Name, &pkg.Price, &pkg.DurationSecs, &pkg.Description); err != nil {
+		var isPopularInt int
+		if err := rows.Scan(
+			&pkg.ID, &pkg.Code, &pkg.Name, &pkg.Price, &pkg.DurationSecs,
+			&pkg.Description, &pkg.ImageSrc, &isPopularInt, &pkg.PrintCount,
+		); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to read packages")
 			return
 		}
+		pkg.IsPopular = isPopularInt == 1
 		pkg.DurationMins = pkg.DurationSecs / 60
 		packages = append(packages, pkg)
 	}
@@ -69,7 +75,6 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "Invalid package id")
 		return
 	}
-	pkgInfo.DurationMins = pkgInfo.DurationSecs / 60
 
 	printUnitPrice := getPrintUnitPrice(pkgInfo.Code)
 

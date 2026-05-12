@@ -1,6 +1,9 @@
 package models
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // ─── Package ────────────────────────────────────────────────────────────────
 
@@ -19,6 +22,9 @@ type PackageInfo struct {
 	DurationSecs int    `json:"duration_secs"`
 	DurationMins int    `json:"duration_mins"`
 	Description  string `json:"description"`
+	ImageSrc     string `json:"image_src,omitempty"`
+	IsPopular    bool   `json:"is_popular"`
+	PrintCount   int    `json:"print_count"`
 }
 
 // ─── Session ─────────────────────────────────────────────────────────────────
@@ -120,11 +126,14 @@ type Voucher struct {
 // ─── Frame ───────────────────────────────────────────────────────────────────
 
 type Frame struct {
-	ID         string `json:"id"`
-	Name       string `json:"name"`
-	FilePath   string `json:"file_path"`
-	ThumbURL   string `json:"thumb_url"`
-	PhotoSlots int    `json:"photo_slots"`
+	ID           string          `json:"id"`
+	Name         string          `json:"name"`
+	FilePath     string          `json:"file_path"`
+	ThumbURL     string          `json:"thumb_url"`
+	PhotoSlots   int             `json:"photo_slots"`
+	CanvasWidth  int             `json:"canvas_width"`
+	CanvasHeight int             `json:"canvas_height"`
+	Slots        json.RawMessage `json:"slots"`
 }
 
 // ─── Request / Response DTOs ─────────────────────────────────────────────────

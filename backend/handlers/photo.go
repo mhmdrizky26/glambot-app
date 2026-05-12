@@ -11,7 +11,6 @@ import (
 	"photobooth/config"
 	"photobooth/database"
 	"photobooth/models"
-	"photobooth/services"
 	"strings"
 	"time"
 
@@ -218,63 +217,84 @@ func SelectPhotos(w http.ResponseWriter, r *http.Request) {
 }
 
 // GET /api/frames
-// List semua frame PNG yang tersedia di folder storage/frames
+// List semua frame aktif dari DB (dengan slot data)
 func GetFrames(w http.ResponseWriter, r *http.Request) {
-	framesDir := filepath.Join(config.App.StoragePath, "frames")
-
-	entries, err := os.ReadDir(framesDir)
+	rows, err := database.DB.Query(`
+		SELECT id, name, file_path, thumb_url, photo_slots, canvas_width, canvas_height, slots
+		FROM frames
+		WHERE is_active = 1
+		ORDER BY sort_order ASC, id ASC`)
 	if err != nil {
-		// Folder belum ada, return list kosong
-		respondJSON(w, http.StatusOK, models.SuccessResponse([]models.Frame{}))
+		respondError(w, http.StatusInternalServerError, "Failed to load frames")
 		return
 	}
+	defer rows.Close()
 
-	var frames []models.Frame
-	for _, entry := range entries {
-		if entry.IsDir() {
-			continue
+	frames := make([]models.Frame, 0)
+	for rows.Next() {
+		var f models.Frame
+		var slotsBytes []byte
+		if err := rows.Scan(
+			&f.ID, &f.Name, &f.FilePath, &f.ThumbURL,
+			&f.PhotoSlots, &f.CanvasWidth, &f.CanvasHeight, &slotsBytes,
+		); err != nil {
+			respondError(w, http.StatusInternalServerError, "Failed to read frames")
+			return
 		}
-
-		name := entry.Name()
-		ext := strings.ToLower(filepath.Ext(name))
-		if ext != ".png" {
-			continue
+		if len(slotsBytes) > 0 {
+			f.Slots = slotsBytes
+		} else {
+			f.Slots = []byte("[]")
 		}
-
-		nameWithoutExt := strings.TrimSuffix(name, filepath.Ext(name))
-		frame := models.Frame{
-			ID:         nameWithoutExt,
-			Name:       formatFrameName(nameWithoutExt),
-			FilePath:   fmt.Sprintf("frames/%s", name),
-			ThumbURL:   fmt.Sprintf("/storage/frames/%s", name),
-			PhotoSlots: 3,
-		}
-		frames = append(frames, frame)
+		frames = append(frames, f)
 	}
 
-	if frames == nil {
-		frames = []models.Frame{}
+	if err := rows.Err(); err != nil {
+		respondError(w, http.StatusInternalServerError, "Failed to read frames")
+		return
 	}
 
 	respondJSON(w, http.StatusOK, models.SuccessResponse(frames))
 }
 
 // POST /api/photo/compose
-// Gabungkan 3 foto yang dipilih dengan frame → hasil strip akhir
-// POST /api/photo/compose
+// Simpan hasil komposisi (image canvas yang sudah di-render frontend) ke storage + DB.
+// Frontend export canvas (frame + foto + filter) jadi JPEG dan kirim via field "image".
+// Backend tidak re-render server-side karena slot positions dinamis per-frame (di DB).
 func ComposeFrame(w http.ResponseWriter, r *http.Request) {
-	var req models.ComposeFrameRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
+	// Max 20MB per file (canvas export bisa besar)
+	if err := r.ParseMultipartForm(20 << 20); err != nil {
+		respondError(w, http.StatusBadRequest, "Gagal membaca form compose")
+		return
+	}
+	if r.MultipartForm != nil {
+		defer r.MultipartForm.RemoveAll()
+	}
+
+	sessionID := firstNonEmpty(r.FormValue("sessionId"), r.FormValue("session_id"))
+	frameID := firstNonEmpty(r.FormValue("frameId"), r.FormValue("frame_id"))
+	photoIDsJSON := firstNonEmpty(r.FormValue("photoIds"), r.FormValue("photo_ids"))
+	// stripFilter sudah baked-in di canvas export; field di-accept untuk forward-compat
+	_ = firstNonEmpty(r.FormValue("filter"), r.FormValue("strip_filter"))
+
+	if sessionID == "" {
+		respondError(w, http.StatusBadRequest, "session_id wajib diisi")
+		return
+	}
+	if frameID == "" {
+		respondError(w, http.StatusBadRequest, "frame_id wajib diisi")
 		return
 	}
 
-	if len(req.PhotoIDs) != 3 {
-		respondError(w, http.StatusBadRequest, "Harus ada tepat 3 foto")
-		return
+	var photoIDs []string
+	if photoIDsJSON != "" {
+		if err := json.Unmarshal([]byte(photoIDsJSON), &photoIDs); err != nil {
+			respondError(w, http.StatusBadRequest, "Invalid photo_ids format")
+			return
+		}
 	}
 
-	session, err := GetSessionByID(req.SessionID)
+	session, err := GetSessionByID(sessionID)
 	if err != nil {
 		respondError(w, http.StatusNotFound, "Session tidak ditemukan")
 		return
@@ -283,62 +303,75 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	allowedStatus := session.Status == models.StatusShooting ||
 		session.Status == models.StatusPaid ||
 		session.Status == models.StatusCompleted
-
 	if !allowedStatus {
 		respondError(w, http.StatusBadRequest, "Status sesi tidak valid untuk compose")
 		return
 	}
 
-	// Ambil file_path tiap foto dari DB
-	photoPaths := make([]string, 0, 3)
-	for _, photoID := range req.PhotoIDs {
-		var filePath string
-		err := database.DB.QueryRow(
-			`SELECT file_path FROM photos WHERE id = ? AND session_id = ?`,
-			photoID, req.SessionID,
-		).Scan(&filePath)
-		if err != nil {
+	// Validasi tiap photo_id memang milik sesi ini
+	for _, photoID := range photoIDs {
+		var count int
+		if err := database.DB.QueryRow(
+			`SELECT COUNT(*) FROM photos WHERE id = ? AND session_id = ?`,
+			photoID, sessionID,
+		).Scan(&count); err != nil || count == 0 {
 			respondError(w, http.StatusBadRequest,
 				fmt.Sprintf("Foto %s tidak ditemukan", photoID))
 			return
 		}
-		photoPaths = append(photoPaths, filePath)
 	}
 
-	// Buat folder hasil
-	framedDir := filepath.Join(config.App.StoragePath, "sessions", req.SessionID, "framed")
+	// Ambil file image hasil canvas export dari frontend
+	file, header, err := r.FormFile("image")
+	if err != nil {
+		respondError(w, http.StatusBadRequest, "File komposisi (image) wajib disertakan")
+		return
+	}
+	defer file.Close()
+
+	// Tentukan ekstensi dari header file (default .jpg)
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext != ".jpg" && ext != ".jpeg" && ext != ".png" {
+		ext = ".jpg"
+	}
+
+	// Buat folder framed
+	framedDir := filepath.Join(config.App.StoragePath, "sessions", sessionID, "framed")
 	if err := os.MkdirAll(framedDir, 0755); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal membuat direktori hasil")
 		return
 	}
 
-	// Generate nama file hasil
 	resultID := uuid.New().String()
-	framedFileName := fmt.Sprintf("result_%s.png", resultID)
-	framedRelPath := fmt.Sprintf("sessions/%s/framed/%s", req.SessionID, framedFileName)
+	framedFileName := fmt.Sprintf("result_%s%s", resultID, ext)
+	framedRelPath := fmt.Sprintf("sessions/%s/framed/%s", sessionID, framedFileName)
 	framedFullPath := filepath.Join(config.App.StoragePath, framedRelPath)
 
-	// ── Compose gambar asli ──────────────────────────────────────────────
-	if err := services.ComposeStripResult(
-		req.SessionID,
-		req.FrameID,
-		photoPaths,
-		req.StripFilter,
-		framedFullPath,
+	dst, err := os.Create(framedFullPath)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError, "Gagal membuat file hasil")
+		return
+	}
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, file); err != nil {
+		respondError(w, http.StatusInternalServerError, "Gagal menulis file hasil")
+		return
+	}
+
+	// Tandai foto yang dipilih (kalau ada)
+	if len(photoIDs) > 0 {
+		if err := updateSelectedPhotos(sessionID, photoIDs); err != nil {
+			respondError(w, http.StatusInternalServerError, "Gagal menyimpan pilihan foto")
+			return
+		}
+	}
+
+	// Update sesi: frame_id + status completed
+	if _, err := database.DB.Exec(
+		`UPDATE sessions SET frame_id = ?, status = 'completed' WHERE id = ?`,
+		frameID, sessionID,
 	); err != nil {
-		respondError(w, http.StatusInternalServerError,
-			"Gagal compose foto: "+err.Error())
-		return
-	}
-
-	if err := updateSelectedPhotos(req.SessionID, req.PhotoIDs); err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal menyimpan pilihan foto")
-		return
-	}
-
-	// Update sesi
-	if _, err := database.DB.Exec(`UPDATE sessions SET frame_id = ?, status = 'completed' WHERE id = ?`,
-		req.FrameID, req.SessionID); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal memperbarui sesi")
 		return
 	}
@@ -347,7 +380,7 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	if _, err := database.DB.Exec(`
 		INSERT INTO photos (id, session_id, file_path, file_name, type, selected, created_at)
 		VALUES (?, ?, ?, ?, 'framed', 1, ?)`,
-		resultID, req.SessionID, framedRelPath, framedFileName, time.Now().UTC(),
+		resultID, sessionID, framedRelPath, framedFileName, time.Now().UTC(),
 	); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal menyimpan metadata hasil")
 		return
@@ -358,8 +391,17 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		"download_url": fmt.Sprintf("/api/photo/download/%s", resultID),
 		"preview_url":  fmt.Sprintf("/storage/%s", framedRelPath),
 		"status":       "composed",
-		"message":      "Strip foto berhasil dibuat",
+		"message":      "Strip foto berhasil disimpan",
 	}))
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if v != "" {
+			return v
+		}
+	}
+	return ""
 }
 
 // GET /api/photo/download/{photoID}
@@ -439,18 +481,6 @@ func GetFramedPhotos(w http.ResponseWriter, r *http.Request) {
 }
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
-
-func formatFrameName(s string) string {
-	s = strings.ReplaceAll(s, "-", " ")
-	s = strings.ReplaceAll(s, "_", " ")
-	words := strings.Fields(s)
-	for i, word := range words {
-		if len(word) > 0 {
-			words[i] = strings.ToUpper(word[:1]) + strings.ToLower(word[1:])
-		}
-	}
-	return strings.Join(words, " ")
-}
 
 func updateSelectedPhotos(sessionID string, photoIDs []string) error {
 	tx, err := database.DB.Begin()

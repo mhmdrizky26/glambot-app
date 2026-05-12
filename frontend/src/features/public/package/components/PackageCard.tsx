@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { formatPriceToK } from '@/lib/formats';
 
 interface PackageCardProps {
@@ -26,7 +25,8 @@ export default function PackageCard({
       className="overflow-hidden w-116 h-134.25 bg-white-400 bg-clip-padding backdrop-filter backdrop-blur-sm bg-opacity-10 border border-gray-100 hover:border-2 hover:border-primary rounded-[29.31px] cursor-pointer transition-all duration-300"
     >
       <div className="relative">
-        <Image width={464} height={244} priority src={imageSrc} alt={title} />
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img width={464} height={244} src={imageSrc} alt={title} />
         {isPopular && (
           <div className="absolute top-2 left-2 gradient-primary text-white px-3.5 py-1 m-2 rounded-full text-sm font-medium">
             Popular

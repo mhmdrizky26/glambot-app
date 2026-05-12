@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import Image from 'next/image';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import type { InstructionStep } from '../data/steps';
@@ -223,7 +222,8 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
                   >
                     <div className="mb-2.5 flex items-center justify-center">
                       {gesture.icon ? (
-                        <Image
+                        /* eslint-disable-next-line @next/next/no-img-element */
+                        <img
                           src={gesture.icon}
                           alt={gesture.name}
                           width={55}

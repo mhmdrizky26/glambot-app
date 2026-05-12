@@ -46,6 +46,19 @@ func main() {
 		log.Printf("💳 Midtrans aktif [%s]", config.App.MidtransEnv)
 	}
 
+	// ─── 4.5. Init Camera System ─────────────────────────────────────────────
+	if config.App.UseBuiltinCamera {
+		services.SetCameraType("builtin")
+		services.SetCameraConnected(true)
+		log.Printf("📷 Camera: Builtin (Laptop) - forced by USE_BUILTIN_CAMERA")
+	} else {
+		// Auto-detect camera (Canon first, then fallback to builtin)
+		status, _ := services.CheckCamera()
+		if status.Connected {
+			log.Printf("📷 Camera: %s", status.CameraName)
+		}
+	}
+
 	// ─── 5. Jalankan cleanup job di background ────────────────────────────────
 	services.StartCleanupJob()
 
@@ -82,9 +95,6 @@ func main() {
 		log.Println("  GET  /api/photo/session/{sessionID}")
 		log.Println("  GET  /api/photo/session/{sessionID}/framed")
 		log.Println("  GET  /api/photo/download/{photoID}")
-		log.Println("  GET  /api/admin/vouchers")
-		log.Println("  POST /api/admin/vouchers")
-		log.Println("  DELETE /api/admin/vouchers/{code}")
 		log.Println("─────────────────────────────────────────")
 
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

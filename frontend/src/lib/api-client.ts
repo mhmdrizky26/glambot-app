@@ -6,9 +6,51 @@ export interface ApiError {
   errors?: Record<string, string[]>;
 }
 
+/**
+ * Resolve API base URL.
+ *
+ * Strategy:
+ * - In the browser: if env points to localhost/127.0.0.1 but the page itself
+ *   is opened from a LAN IP (192.168.x.x, etc.), the env localhost is wrong
+ *   for that device — derive backend URL from current page hostname instead.
+ *   This makes the same build work on PC (localhost) and phones (LAN IP).
+ * - If env is a non-local URL (e.g. production domain), respect it.
+ * - SSR / no env / no window → fall back to localhost.
+ */
+export const resolveBaseUrl = (): string => {
+  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+
+  if (typeof window !== 'undefined') {
+    const currentHost = window.location.hostname;
+    const onLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
+
+    if (envUrl) {
+      const envIsLocal = /localhost|127\.0\.0\.1/.test(envUrl);
+      // env says localhost but page is on LAN IP → override using window host
+      if (envIsLocal && !onLocalhost) {
+        return `${window.location.protocol}//${currentHost}:8080`;
+      }
+      return envUrl;
+    }
+
+    // No env → always derive from current page
+    return `${window.location.protocol}//${currentHost}:8080`;
+  }
+
+  if (envUrl) return envUrl;
+  return 'http://localhost:8080';
+};
+
 export const apiClient = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: resolveBaseUrl(),
 });
+
+/**
+ * Convert a possibly-relative URL (e.g. `/storage/...`) into an absolute URL
+ * by prepending the resolved API base. Pass-through if already absolute.
+ */
+export const toAbsoluteUrl = (path: string): string =>
+  path.startsWith('http') ? path : `${resolveBaseUrl()}${path}`;
 
 apiClient.interceptors.response.use(
   (response) => {

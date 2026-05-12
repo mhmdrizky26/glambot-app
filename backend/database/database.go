@@ -124,7 +124,10 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 }
 
 func runMigrations(db *DBWrapper) error {
-	schemaPaths := []string{"schema.postgres.sql", "backend/schema.postgres.sql"}
+	schemaPaths := []string{
+		"migrations/init.sql",
+		"backend/migrations/init.sql",
+	}
 
 	var schemaSQL string
 	for _, path := range schemaPaths {
@@ -136,7 +139,7 @@ func runMigrations(db *DBWrapper) error {
 	}
 
 	if schemaSQL == "" {
-		return fmt.Errorf("schema.postgres.sql not found")
+		return fmt.Errorf("migrations/init.sql not found")
 	}
 
 	if _, err := db.inner.Exec(schemaSQL); err != nil {

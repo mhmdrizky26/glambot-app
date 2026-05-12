@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 )
 
@@ -272,107 +271,6 @@ func RemoveVoucher(w http.ResponseWriter, r *http.Request) {
 		"original_price": getSessionTotalPrice(session),
 		"final_price":    getSessionTotalPrice(session),
 		"discount":       0,
-	}))
-}
-
-// GET /api/admin/vouchers
-func ListVouchers(w http.ResponseWriter, r *http.Request) {
-	rows, err := database.DB.Query(`
-		SELECT 
-			code, COALESCE(description, ''), discount_type, discount_value,
-			min_price, max_uses, used_count, is_active
-		FROM vouchers 
-		ORDER BY created_at DESC`)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal mengambil daftar voucher")
-		return
-	}
-	defer rows.Close()
-
-	var vouchers []models.Voucher
-	for rows.Next() {
-		var v models.Voucher
-		var isActiveInt int
-		if err := rows.Scan(
-			&v.Code, &v.Description, &v.DiscountType, &v.DiscountValue,
-			&v.MinPrice, &v.MaxUses, &v.UsedCount, &isActiveInt,
-		); err != nil {
-			respondError(w, http.StatusInternalServerError, "Gagal membaca data voucher")
-			return
-		}
-		v.IsActive = isActiveInt == 1
-		vouchers = append(vouchers, v)
-	}
-
-	if err := rows.Err(); err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal membaca daftar voucher")
-		return
-	}
-
-	if vouchers == nil {
-		vouchers = []models.Voucher{}
-	}
-
-	respondJSON(w, http.StatusOK, models.SuccessResponse(vouchers))
-}
-
-// POST /api/admin/vouchers
-func CreateVoucher(w http.ResponseWriter, r *http.Request) {
-	var v models.Voucher
-	if err := json.NewDecoder(r.Body).Decode(&v); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	v.Code = strings.ToUpper(strings.TrimSpace(v.Code))
-	if v.Code == "" {
-		respondError(w, http.StatusBadRequest, "Voucher code tidak boleh kosong")
-		return
-	}
-
-	if v.DiscountType != models.DiscountPercent && v.DiscountType != models.DiscountFixed {
-		respondError(w, http.StatusBadRequest, "Discount type harus 'percent' atau 'fixed'")
-		return
-	}
-
-	if v.DiscountValue <= 0 {
-		respondError(w, http.StatusBadRequest, "Discount value harus lebih dari 0")
-		return
-	}
-
-	if v.MaxUses <= 0 {
-		v.MaxUses = 1
-	}
-
-	_, err := database.DB.Exec(`
-		INSERT INTO vouchers 
-			(code, description, discount_type, discount_value, min_price, max_uses, is_active)
-		VALUES 
-			(?, ?, ?, ?, ?, ?, 1)`,
-		v.Code, v.Description, string(v.DiscountType),
-		v.DiscountValue, v.MinPrice, v.MaxUses,
-	)
-	if err != nil {
-		respondError(w, http.StatusConflict, "Voucher code sudah ada atau gagal disimpan")
-		return
-	}
-
-	respondJSON(w, http.StatusCreated, models.SuccessResponse(v))
-}
-
-// DELETE /api/admin/vouchers/{code}
-func DeleteVoucher(w http.ResponseWriter, r *http.Request) {
-	code := strings.ToUpper(chi.URLParam(r, "code"))
-
-	_, err := database.DB.Exec(`DELETE FROM vouchers WHERE code = ?`, code)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal menghapus voucher")
-		return
-	}
-
-	respondJSON(w, http.StatusOK, models.SuccessResponse(map[string]string{
-		"message": "Voucher berhasil dihapus",
-		"code":    code,
 	}))
 }
 

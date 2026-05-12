@@ -24,16 +24,15 @@ export const saveComposition = async (
   input: SaveCompositionInput,
 ): Promise<CompositionResponse> => {
   const formData = new FormData();
+  formData.append('sessionId', input.sessionId);
   formData.append('frameId', input.frameId);
   formData.append('filter', input.filter);
   formData.append('photoIds', JSON.stringify(input.photoIds));
   formData.append('image', input.composedImage, 'composition.jpg');
 
-  const response = await apiClient.post(`/api/photo/compose`, formData, {
-    headers: {
-      'Content-Type': 'multipart/form-data',
-    },
-  });
+  // Note: don't set Content-Type manually — axios/browser will set it
+  // with the correct multipart boundary parameter automatically.
+  const response = await apiClient.post(`/api/photo/compose`, formData);
 
   return response.data;
 };

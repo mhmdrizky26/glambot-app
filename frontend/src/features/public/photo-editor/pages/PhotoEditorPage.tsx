@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { fabric } from 'fabric';
 
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
+import Timer from '@/components/shared/Timer';
 import PhotoSelectionPanel from '../components/PhotoSelectionPanel';
 import PreviewArea from '../components/PreviewArea';
 import FrameSelectionPanel from '../components/FrameSelectionPanel';
@@ -17,8 +18,18 @@ import { exportComposition } from '../lib/exportComposition';
 import { useSaveComposition } from '../api/saveComposition';
 import { usePhotoComposition } from '../hooks/usePhotoComposition';
 
-// Filter type
-export type FilterType = 'original' | 'warm' | 'cool' | 'vintage' | 'dramatic';
+// Filter type — keep in sync with `lib/filters.ts`
+export type FilterType =
+  | 'original'
+  | 'warm'
+  | 'cool'
+  | 'vintage'
+  | 'dramatic'
+  | 'mono'
+  | 'sepia'
+  | 'vivid'
+  | 'soft'
+  | 'film';
 
 type TabType = 'frame' | 'filter';
 
@@ -38,6 +49,16 @@ export default function PhotoEditorPage() {
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('original');
   const [activeTab, setActiveTab] = useState<TabType>('frame');
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+  // Dedup navigation — Timer dan saveComposition.onSuccess sama-sama push
+  // ke /session-end. Tanpa flag ini, mereka bisa double-push kalau fire
+  // hampir bersamaan (user klik Confirm di detik ~118, timer expire di 120).
+  const navigatedRef = useRef(false);
+
+  const navigateToSessionEnd = () => {
+    if (navigatedRef.current) return;
+    navigatedRef.current = true;
+    router.push(`/session-end?sessionId=${sessionId}`);
+  };
 
   // Photo composition tracking
   const {
@@ -103,8 +124,15 @@ export default function PhotoEditorPage() {
   // Confirm Print logic
   const isConfirmEnabled = selectedFrame !== null;
 
-  const handleConfirmPrint = async () => {
-    if (!isConfirmEnabled || !fabricCanvasRef.current) return;
+  // `silent: true` dipakai saat trigger dari timer — error di-log tapi tidak
+  // alert, dan saat fail tetap navigate supaya user tidak stuck di halaman.
+  const handleConfirmPrint = async (options?: { silent?: boolean }) => {
+    if (!isConfirmEnabled || !fabricCanvasRef.current) {
+      if (options?.silent) navigateToSessionEnd();
+      return;
+    }
+
+    const silent = options?.silent === true;
 
     try {
       // Collect photo IDs from slots
@@ -115,9 +143,11 @@ export default function PhotoEditorPage() {
       console.log(
         '[PhotoEditorPage] Saving composition with photo IDs:',
         photoIds,
+        silent ? '(timer-triggered)' : '(user-triggered)',
       );
 
-      // Export canvas at high resolution
+      // Export canvas at high resolution (kept in-memory; user downloads from
+      // /download-photos page, not auto-saved to local directory)
       const exported = await exportComposition(fabricCanvasRef.current, {
         format: 'jpeg',
         quality: 0.95,
@@ -130,40 +160,52 @@ export default function PhotoEditorPage() {
         'MB',
       );
 
-      const downloadLink = document.createElement('a');
-      downloadLink.href = exported.dataUrl;
-      downloadLink.download = `photo-composition-${sessionId}-${Date.now()}.jpg`;
-      document.body.appendChild(downloadLink);
-      downloadLink.click();
-      document.body.removeChild(downloadLink);
-
-      // Save to backend
+      // Save composition to backend, then redirect to download page
       saveComposition(
         {
           sessionId,
           frameId: selectedFrame!.id,
           filter: selectedFilter,
-          photoIds, // Now tracking photo IDs from composition state
+          photoIds,
           composedImage: exported.blob,
         },
         {
           onSuccess: () => {
-            router.push(`/session-end?sessionId=${sessionId}`);
+            navigateToSessionEnd();
           },
           onError: (error) => {
             console.error('Failed to save composition:', error);
-            alert('Failed to save composition. Please try again.');
+            if (silent) {
+              // Timer-triggered: navigate anyway, jangan stuck user.
+              navigateToSessionEnd();
+            } else {
+              alert('Failed to save composition. Please try again.');
+            }
           },
         },
       );
     } catch (error) {
       console.error('Export failed:', error);
-      alert('Failed to export composition. Please try again.');
+      if (silent) {
+        navigateToSessionEnd();
+      } else {
+        alert('Failed to export composition. Please try again.');
+      }
     }
+  };
+
+  // Timer habis = otomatis "klik" Confirm Print supaya komposisi ter-save
+  // dulu (frame + foto), baru navigate. Kalau user belum pilih frame, langsung
+  // navigate tanpa save.
+  const handleTimeUp = () => {
+    handleConfirmPrint({ silent: true });
   };
 
   return (
     <div className="h-full w-full flex flex-col overflow-hidden">
+      {/* 2 menit untuk pilih frame + foto, lalu auto ke session-end */}
+      <Timer duration={120} onTimeUp={handleTimeUp} />
+
       {/* Header */}
       <div className="w-full text-center py-1 shrink-0">
         <h1 className="text-primary text-[60px] font-bold tracking-tight">

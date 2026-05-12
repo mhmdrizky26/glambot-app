@@ -4,6 +4,7 @@ import { Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import Lottie from 'lottie-react';
 import Link from 'next/link';
+import { QRCodeSVG } from 'qrcode.react';
 import loadingAnimation from '@/assets/loading.json';
 import Timer from '@/components/shared/Timer';
 
@@ -17,11 +18,22 @@ export function GetPhotosScreen({
   sessionId,
 }: GetPhotosScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [downloadUrl, setDownloadUrl] = useState('');
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 3000);
     return () => clearTimeout(timer);
   }, []);
+
+  // Build the download URL after mount (window is undefined during SSR).
+  // Override with NEXT_PUBLIC_DOWNLOAD_PUBLIC_URL if the kiosk is accessed via
+  // localhost — set this to the LAN IP/public URL the HP can reach.
+  useEffect(() => {
+    const base =
+      process.env.NEXT_PUBLIC_DOWNLOAD_PUBLIC_URL?.trim() ||
+      window.location.origin;
+    setDownloadUrl(`${base}/download-photos/${sessionId}`);
+  }, [sessionId]);
 
   // Loading state
   if (isLoading) {
@@ -89,12 +101,18 @@ export function GetPhotosScreen({
             <p className="text-white/60 text-xs text-center">
               Point your phone&apos;s camera at this QR code.
             </p>
-            <div className="rounded-xl p-3">
-              <img
-                src="/qr-code 1.svg"
-                alt={`QR Code untuk /download-photos/${sessionId}`}
-                className="w-65 h-65"
-              />
+            <div className="rounded-xl p-3 bg-white">
+              {downloadUrl ? (
+                <QRCodeSVG
+                  value={downloadUrl}
+                  size={240}
+                  level="M"
+                  marginSize={2}
+                  aria-label={`QR Code untuk ${downloadUrl}`}
+                />
+              ) : (
+                <div className="w-60 h-60 bg-white/10 rounded animate-pulse" />
+              )}
             </div>
           </div>
 

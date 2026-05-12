@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
 interface TimerProps {
@@ -11,11 +11,19 @@ interface TimerProps {
 export default function Timer({ duration = 120, onTimeUp }: TimerProps) {
   const [timeLeft, setTimeLeft] = useState(duration);
   const router = useRouter();
+  // Pastikan onTimeUp / fallback router.push hanya fire SEKALI walaupun
+  // efek re-run akibat onTimeUp ref berubah saat parent re-render (misal
+  // karena mutation pending yang trigger render baru).
+  const firedRef = useRef(false);
+  const onTimeUpRef = useRef(onTimeUp);
+  onTimeUpRef.current = onTimeUp;
 
   useEffect(() => {
     if (timeLeft <= 0) {
-      if (onTimeUp) {
-        onTimeUp();
+      if (firedRef.current) return;
+      firedRef.current = true;
+      if (onTimeUpRef.current) {
+        onTimeUpRef.current();
       } else {
         router.push('/');
       }
@@ -27,7 +35,7 @@ export default function Timer({ duration = 120, onTimeUp }: TimerProps) {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, [timeLeft, router, onTimeUp]);
+  }, [timeLeft, router]);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
