@@ -147,10 +147,13 @@ export default function SummaryPage() {
               type="text"
               placeholder="Voucher code"
               value={code}
-              onChange={(e) => setCode(e.target.value)}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
               onKeyDown={(e) => e.key === 'Enter' && applyVoucher()}
               disabled={isValid}
-              className="pl-16"
+              className="pl-16 uppercase"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
             />
           </div>
           <Button

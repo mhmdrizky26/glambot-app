@@ -1,6 +1,5 @@
 'use client';
 
-import Image from 'next/image';
 import { Download, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import type { Photo } from '@/features/public/photo-editor/api/getPhotos';
 import type { DownloadState } from '@/features/public/photo-download/hooks/useDownloadPhoto';
@@ -10,6 +9,10 @@ interface PhotoCardProps {
   index: number;
   downloadState: DownloadState;
   onDownload: (photo: Photo) => void;
+  /** Tailwind aspect class (default `aspect-3/4`). Use `aspect-[2/3]` for strips. */
+  aspectClass?: string;
+  /** Hide the "Foto N" label below the image. */
+  hideLabel?: boolean;
 }
 
 export function PhotoCard({
@@ -17,6 +20,8 @@ export function PhotoCard({
   index,
   downloadState,
   onDownload,
+  aspectClass = 'aspect-3/4',
+  hideLabel = false,
 }: PhotoCardProps) {
   return (
     <div
@@ -24,13 +29,15 @@ export function PhotoCard({
       className="group relative flex flex-col gap-2"
     >
       {/* Image */}
-      <div className="relative w-full aspect-3/4 overflow-hidden rounded-2xl">
-        <Image
+      <div
+        className={`relative w-full ${aspectClass} overflow-hidden rounded-2xl bg-black/20`}
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
           src={photo.url}
           alt={`Foto ${index + 1}`}
-          fill
-          sizes="(max-width: 768px) 50vw, 33vw"
-          className="object-cover"
+          className="absolute inset-0 w-full h-full object-cover"
+          loading="lazy"
         />
 
         {/* Download overlay — always visible */}
@@ -84,9 +91,11 @@ export function PhotoCard({
       </div>
 
       {/* Label */}
-      <p className="text-center text-sm font-medium text-white">
-        Foto {index + 1}
-      </p>
+      {!hideLabel && (
+        <p className="text-center text-sm font-medium text-white">
+          Foto {index + 1}
+        </p>
+      )}
     </div>
   );
 }

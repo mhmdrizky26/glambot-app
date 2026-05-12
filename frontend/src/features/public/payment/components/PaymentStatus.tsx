@@ -117,32 +117,35 @@ export default function PaymentStatus({
 
   // Waiting state — QRIS displayed immediately
   return (
-    <div className="w-full max-w-149.25 h-159.25 px-4 py-6 flex justify-center">
-      <GlassCard className="shadow-[0px_10px_30px_rgba(17,45,78,0.35)] ">
-        <div className="flex min-h-160 flex-col items-center px-8 pt-8 pb-7 text-center">
-          <h1 className="text-[42.82px] font-bold leading-[62.2px] text-white">
-            Scan to Pay
-          </h1>
-          <p className="mt-[8.8px] text-[19px] leading-7 text-[#ffff]/40">
-            Use any QRIS-compatible payment app
-          </p>
+    <div className="w-full max-w-149.25 flex justify-center px-4 py-6">
+      <GlassCard className="shadow-[0px_10px_30px_rgba(17,45,78,0.35)]">
+        <div className="flex flex-col items-center justify-center gap-10 px-8 py-10 text-center">
+          {/* Header */}
+          <div>
+            <h1 className="text-[42.82px] font-bold leading-[1.1] text-white">
+              Scan to Pay
+            </h1>
+            <p className="mt-3 text-[19px] leading-7 text-white/40">
+              Use any QRIS-compatible payment app
+            </p>
+          </div>
 
           {/* QR Code */}
-          {qrisUrl && (
-            <div className="mt-10 rounded-2xl bg-white p-4 shadow-[0px_0px_0px_1px_rgba(255,255,255,0.25)]">
+          {qrisUrl ? (
+            <div className="rounded-2xl bg-white p-4 shadow-[0px_0px_0px_1px_rgba(255,255,255,0.25)]">
               <QrisPreview key={qrisUrl} src={qrisUrl} />
             </div>
-          )}
-
-          {!qrisUrl && (
-            <div className="mt-10 rounded-2xl border border-white/15 bg-white/5 px-6 py-8 text-center">
+          ) : (
+            <div className="rounded-2xl border border-white/15 bg-white/5 px-6 py-8 text-center">
               <p className="text-sm text-white">
                 QRIS belum siap. Payment masih diproses, silakan tunggu.
               </p>
             </div>
           )}
+
+          {/* Price */}
           {totalPrice !== null && (
-            <p className="pt-[38.06px] text-[33.3px] font-semibold leading-12.5 text-white">
+            <p className="text-[33.3px] font-semibold leading-tight text-white">
               Rp {formatRupiah(totalPrice)}
             </p>
           )}

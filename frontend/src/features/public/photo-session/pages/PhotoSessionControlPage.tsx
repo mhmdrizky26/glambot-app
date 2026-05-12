@@ -28,7 +28,7 @@ export function PhotoSessionControlPage() {
   const [lockTimeLeft, setLockTimeLeft] = useState(0);
 
   const lockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { streamUrl } = useLiveStream();
+  const { frameUrl, cameraType, mediaStream } = useLiveStream();
 
   useGetSession({
     sessionId: sessionId ?? '',
@@ -124,7 +124,9 @@ export function PhotoSessionControlPage() {
           </h2>
           <div className="w-[875.31px] h-160.25">
             <GestureDetectionPanel
-              streamUrl={streamUrl}
+              streamUrl={frameUrl}
+              cameraType={cameraType}
+              mediaStream={mediaStream}
               gestureState={gestureState}
               activeName={activeGestureName}
               lockTimeLeft={lockTimeLeft}

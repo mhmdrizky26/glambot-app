@@ -1,5 +1,3 @@
-import Image from 'next/image';
-
 interface SessionGesture {
   name: string;
   icon: string;
@@ -35,7 +33,8 @@ export function GestureControlsGrid({
                 }`}
               >
                 <div className="mb-2 flex items-center justify-center">
-                  <Image
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
                     src={gesture.icon}
                     alt={gesture.name}
                     width={33}

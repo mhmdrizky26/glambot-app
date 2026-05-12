@@ -1,8 +1,13 @@
-# OS / editor
+# ─── OS / Editor ─────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/
+*.iml
 
-# Environment files
+# ─── Environment files (NEVER commit secrets) ────────────────────────────────
 .env
 .env.*
 !.env.example
@@ -13,7 +18,8 @@ frontend/.env
 frontend/.env.*
 !frontend/.env.example
 
-# Node / Next.js
+# ─── Node / Next.js ──────────────────────────────────────────────────────────
+node_modules/
 frontend/node_modules/
 frontend/.next/
 frontend/out/
@@ -27,19 +33,36 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
-# Go build artifacts
+# ─── Go build artifacts ──────────────────────────────────────────────────────
 backend/bin/
 backend/*.exe
 backend/*.test
 backend/*.out
+backend/photobooth
 backend/photobooth.exe
 
-# Runtime data
+# ─── Backend runtime data (per-session uploads/processing) ───────────────────
+# storage/sessions/ adalah hasil capture per session — ignore semua isinya
+# tapi keep folder tetap ada via .gitkeep
 backend/storage/sessions/
 backend/storage/*.db
 backend/storage/**/*.db
 backend/storage/tmp/
 
-# Misc
+# ─── Generic logs ────────────────────────────────────────────────────────────
+*.log
+
+# ─── Tooling ─────────────────────────────────────────────────────────────────
+# Claude Code skills cache (auto-regenerated)
+frontend/skills-lock.json
+skills-lock.json
+
+# Claude Code local settings (user-specific overrides, never commit).
+# Shared config (.claude/settings.json) tetap bisa di-track kalau ada.
+.claude/settings.local.json
+.claude/cache/
+.claude/logs/
+
+# ─── Deployment / Misc ───────────────────────────────────────────────────────
 .vercel/
 *.pem

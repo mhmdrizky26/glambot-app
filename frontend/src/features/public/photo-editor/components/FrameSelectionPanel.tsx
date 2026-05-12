@@ -12,13 +12,18 @@ const tabs: { id: TabType; label: string }[] = [
   { id: 'filter', label: 'Filter' },
 ];
 
-// Static filter list
+// Static filter list — keep order in sync with `lib/filters.ts` getFiltersByType
 const FILTER_OPTIONS: { id: FilterType; name: string }[] = [
   { id: 'original', name: 'Original' },
   { id: 'warm', name: 'Warm' },
   { id: 'cool', name: 'Cool' },
   { id: 'vintage', name: 'Vintage' },
   { id: 'dramatic', name: 'Dramatic' },
+  { id: 'mono', name: 'Mono' },
+  { id: 'sepia', name: 'Sepia' },
+  { id: 'vivid', name: 'Vivid' },
+  { id: 'soft', name: 'Soft' },
+  { id: 'film', name: 'Film' },
 ];
 
 interface FrameSelectionPanelProps {

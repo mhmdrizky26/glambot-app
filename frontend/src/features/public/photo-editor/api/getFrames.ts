@@ -1,5 +1,5 @@
 import { useQuery, queryOptions } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, toAbsoluteUrl } from '@/lib/api-client';
 import type { QueryConfig } from '@/lib/react-query';
 
 export type SlotShape = 'rect' | 'ellipse';
@@ -23,11 +23,28 @@ export interface Frame {
   slots: FrameSlot[];
 }
 
+interface BackendFrame {
+  id: string;
+  name: string;
+  file_path: string;
+  thumb_url: string;
+  photo_slots: number;
+  canvas_width?: number;
+  canvas_height?: number;
+  slots?: FrameSlot[];
+}
+
 export const getFrames = async (): Promise<Frame[]> => {
-  console.log('[API] Fetching frames');
-  const response = await apiClient.get<Frame[]>('/api/frames');
-  console.log('[API] Frames response:', response.data);
-  return response.data;
+  const response = await apiClient.get<BackendFrame[]>('/api/frames');
+  const raw = response.data ?? [];
+  return raw.map((f) => ({
+    id: f.id,
+    name: f.name,
+    imageUrl: toAbsoluteUrl(f.thumb_url),
+    canvasWidth: f.canvas_width ?? 464,
+    canvasHeight: f.canvas_height ?? 696,
+    slots: Array.isArray(f.slots) ? f.slots : [],
+  }));
 };
 
 export const getFramesQueryOptions = () => {

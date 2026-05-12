@@ -80,7 +80,7 @@ export function DoneScreen({ onSessionEnd }: DoneScreenProps) {
         <div className="flex  gap-2 bg-primary/8 border border-primary/15 px-4 py-2 rounded-full">
           <CloudDownload size={14} className="text-primary/50" />
           <span className="text-[12px] text-primary/60 font-medium">
-            Gdrive valid for 7 days
+            Website valid for 7 days
           </span>
         </div>
       </div>

@@ -1,6 +1,10 @@
 import { useQuery, queryOptions } from '@tanstack/react-query';
-import { apiClient } from '@/lib/api-client';
+import { apiClient, resolveBaseUrl } from '@/lib/api-client';
 import type { QueryConfig } from '@/lib/react-query';
+
+// Note: getPackages uses a custom abs-URL helper (different rule for /storage/
+// vs frontend public assets), so we keep it local instead of using the shared
+// `toAbsoluteUrl` from api-client.
 
 export interface Package {
   id: number;
@@ -26,8 +30,11 @@ type BackendPackage = {
   durationSecs?: number;
   description?: string;
   type?: Package['type'];
+  image_src?: string;
   imageSrc?: string;
+  is_popular?: boolean;
   isPopular?: boolean;
+  print_count?: number;
   pricePerPrint?: number;
 };
 
@@ -47,6 +54,14 @@ const packageAssets: Record<
   },
 };
 
+const toAbsoluteUrl = (path: string | undefined): string | undefined => {
+  if (!path) return undefined;
+  if (path.startsWith('http')) return path;
+  if (path.startsWith('/storage/')) return `${resolveBaseUrl()}${path}`;
+  // Frontend public-folder assets (e.g. /Container.svg) — leave relative
+  return path;
+};
+
 const normalizePackage = (pkg: BackendPackage): Package => {
   const code = pkg.code ?? (pkg.type === 'print' ? 'vip' : 'regular');
   const asset = packageAssets[code] ?? packageAssets.regular;
@@ -54,6 +69,8 @@ const normalizePackage = (pkg: BackendPackage): Package => {
   const title = pkg.name ?? pkg.title ?? code;
   const pricePerPrint =
     pkg.pricePerPrint ?? (code === 'vip' ? 15000 : 0);
+  const backendImg = toAbsoluteUrl(pkg.image_src ?? pkg.imageSrc);
+  const popular = pkg.is_popular ?? pkg.isPopular;
 
   return {
     id: pkg.id ?? 0,
@@ -62,8 +79,8 @@ const normalizePackage = (pkg: BackendPackage): Package => {
     description: pkg.description ?? '',
     price: pkg.base_price ?? pkg.price ?? 0,
     pricePerPrint,
-    imageSrc: pkg.imageSrc ?? asset.imageSrc,
-    isPopular: pkg.isPopular ?? asset.isPopular,
+    imageSrc: backendImg ?? asset.imageSrc,
+    isPopular: popular ?? asset.isPopular,
     durationSecs,
     durationMins: Math.floor(durationSecs / 60),
   };
