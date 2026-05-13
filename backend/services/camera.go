@@ -157,32 +157,41 @@ type CameraStatus struct {
 }
 
 // CheckCamera cek apakah kamera terhubung ke digiCamControl
-// Jika Canon tidak terdeteksi, fallback ke builtin camera (laptop camera)
+// Deteksi via ping liveview.jpg — endpoint yang memang dipakai digiCamControl
+// untuk streaming. Jika tidak ada respons valid, fallback ke builtin camera.
 func CheckCamera() (*CameraStatus, error) {
-	// Try Canon camera first
-	resp, err := digiCamGet("/camera")
-	if err == nil && resp.StatusCode == http.StatusOK {
-		defer resp.Body.Close()
+	cameraName := "Canon Camera"
 
-		body, err := io.ReadAll(resp.Body)
-		if err == nil && strings.TrimSpace(string(body)) != "" {
-			var result map[string]interface{}
-			if json.Unmarshal(body, &result) == nil {
-				name := ""
-				if n, ok := result["name"].(string); ok {
-					name = n
+	// Coba ambil nama kamera dari /api/camera kalau kebetulan tersedia (versi tertentu).
+	if resp, err := digiCamGet("/camera"); err == nil {
+		if resp.StatusCode == http.StatusOK {
+			if body, err := io.ReadAll(resp.Body); err == nil && strings.TrimSpace(string(body)) != "" {
+				var result map[string]interface{}
+				if json.Unmarshal(body, &result) == nil {
+					if n, ok := result["name"].(string); ok && strings.TrimSpace(n) != "" {
+						cameraName = n
+					}
 				}
-				SetCameraType("canon")
-				SetCameraConnected(true)
-				log.Printf("📷 Canon Camera Detected: %s", name)
-				return &CameraStatus{
-					Connected:  true,
-					CameraName: name,
-					CameraType: "canon",
-				}, nil
 			}
 		}
 		resp.Body.Close()
+	}
+
+	// Sinyal utama: liveview.jpg yang dipakai digiCamControl untuk streaming.
+	root := digiCamRootURL()
+	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
+	if frame, err := digiCamReadFirstAvailable([]string{
+		root + "/liveview.jpg?_ts=" + nonce,
+		root + "/preview.jpg?_ts=" + nonce,
+	}); err == nil && len(frame) > 0 {
+		SetCameraType("canon")
+		SetCameraConnected(true)
+		log.Printf("📷 Canon Camera Detected: %s", cameraName)
+		return &CameraStatus{
+			Connected:  true,
+			CameraName: cameraName,
+			CameraType: "canon",
+		}, nil
 	}
 
 	// Fallback ke builtin camera

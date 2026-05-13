@@ -65,13 +65,32 @@ export function usePayment({
   const { mutate: initiatePayment, isPending } = useCreatePayment({
     mutationConfig: {
       onSuccess: (result) => {
+        const amount =
+          result.session.finalPrice ?? result.transaction.amount ?? 0;
+        setTotalPrice(amount);
+
+        // Free voucher (finalPrice = 0): backend already returns the
+        // transaction as 'paid' with no QRIS. Skip the QR flow and run the
+        // same processing → success → redirect path as a paid QRIS payment.
+        if (result.transaction.status === 'paid' || amount <= 0) {
+          cleanup();
+          setStatus('processing');
+          updateSessionStatus({ sessionId, status: 'paid' });
+          processingTimeoutRef.current = setTimeout(() => {
+            setStatus('success');
+            redirectTimeoutRef.current = setTimeout(() => {
+              onSuccess?.(sessionId);
+            }, SUCCESS_REDIRECT_DELAY_MS);
+          }, PROCESSING_DELAY_MS);
+          return;
+        }
+
         if (!result.transaction.qrisUrl) {
           setStatus('failed');
           return;
         }
         setMidtransOrderId(result.transaction.midtransOrderId);
         setQrisUrl(result.transaction.qrisUrl);
-        setTotalPrice(result.session.finalPrice ?? result.transaction.amount ?? null);
         setPollingEnabled(true);
       },
       onError: () => {
