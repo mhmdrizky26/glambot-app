@@ -10,9 +10,12 @@ const nextConfig: NextConfig = {
   // Add your LAN IP(s) here. Wildcard `*` is supported per-octet only at the
   // segment level (e.g. `192.168.1.*`), CIDR is NOT supported.
   allowedDevOrigins: [
-    '192.168.1.150',
-    '192.168.1.*',
     '192.168.0.*',
+    '192.168.1.*',
+    '192.168.2.*',
+    '192.168.10.*',
+    '192.168.43.*',
+    '192.168.100.*',
     '10.0.0.*',
     '172.16.0.*',
     '*.local',

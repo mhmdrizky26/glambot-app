@@ -90,8 +90,8 @@ export function PhotoSessionPage() {
       </div>
 
       <main className="flex flex-1 min-h-0 px-6 pb-6 pt-0">
-        <div className="flex-1 flex flex-col gap-2 min-h-0">
-          <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0">
+        <div className="flex-1 flex flex-col gap-3 min-h-0">
+          <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0 text-left">
             Preview Camera
           </h2>
           <div className="flex-1 min-h-0">

@@ -5,7 +5,6 @@ import {
   useFramedPhotos,
 } from '@/features/public/photo-editor/api/getPhotos';
 import { useDownloadPhoto } from '@/features/public/photo-download/hooks/useDownloadPhoto';
-import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/features/public/photo-download/components/ErrorState';
 import { PhotoGrid } from '@/features/public/photo-download/components/PhotoGrid';
@@ -40,7 +39,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           variant="default"
           className="flex flex-col items-center text-center px-6 py-8 gap-4 max-w-sm"
         >
-          <p className="text-primary font-semibold text-base">
+          <p className="text-white font-semibold text-base">
             Session ID tidak valid.
           </p>
         </GlassCard>
@@ -53,8 +52,13 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
 
   if (isLoading) {
     return (
-      <main className="flex flex-col items-center justify-center min-h-full px-4">
-        <StatusAnimation status="processing" />
+      <main className="flex flex-col items-center justify-center min-h-full px-4 gap-4">
+        <div
+          role="status"
+          aria-label="Memuat foto"
+          className="w-14 h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin"
+        />
+        <p className="text-primary font-semibold text-base">Memuat foto...</p>
       </main>
     );
   }
@@ -83,7 +87,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           variant="default"
           className="flex flex-col items-center text-center px-6 py-8 gap-4 max-w-sm"
         >
-          <p className="text-primary font-semibold text-base">
+          <p className="text-white font-semibold text-base">
             Tidak ada foto ditemukan untuk sesi ini.
           </p>
         </GlassCard>

@@ -43,6 +43,12 @@ export const resolveBaseUrl = (): string => {
 
 export const apiClient = axios.create({
   baseURL: resolveBaseUrl(),
+  timeout: 15000,
+});
+
+apiClient.interceptors.request.use((config) => {
+  config.baseURL = resolveBaseUrl();
+  return config;
 });
 
 /**

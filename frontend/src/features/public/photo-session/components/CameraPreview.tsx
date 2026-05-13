@@ -323,8 +323,10 @@ export function CameraPreview({
 
   return (
     <div
-      className={`h-full w-full relative rounded-3xl overflow-hidden bg-black/30 border-8 border-solid border-primary shadow-2xl ${className ?? ''}`}
+      className={`relative h-full w-full rounded-[28px] overflow-hidden bg-black ring-[6px] ring-primary ring-offset-2 ring-offset-transparent shadow-[0_20px_60px_-15px_rgba(63,114,175,0.45)] ${className ?? ''}`}
     >
+      {/* Soft inner highlight for depth */}
+      <div className="pointer-events-none absolute inset-0 z-10 rounded-[22px] ring-1 ring-inset ring-white/10" />
       {showError || !hasContent ? (
         <div className="w-full h-full flex flex-col items-center justify-center gap-3">
           <p className="text-white/40 text-sm">
@@ -342,7 +344,7 @@ export function CameraPreview({
       ) : (
         <canvas
           ref={canvasRef}
-          className="w-full h-full bg-black"
+          className="absolute inset-0 w-full h-full object-cover"
           style={{ display: 'block' }}
         />
       )}
@@ -365,23 +367,32 @@ export function CameraPreview({
         </div>
       )}
 
-      {/* Capture result modal — fullscreen clean preview for 3s, then auto-hides */}
+      {/* Capture result modal — fullscreen clean preview for 3s, then auto-hides.
+          Blurred backdrop of the same image fills any aspect-ratio gap so the
+          foreground photo stays uncropped and the screen never shows hard black. */}
       {capturedUrl && (
-        <div className="fixed inset-0 z-50 bg-black animate-[fadeIn_200ms_ease-out]">
+        <div className="fixed inset-0 z-50 overflow-hidden animate-[fadeIn_200ms_ease-out]">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={capturedUrl}
             alt=""
-            className="w-screen h-screen object-contain"
+            aria-hidden="true"
+            className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl brightness-50"
+          />
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={capturedUrl}
+            alt=""
+            className="relative w-screen h-screen object-contain drop-shadow-2xl"
           />
         </div>
       )}
 
-      {/* Corner brackets */}
-      <div className="absolute top-5 left-5 w-8 h-8 border-t-2 border-l-2 border-white/50 rounded-tl-lg pointer-events-none" />
-      <div className="absolute top-5 right-5 w-8 h-8 border-t-2 border-r-2 border-white/50 rounded-tr-lg pointer-events-none" />
-      <div className="absolute bottom-5 left-5 w-8 h-8 border-b-2 border-l-2 border-white/50 rounded-bl-lg pointer-events-none" />
-      <div className="absolute bottom-5 right-5 w-8 h-8 border-b-2 border-r-2 border-white/50 rounded-br-lg pointer-events-none" />
+      {/* Corner brackets — refined: smaller, softer, brand-tinted */}
+      <div className="absolute top-4 left-4 w-6 h-6 border-t border-l border-white/40 rounded-tl-md pointer-events-none z-10" />
+      <div className="absolute top-4 right-4 w-6 h-6 border-t border-r border-white/40 rounded-tr-md pointer-events-none z-10" />
+      <div className="absolute bottom-4 left-4 w-6 h-6 border-b border-l border-white/40 rounded-bl-md pointer-events-none z-10" />
+      <div className="absolute bottom-4 right-4 w-6 h-6 border-b border-r border-white/40 rounded-br-md pointer-events-none z-10" />
     </div>
   );
 }
