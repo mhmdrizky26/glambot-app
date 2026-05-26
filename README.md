@@ -21,8 +21,10 @@ Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis
 13. [Integrasi Robot](#integrasi-robot)
 14. [Mode Kamera](#mode-kamera)
 15. [Audio Cues](#audio-cues)
-16. [Testing dengan curl](#testing-dengan-curl)
-17. [Troubleshooting](#troubleshooting)
+16. [Animated GIF Output](#animated-gif-output)
+17. [Safeguard Sesi Foto](#safeguard-sesi-foto)
+18. [Testing dengan curl](#testing-dengan-curl)
+19. [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -363,14 +365,22 @@ glambot-app/
 │   │   └── routes.go              # All HTTP route definitions
 │   ├── services/
 │   │   ├── camera.go              # Canon (digiCamControl) + builtin webcam abstraction
+│   │   ├── burst.go               # Burst-capture liveview frames during 3s countdown (untuk Live Strip GIF)
+│   │   ├── gif.go                 # Slideshow GIF generator (raw photos terpilih, loop)
+│   │   ├── gif_live.go            # Live Strip GIF generator (framed + burst overlay + frame design top-layer)
 │   │   ├── cleanup.go             # Periodic cleanup of expired sessions
 │   │   ├── midtrans.go            # Midtrans QRIS integration
 │   │   └── robot.go               # HTTP client to external robot API
 │   ├── storage/
 │   │   ├── audio/                 # tiga, dua, satu, inisiasi, preset, presetTerkonfirmasi, etc.
-│   │   ├── frames/                # Frame SVG assets
+│   │   ├── frames/                # Frame SVG assets (embedded base64 PNG → frame overlay)
 │   │   ├── packages/              # Package thumbnails (digital.svg, print.svg)
-│   │   └── sessions/{id}/         # Per-session photos (raw/ + framed/)
+│   │   └── sessions/{id}/         # Per-session output:
+│   │       ├── raw/               #   - canon_*.jpg / webcam_*.jpg (foto hasil capture)
+│   │       ├── framed/            #   - result_*.jpg (komposisi frame + foto, dari Fabric canvas)
+│   │       ├── burst/             #   - {photoID}/frame_*.jpg (liveview frames selama countdown)
+│   │       ├── animation.gif      #   - slideshow GIF (lazy-generated saat request pertama)
+│   │       └── animation-live-v2.gif #- live-strip GIF (versioned: bump suffix saat compositing logic berubah)
 │   ├── .env.example
 │   ├── go.mod
 │   └── main.go                    # Entry point
@@ -405,14 +415,17 @@ glambot-app/
 │   │   │       ├── instruction/   # Multi-step instruction (3 cards + 60s timer)
 │   │   │       ├── package/       # Package selection
 │   │   │       ├── payment/       # QRIS + voucher
-│   │   │       ├── photo-session/ # Live preview + capture (Canon/builtin) + countdown overlay
+│   │   │       ├── photo-session/ # Live preview + capture (Canon/builtin) + countdown overlay + grace-period safeguard
+│   │   │       │                  # api/getRobotConfig.ts: shared useRobotConfig() hook (React Query, 250ms poll dedupe)
 │   │   │       ├── photo-editor/  # Select & Edit (Fabric canvas) — VIP only
-│   │   │       ├── photo-download/# Download grid (HP)
+│   │   │       ├── photo-download/# Download grid (HP) — slideshow GIF + live-strip GIF preview/download cards
 │   │   │       └── session-end/   # QR display + done screen
 │   │   ├── lib/
 │   │   │   ├── api-client.ts      # axios instance + resolveBaseUrl + toAbsoluteUrl
 │   │   │   ├── audio.ts           # playBackendAudio helper
 │   │   │   ├── formats.ts         # formatRupiah, formatPriceToK
+│   │   │   ├── formatTime.ts      # formatTimeMMSS — shared MM:SS + negative grace timer format
+│   │   │   ├── usePersistedCountdown.ts # Countdown yang persist via sessionStorage (survive refresh)
 │   │   │   ├── react-query.ts     # Query config
 │   │   │   └── utils.ts           # cn (Tailwind merge)
 │   │   ├── shared/
@@ -542,6 +555,9 @@ Diskon code.
 | GET | `/api/photo/session/{id}` | List raw photos |
 | GET | `/api/photo/session/{id}/framed` | List framed photos |
 | GET | `/api/photo/download/{photoID}` | Download single photo |
+| GET | `/api/photo/session/{id}/gif` | Slideshow GIF — loop foto raw terpilih. Pakai `?inline=1` untuk preview di `<img>` (Content-Disposition: inline). |
+| GET | `/api/photo/session/{id}/gif-live` | Live strip GIF — framed strip dengan tiap slot animated dari burst frames. Pakai `?inline=1` untuk inline preview. |
+| GET | `/api/photo/session/{id}/gif-live/available` | Cek ringan apakah Live Strip GIF tersedia (perlu framed + burst frames). Mode builtin webcam selalu false. |
 | GET | `/api/robot/status` | Cek kamera connected + type |
 | POST | `/api/robot/capture` | Manual trigger capture (Canon) |
 | GET | `/api/robot/liveview` | Single live frame JPEG (Canon, mirrored) |
@@ -605,9 +621,13 @@ User scan QR code di `/session-end` → buka `http://<kiosk-ip>:3000/download-ph
 ```
 [ /download-photos/{sessionId} ]
   Header: "Download Your Photos"
-  Section "Hasil Strip"      — framed composition (object-contain 2:3)
-  Section "Foto Mentah"       — semua raw photos (grid 2×N atau 3×N)
-  Tombol "Download Semua (N)" — sticky di bottom
+  Section "Hasil Strip"       — framed composition (object-contain 2:3)
+  Section "Animated GIF"      — 2 card:
+                                  • Slideshow Foto (loop foto raw)
+                                  • Live Strip (framed + burst, hanya tampil
+                                    kalau /gif-live/available returns true)
+  Section "Foto Mentah"        — semua raw photos (grid 2×N atau 3×N)
+  Tombol "Download Semua (N)"  — sticky di bottom
 ```
 
 Tap ikon download di tiap card → fetch blob → trigger browser download via `<a download>`.
@@ -716,6 +736,67 @@ Helper: [`lib/audio.ts:playBackendAudio(filename)`](frontend/src/lib/audio.ts) �
 
 ---
 
+## Animated GIF Output
+
+Setiap sesi yang sukses compose menghasilkan **dua varian animated GIF** yang bisa di-preview/download dari `/download-photos/{sessionId}`:
+
+### GIF #1 — Slideshow
+
+- File: `storage/sessions/{id}/animation.gif`
+- Endpoint: `GET /api/photo/session/{id}/gif` (tambah `?inline=1` untuk preview di `<img>`)
+- Isi: rotasi foto raw terpilih (3 foto), 0.7s per frame, loop forever
+- Canvas 360×540, palette 256 colors + Floyd-Steinberg dithering supaya gradasi kulit/langit tidak banding parah
+- Generator: [`services/gif.go:GenerateSessionGIF`](backend/services/gif.go)
+
+### GIF #2 — Live Strip
+
+- File: `storage/sessions/{id}/animation-live-v2.gif` (suffix `-v2` versioned — bump saat compositing logic berubah supaya cache lama otomatis di-skip)
+- Endpoint: `GET /api/photo/session/{id}/gif-live` (tambah `?inline=1` untuk inline preview)
+- Availability cek: `GET /api/photo/session/{id}/gif-live/available` → frontend hide tombol kalau tidak available (mis. mode builtin webcam, tidak ada burst frames)
+- Isi: framed strip sebagai base, tiap slot foto diisi rentetan burst-frame liveview (3 detik momen sebelum jepret), lalu settle ke foto final
+- Compositing: **z-order benar** — burst di-draw di tengah, frame design (extracted dari embedded base64 PNG di SVG) di-overlay ON TOP supaya dekorasi window (rounded corner / border) tidak ke-timpa burst
+- Frame yang tidak punya embedded PNG (mis. path-based SVG) gracefully fall back ke compositing lama — di-log dengan `ℹ️  frame overlay: SVG ... tidak punya embedded PNG (non-standar)`
+- Generator: [`services/gif_live.go:GenerateLiveStripGIF`](backend/services/gif_live.go)
+
+### Burst capture
+
+Selama 3 detik countdown (antara `POST /api/robot/done` dan shutter trigger), backend men-snapshot liveview frames ke `storage/sessions/{id}/burst/pending/frame_NNN.jpg`. Setelah capture sukses dan `photoID` di-assign, folder pending di-rename ke `burst/{photoID}/` (atomic move).
+
+- Hanya jalan di mode Canon — builtin webcam pakai browser camera yang tidak punya backend liveview cepat
+- Interval 280ms, max 12 frames, durasi 3 detik
+- Per-frame call wrapped `time.After(560ms)` supaya satu frame lambat tidak nahan loop
+- Implementation: [`services/burst.go`](backend/services/burst.go)
+
+### Pre-generation
+
+Saat user submit compose dari photo-editor, backend langsung kick off **kedua generator** di goroutine. Jadi pas user buka halaman download di HP, file GIF umumnya sudah siap (tidak perlu wait 3-5 detik untuk first hit). Lock per-session ([`gifGenLocks`](backend/services/gif.go)) memastikan request paralel tidak race — yang kedua menunggu yang pertama selesai dan reuse cache-nya.
+
+Cache invalidation pakai mtime: kalau framed strip / burst frames / frame SVG ada yang lebih baru dari GIF output, generator regenerate. Jangan-jangan force-bust dengan delete file di `storage/sessions/{id}/animation*.gif`.
+
+---
+
+## Safeguard Sesi Foto
+
+Saat session timer (5 menit di `/photo-session`) habis tepat waktu robot sedang gerak atau countdown shutter masih jalan, **sesi tidak langsung end** — foto terakhir bisa ke-cut di tengah jepretan. Frontend ([`PhotoSessionPage.tsx`](frontend/src/features/public/photo-session/pages/PhotoSessionPage.tsx)) menahan end-effect sampai robot selesai:
+
+```
+sessionTimeLeft = 0  AND  robotBusy = false  AND  robotConfigFetched = true
+                                ↓
+                  → broadcast SESSION_END → disable robot → navigate
+```
+
+Selama menunggu, header timer tampil `-MM:SS` (mis. `-00:01`, `-00:02`, …) sebagai indikator overtime. Hard cap **30 detik** mencegah kiosk hang kalau robot stuck atau webhook `/done` tidak fire.
+
+`robotBusy` ditentukan dari poll `/api/robot/config` (shared via `useRobotConfig()` hook — single underlying request, di-konsumsi juga oleh `CameraPreview` untuk countdown overlay):
+
+```ts
+robotBusy = (current_preset ?? 0) > 0 || auto_capture_active === true
+```
+
+Edge case yang dihandle: kalau halaman refresh tepat saat `sessionTimeLeft` sudah 0 dan `robotConfig` belum sempat fetch, end-effect tahan dulu sampai `isFetched = true` dari React Query — supaya grace check tidak ke-skip.
+
+---
+
 ## Testing dengan curl
 
 ### Setup session untuk testing
@@ -797,6 +878,27 @@ Mode builtin tidak butuh ffmpeg lagi — backend skip capture, frontend handle v
 ### Build production fail "Cross origin request blocked"
 - Hanya dev mode yang punya restriction ini
 - `npm run build && npm run start` (production) tidak block
+
+### Live Strip GIF: foto burst tampak "diluar frame" di awal animasi
+- Bug compositing lama — burst di-draw ON TOP framed strip, ke-timpa frame border
+- Sudah fixed: filename output bumped ke `animation-live-v2.gif`, generator overlay frame design di atas burst
+- Kalau session lama masih ke-cache buggy version, hapus manual: `rm storage/sessions/<id>/animation-live.gif` (file lama tanpa `-v2` suffix)
+
+### Live Strip GIF kosong / hilang dekorasi frame untuk `frame-165`
+- `frame-165.svg` pakai path-based SVG (bukan embedded base64 PNG seperti frame lain)
+- `loadFrameOverlay` regex tidak match → gracefully fall back ke compositing lama (burst nimpa frame border)
+- Log: `ℹ️  frame overlay: SVG storage/frames/frame-165.svg tidak punya embedded PNG (non-standar)`
+- Fix proper: re-export `frame-165` ke format yang sama (embedded base64 PNG di SVG, dimensi 464×696), atau tambah SVG renderer di backend
+
+### Sesi tidak end padahal timer sudah 0
+- Safeguard: backend masih sibuk (preset moving atau countdown shutter) — frontend tampil timer negatif `-00:01`, `-00:02`, ...
+- Hard cap 30 detik (lihat [Safeguard Sesi Foto](#safeguard-sesi-foto))
+- Kalau lebih dari 30s masih stuck: cek `/api/robot/config` — kemungkinan `current_preset` tidak pernah reset (robot webhook `/done` tidak fire ke backend). Reset manual via `POST /api/robot/webhook` dengan `{"event":"ended","preset":N}`.
+
+### "Pilih 3 foto dulu" saat klik Confirm di photo-editor
+- Slot belum terisi semua (kurang dari 3). Frontend block submit supaya tidak hit error 400 backend
+- Drop sisa foto dari panel kiri ke slot kosong di canvas tengah
+- Kalau timer 2 menit habis dengan slot belum penuh, otomatis skip save dan navigate ke `/session-end`
 
 ---
 

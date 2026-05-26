@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient, resolveBaseUrl } from '@/lib/api-client';
 import { playBackendAudio } from '@/lib/audio';
 import type { CameraType } from '../api/getLivePreview';
+import { useRobotConfig } from '../api/getRobotConfig';
 
 interface CameraPreviewProps {
   frameUrl?: string | null;
@@ -39,6 +40,11 @@ export function CameraPreview({
   const wasActiveRef = useRef(false);
   const captureTriggeredRef = useRef(false);
   const prevPresetRef = useRef(0);
+  // Set ke false di cleanup effect. Async callbacks (showLatestCanonCapture,
+  // captureAndUpload) cek ref ini sebelum setState supaya tidak fire pada
+  // komponen yang sudah unmount (mis. timer expire → navigate sementara
+  // polling masih jalan).
+  const isMountedRef = useRef(true);
 
   const [countdown, setCountdown] = useState<number | null>(null);
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
@@ -72,12 +78,15 @@ export function CameraPreview({
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
       if (capturedTimerRef.current) clearTimeout(capturedTimerRef.current);
       if (capturedBlobUrlRef.current) URL.revokeObjectURL(capturedBlobUrlRef.current);
     };
   }, []);
 
-  // Preload countdown audio (3-2-1) from backend storage
+  // Preload countdown audio (3-2-1) from backend storage.
+  // Cleanup: pause + clear src supaya audio buffer bisa di-GC dan tidak
+  // ada handle yang menahan native resource saat komponen unmount.
   useEffect(() => {
     const base = resolveBaseUrl();
     audioRefs.current = {
@@ -88,6 +97,18 @@ export function CameraPreview({
     Object.values(audioRefs.current).forEach((a) => {
       a.preload = 'auto';
     });
+    return () => {
+      Object.values(audioRefs.current).forEach((a) => {
+        try {
+          a.pause();
+          a.src = '';
+          a.load();
+        } catch {
+          // ignore — audio element may already be disposed
+        }
+      });
+      audioRefs.current = {};
+    };
   }, []);
 
   // Capture from <video> (UNMIRRORED — natural orientation) and upload
@@ -113,6 +134,10 @@ export function CameraPreview({
 
     // Show preview modal immediately from local blob (instant, no waiting for upload)
     const previewUrl = URL.createObjectURL(blob);
+    if (!isMountedRef.current) {
+      URL.revokeObjectURL(previewUrl);
+      return;
+    }
     showCapturedModal(previewUrl, true);
 
     const formData = new FormData();
@@ -120,108 +145,111 @@ export function CameraPreview({
     formData.append('photo', blob, `webcam_${Date.now()}.jpg`);
     try {
       await apiClient.post('/api/photo/upload', formData);
-      console.log('[CameraPreview] Builtin capture uploaded');
     } catch (err) {
       console.error('[CameraPreview] Builtin upload failed:', err);
     }
   }, [sessionId, showCapturedModal]);
 
   // Canon path: after capture finishes, fetch most recent photo from backend
-  // and show it in the modal.
+  // and show it in the modal. Backend writes photo to DB inside a goroutine,
+  // so we may need to wait — retry with backoff until it appears.
+  // Polling-loop ini bisa berjalan ~2.2 detik; user bisa navigate ke halaman
+  // lain di tengah waktu itu (mis. sesi habis). isMountedRef.current jadi
+  // false di unmount → kita break out tanpa setState (which would warn).
   const showLatestCanonCapture = useCallback(async () => {
     if (!sessionId) return;
-    try {
-      // Backend writes photo to DB inside its goroutine; allow a short window.
-      await new Promise((r) => setTimeout(r, 400));
-      const res = await apiClient.get<
-        Array<{ url?: string; created_at?: string }>
-      >(`/api/photo/session/${sessionId}`);
-      const photos = res.data ?? [];
-      if (photos.length === 0) return;
-      const sorted = [...photos].sort((a, b) => {
-        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-        return tb - ta;
-      });
-      const latest = sorted[0];
-      if (!latest?.url) return;
-      const url = latest.url.startsWith('http')
-        ? latest.url
-        : `${resolveBaseUrl()}${latest.url}`;
-      showCapturedModal(url, false);
-    } catch (err) {
-      console.error('[CameraPreview] Failed to fetch latest canon capture:', err);
+    const triggeredAt = Date.now();
+    // Attempts at 200, 400, 700, 1100, 1600, 2200 ms — total ~2.2s budget.
+    const delays = [200, 200, 300, 400, 500, 600];
+    for (let i = 0; i < delays.length; i++) {
+      await new Promise((r) => setTimeout(r, delays[i]));
+      if (!isMountedRef.current) return;
+      try {
+        const res = await apiClient.get<
+          Array<{ url?: string; created_at?: string }>
+        >(`/api/photo/session/${sessionId}`);
+        if (!isMountedRef.current) return;
+        const photos = res.data ?? [];
+        if (photos.length === 0) continue;
+        const sorted = [...photos].sort((a, b) => {
+          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+          return tb - ta;
+        });
+        const latest = sorted[0];
+        const latestTs = latest?.created_at
+          ? new Date(latest.created_at).getTime()
+          : 0;
+        // Only accept photos created at/after this capture trigger,
+        // otherwise we might surface a leftover from the previous shot.
+        // Allow a 1s clock-skew tolerance.
+        if (!latest?.url || latestTs < triggeredAt - 1000) continue;
+        const url = latest.url.startsWith('http')
+          ? latest.url
+          : `${resolveBaseUrl()}${latest.url}`;
+        showCapturedModal(url, false);
+        return;
+      } catch (err) {
+        if (!isMountedRef.current) return;
+        console.error(
+          '[CameraPreview] Failed to fetch latest canon capture (attempt ' +
+            (i + 1) +
+            '):',
+          err,
+        );
+      }
     }
+    console.warn('[CameraPreview] Canon capture not visible after retries');
   }, [sessionId, showCapturedModal]);
 
-  // Poll /api/robot/config to drive countdown overlay + audio + auto-upload.
-  // Backend sets auto_capture_active=false the moment countdown reaches 0,
-  // so we detect the transition (active: true → false) to fire capture.
+  // Robot state — di-share via React Query hook (single underlying poll
+  // dengan PhotoSessionPage). Effect di bawah ini react ke perubahan state,
+  // detect transisi (active → inactive) untuk fire capture, dan preset
+  // change untuk preset-confirmation sound.
+  const { data: robotConfig } = useRobotConfig();
+  const active = robotConfig?.auto_capture_active === true;
+  const remainingMs = robotConfig?.auto_capture_remaining_ms ?? 0;
+  const currentPreset = robotConfig?.current_preset ?? 0;
+
   useEffect(() => {
-    let cancelled = false;
+    // Robot just started moving to a new preset (transition 0 → N or N → M)
+    if (currentPreset > 0 && currentPreset !== prevPresetRef.current) {
+      playBackendAudio('presetTerkonfirmasi.mp3');
+    }
+    prevPresetRef.current = currentPreset;
+  }, [currentPreset]);
 
-    const tick = async () => {
-      try {
-        const res = await apiClient.get<{
-          auto_capture_active?: boolean;
-          auto_capture_remaining_ms?: number;
-          current_preset?: number;
-        }>('/api/robot/config');
-        if (cancelled) return;
-
-        const active = res.data?.auto_capture_active === true;
-        const remainingMs = res.data?.auto_capture_remaining_ms ?? 0;
-        const currentPreset = res.data?.current_preset ?? 0;
-
-        // Robot just started moving to a new preset (transition 0 → N or N → M)
-        if (currentPreset > 0 && currentPreset !== prevPresetRef.current) {
-          playBackendAudio('presetTerkonfirmasi.mp3');
+  useEffect(() => {
+    if (active) {
+      const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
+      if (seconds >= 1 && seconds <= 3) {
+        setCountdown(seconds);
+        if (!playedRef.current.has(seconds)) {
+          playedRef.current.add(seconds);
+          audioRefs.current[seconds]?.play().catch(() => {});
         }
-        prevPresetRef.current = currentPreset;
-
-        if (active) {
-          const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
-          if (seconds >= 1 && seconds <= 3) {
-            setCountdown(seconds);
-            if (!playedRef.current.has(seconds)) {
-              playedRef.current.add(seconds);
-              audioRefs.current[seconds]?.play().catch(() => {});
-            }
-          }
-          wasActiveRef.current = true;
-          captureTriggeredRef.current = false;
-          return;
-        }
-
-        // active === false
-        setCountdown(null);
-
-        if (wasActiveRef.current && !captureTriggeredRef.current) {
-          // Transition active → inactive = countdown just finished.
-          captureTriggeredRef.current = true;
-          if (isBuiltin) {
-            console.log('[CameraPreview] Countdown finished, capturing (builtin)...');
-            captureAndUpload();
-          } else {
-            console.log('[CameraPreview] Countdown finished, fetching canon photo...');
-            showLatestCanonCapture();
-          }
-        }
-
-        wasActiveRef.current = false;
-        playedRef.current.clear();
-      } catch {
-        // network blip, ignore
       }
-    };
+      wasActiveRef.current = true;
+      captureTriggeredRef.current = false;
+      return;
+    }
 
-    const interval = setInterval(tick, 250);
-    tick();
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [isBuiltin, captureAndUpload, showLatestCanonCapture]);
+    // active === false
+    setCountdown(null);
+
+    if (wasActiveRef.current && !captureTriggeredRef.current) {
+      // Transition active → inactive = countdown just finished.
+      captureTriggeredRef.current = true;
+      if (isBuiltin) {
+        captureAndUpload();
+      } else {
+        showLatestCanonCapture();
+      }
+    }
+
+    wasActiveRef.current = false;
+    playedRef.current.clear();
+  }, [active, remainingMs, isBuiltin, captureAndUpload, showLatestCanonCapture]);
 
   // Builtin mode: render webcam via getUserMedia → <video> → canvas (mirrored)
   useEffect(() => {

@@ -1,6 +1,7 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"crypto/md5"
 	"encoding/json"
@@ -40,14 +41,37 @@ var cameraState = struct {
 	connected:  false,
 }
 
-func digiCamBaseURL() string {
-	if config.App != nil {
-		base := strings.TrimSpace(config.App.DigiCamBaseURL)
-		if base != "" {
-			return strings.TrimRight(base, "/")
+// digiCam URLs di-cache via sync.Once: dipanggil di hot path (liveview,
+// burst, capture), tidak perlu re-parse string config tiap call.
+// Config.App di-set sekali saat startup jadi cache stay valid sepanjang
+// process lifetime.
+var (
+	digiCamURLOnce sync.Once
+	digiCamBase    string
+	digiCamRoot    string
+)
+
+func ensureDigiCamURLs() {
+	digiCamURLOnce.Do(func() {
+		base := "http://localhost:5513/api"
+		if config.App != nil {
+			b := strings.TrimSpace(config.App.DigiCamBaseURL)
+			if b != "" {
+				base = strings.TrimRight(b, "/")
+			}
 		}
-	}
-	return "http://localhost:5513/api"
+		digiCamBase = base
+		if strings.HasSuffix(strings.ToLower(base), "/api") {
+			digiCamRoot = strings.TrimSpace(base[:len(base)-4])
+		} else {
+			digiCamRoot = base
+		}
+	})
+}
+
+func digiCamBaseURL() string {
+	ensureDigiCamURLs()
+	return digiCamBase
 }
 
 func digiCamGet(path string) (*http.Response, error) {
@@ -55,12 +79,8 @@ func digiCamGet(path string) (*http.Response, error) {
 }
 
 func digiCamRootURL() string {
-	base := digiCamBaseURL()
-	lower := strings.ToLower(base)
-	if strings.HasSuffix(lower, "/api") {
-		return strings.TrimSpace(base[:len(base)-4])
-	}
-	return base
+	ensureDigiCamURLs()
+	return digiCamRoot
 }
 
 func digiCamTryCommand(urls []string) error {
@@ -127,6 +147,14 @@ func digiCamReadFirstAvailable(paths []string) ([]byte, error) {
 			continue
 		}
 
+		// Validate JPEG magic bytes (0xFF 0xD8). digiCamControl returns HTML
+		// error pages or empty status payloads when the camera is missing,
+		// and we don't want those to be mistaken for a valid live frame.
+		if !isJPEG(body) {
+			lastErr = fmt.Errorf("invalid jpeg payload")
+			continue
+		}
+
 		return body, nil
 	}
 
@@ -134,6 +162,36 @@ func digiCamReadFirstAvailable(paths []string) ([]byte, error) {
 		lastErr = fmt.Errorf("no liveview endpoint available")
 	}
 	return nil, lastErr
+}
+
+// isJPEG validates JPEG framing — SOI marker (0xFF 0xD8) at the start AND
+// EOI marker (0xFF 0xD9) somewhere in the trailing bytes. SOI-only check
+// let truncated camera frames (network glitch mid-MJPEG, partial liveview
+// read) through; the EOI guard rejects half-frames before they're stored
+// as burst frames / captures.
+//
+// Trailing window pakai 64 byte (bukan exact-end) supaya tetap accept
+// JPEG dengan small trailer (EXIF/thumbnail/app marker setelah EOI) yang
+// produced by some camera firmwares — kalau strict exact-end, satu byte
+// trailer akan reject SEMUA frame dari kamera itu.
+func isJPEG(b []byte) bool {
+	n := len(b)
+	if n < 4 {
+		return false
+	}
+	if b[0] != 0xFF || b[1] != 0xD8 {
+		return false
+	}
+	tail := b
+	if n > 64 {
+		tail = b[n-64:]
+	}
+	for i := 0; i < len(tail)-1; i++ {
+		if tail[i] == 0xFF && tail[i+1] == 0xD9 {
+			return true
+		}
+	}
+	return false
 }
 
 func captureLiveFrameHash(frame []byte) {
@@ -194,7 +252,9 @@ func CheckCamera() (*CameraStatus, error) {
 		}, nil
 	}
 
-	// Fallback ke builtin camera
+	// Fallback ke builtin camera. Capture path utama untuk builtin ada di
+	// browser (getUserMedia), jadi kita selalu klaim Connected:true supaya
+	// frontend bisa lanjut.
 	log.Printf("⚠️  Canon camera tidak terdeteksi, menggunakan laptop camera (builtin)")
 	SetCameraType("builtin")
 	SetCameraConnected(true)
@@ -304,8 +364,10 @@ func saveCaptureFrame(sessionDir string, frame []byte) (string, error) {
 	return filePath, nil
 }
 
-// downloadLastCaptured download foto terakhir dari digiCamControl
-func downloadLastCaptured(sessionID, sessionDir string) (string, error) {
+// downloadLastCaptured download foto terakhir dari digiCamControl.
+// sessionID di-pass dari pemanggil untuk konsistensi signature, tapi
+// folder tujuan sudah lengkap di sessionDir.
+func downloadLastCaptured(_ string, sessionDir string) (string, error) {
 	root := digiCamRootURL()
 	base := digiCamBaseURL()
 	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
@@ -463,9 +525,10 @@ func captureWebcamFrame() ([]byte, error) {
 	return data, nil
 }
 
-// generateTestImage generate test image untuk builtin camera fallback
-// Lebih realistis untuk testing photo booth flow
-func generateTestImage(sessionID string) ([]byte, error) {
+// generateTestImage generate test image untuk builtin camera fallback.
+// Lebih realistis untuk testing photo booth flow. Parameter di-keep untuk
+// kompatibilitas pemanggil walau tidak dipakai di body.
+func generateTestImage(_ string) ([]byte, error) {
 	width, height := 1280, 720
 	img := image.NewRGBA(image.Rect(0, 0, width, height))
 
@@ -517,27 +580,13 @@ func generateTestImage(sessionID string) ([]byte, error) {
 	return encodeJPEG(img)
 }
 
-// encodeJPEG encode image ke JPEG bytes
+// encodeJPEG encode image ke JPEG bytes via in-memory buffer.
 func encodeJPEG(img image.Image) ([]byte, error) {
-	// Kita perlu buat file dulu untuk encode
-	tmpFile := filepath.Join(os.TempDir(), fmt.Sprintf("test_img_%d.jpg", time.Now().UnixNano()))
-	f, err := os.Create(tmpFile)
-	if err != nil {
+	var buf bytes.Buffer
+	if err := jpeg.Encode(&buf, img, &jpeg.Options{Quality: 85}); err != nil {
 		return nil, err
 	}
-	defer func() {
-		f.Close()
-		os.Remove(tmpFile)
-	}()
-
-	if err := jpeg.Encode(f, img, &jpeg.Options{Quality: 85}); err != nil {
-		return nil, err
-	}
-
-	f.Close()
-
-	// Baca kembali file
-	return os.ReadFile(tmpFile)
+	return buf.Bytes(), nil
 }
 
 // drawSimpleText draw text sederhana pada image (text representation)

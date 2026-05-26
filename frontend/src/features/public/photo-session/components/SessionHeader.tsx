@@ -1,16 +1,12 @@
 import { Camera } from 'lucide-react';
+import { formatTimeMMSS } from '@/lib/formatTime';
 
 interface SessionHeaderProps {
   sessionTimeLeft?: number;
 }
 
 export function SessionHeader({ sessionTimeLeft = 60 }: SessionHeaderProps) {
-  // Format seconds to MM:SS
-  const minutes = Math.floor(sessionTimeLeft / 60);
-  const seconds = sessionTimeLeft % 60;
-  const formattedTime = `${minutes.toString().padStart(2, '0')}:${seconds
-    .toString()
-    .padStart(2, '0')}`;
+  const formattedTime = formatTimeMMSS(sessionTimeLeft);
 
   return (
     <div className="flex items-center justify-between bg-primary/80 backdrop-blur-md border border-white/10 px-5 py-3 rounded-2xl shadow-lg">

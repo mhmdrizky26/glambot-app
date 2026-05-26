@@ -11,13 +11,20 @@ import (
 )
 
 func CORS(next http.Handler) http.Handler {
+	// FRONTEND_URL boleh berisi satu URL atau beberapa dipisahkan koma
+	// (mis. "https://app.example.com,https://staging.example.com").
+	// Parse sekali saat startup biar tiap request tidak split string lagi.
+	configuredOrigins := parseAllowedOrigins(config.App.FrontendURL)
+
 	cors := chiCors.New(chiCors.Options{
 		AllowOriginFunc: func(r *http.Request, origin string) bool {
 			if origin == "" {
 				return false
 			}
-			if origin == config.App.FrontendURL {
-				return true
+			for _, allowed := range configuredOrigins {
+				if origin == allowed {
+					return true
+				}
 			}
 
 			u, err := url.Parse(origin)
@@ -56,4 +63,15 @@ func CORS(next http.Handler) http.Handler {
 		MaxAge:           300,
 	})
 	return cors.Handler(next)
+}
+
+func parseAllowedOrigins(raw string) []string {
+	parts := strings.Split(raw, ",")
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if v := strings.TrimSpace(p); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
 }

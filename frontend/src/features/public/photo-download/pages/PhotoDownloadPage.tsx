@@ -5,10 +5,12 @@ import {
   useFramedPhotos,
 } from '@/features/public/photo-editor/api/getPhotos';
 import { useDownloadPhoto } from '@/features/public/photo-download/hooks/useDownloadPhoto';
+import { useLiveGifAvailability } from '@/features/public/photo-download/api/getGifAvailability';
 import { Button } from '@/components/ui/button';
 import { ErrorState } from '@/features/public/photo-download/components/ErrorState';
 import { PhotoGrid } from '@/features/public/photo-download/components/PhotoGrid';
 import { PhotoCard } from '@/features/public/photo-download/components/PhotoCard';
+import { GIFPreview } from '@/features/public/photo-download/components/GIFPreview';
 import GlassCard from '@/components/shared/GlassCard';
 
 interface PhotoDownloadPageProps {
@@ -30,7 +32,18 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
     refetch: refetchFramed,
   } = useFramedPhotos({ sessionId });
 
-  const { downloadStates, downloadPhoto, downloadAll } = useDownloadPhoto();
+  const {
+    downloadStates,
+    gifState,
+    gifLiveState,
+    downloadPhoto,
+    downloadAll,
+    downloadGIF,
+    downloadLiveGIF,
+  } = useDownloadPhoto();
+
+  const { data: liveGifAvailability } = useLiveGifAvailability({ sessionId });
+  const isLiveGifAvailable = liveGifAvailability?.available ?? false;
 
   if (!sessionId) {
     return (
@@ -137,6 +150,106 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
               ))}
             </div>
           </GlassCard>
+        </section>
+      )}
+
+      {/* Animated GIF — dua varian: slideshow foto + live strip (kalau ada
+          burst frames). Tampil kalau ada minimal foto. */}
+      {allPhotos.length > 0 && (
+        <section className="w-full max-w-2xl flex flex-col gap-2 sm:gap-3">
+          <h2 className="text-primary/80 text-xs sm:text-sm font-semibold uppercase tracking-wider px-1">
+            Animated GIF
+          </h2>
+
+          {/* GIF #1: Slideshow foto raw terpilih */}
+          <GlassCard
+            variant="default"
+            maxWidth="max-w-2xl"
+            className="flex flex-col sm:flex-row sm:items-stretch gap-3 sm:gap-4 p-4"
+          >
+            <div className="w-full sm:w-32 shrink-0">
+              <GIFPreview
+                endpoint={`/api/photo/session/${sessionId}/gif`}
+                alt="Preview slideshow GIF"
+                aspectClass="aspect-[2/3]"
+              />
+            </div>
+            <div className="flex-1 flex flex-col gap-3 justify-between">
+              <div className="flex flex-col gap-1 text-center sm:text-left">
+                <p className="text-white font-semibold text-sm sm:text-base">
+                  Slideshow Foto
+                </p>
+                <p className="text-white/60 text-xs sm:text-sm">
+                  Foto terpilih di-loop satu per satu — pas buat story / status
+                  WhatsApp.
+                </p>
+              </div>
+              <Button
+                variant="default"
+                size="default"
+                disabled={gifState === 'downloading'}
+                onClick={() => downloadGIF(sessionId)}
+                aria-label="Download slideshow GIF"
+                className="w-full sm:w-auto sm:self-start whitespace-nowrap"
+              >
+                {gifState === 'downloading'
+                  ? 'Menyiapkan...'
+                  : gifState === 'done'
+                    ? 'Tersimpan ✓'
+                    : gifState === 'error'
+                      ? 'Gagal, coba lagi'
+                      : 'Download GIF'}
+              </Button>
+            </div>
+          </GlassCard>
+
+          {/* GIF #2: Live strip — strip frame dengan slot yang "hidup" pakai
+              burst liveview frames sebelum settle ke foto final.
+              Hanya tampil kalau backend punya burst frames (Canon mode +
+              liveview sempat capture). Di mode builtin webcam tidak ada
+              burst → card di-hide supaya user tidak lihat tombol gagal. */}
+          {framed.length > 0 && isLiveGifAvailable && (
+            <GlassCard
+              variant="default"
+              maxWidth="max-w-2xl"
+              className="flex flex-col sm:flex-row sm:items-stretch gap-3 sm:gap-4 p-4"
+            >
+              <div className="w-full sm:w-32 shrink-0">
+                <GIFPreview
+                  endpoint={`/api/photo/session/${sessionId}/gif-live`}
+                  alt="Preview live strip GIF"
+                  aspectClass="aspect-[2/3]"
+                />
+              </div>
+              <div className="flex-1 flex flex-col gap-3 justify-between">
+                <div className="flex flex-col gap-1 text-center sm:text-left">
+                  <p className="text-white font-semibold text-sm sm:text-base">
+                    Live Strip
+                  </p>
+                  <p className="text-white/60 text-xs sm:text-sm">
+                    Strip-mu dengan tiap slot bergerak (3 detik momen sebelum
+                    jepret), lalu settle ke foto final.
+                  </p>
+                </div>
+                <Button
+                  variant="default"
+                  size="default"
+                  disabled={gifLiveState === 'downloading'}
+                  onClick={() => downloadLiveGIF(sessionId)}
+                  aria-label="Download live strip GIF"
+                  className="w-full sm:w-auto sm:self-start whitespace-nowrap"
+                >
+                  {gifLiveState === 'downloading'
+                    ? 'Menyiapkan...'
+                    : gifLiveState === 'done'
+                      ? 'Tersimpan ✓'
+                      : gifLiveState === 'error'
+                        ? 'Belum tersedia'
+                        : 'Download Live Strip'}
+                </Button>
+              </div>
+            </GlassCard>
+          )}
         </section>
       )}
 

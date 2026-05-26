@@ -10,11 +10,18 @@ export interface SaveCompositionInput {
   composedImage: Blob;
 }
 
+// Shape backend response untuk POST /api/photo/compose
+// (lihat handlers/photo.go ComposeFrame). Field-field snake_case sesuai
+// JSON encoding di backend — api-client interceptor sudah strip wrapper
+// `{success, data: ...}` jadi caller pegang langsung object di bawah ini.
 export interface CompositionResponse {
-  id: string;
-  sessionId: string;
-  imageUrl: string;
-  createdAt: string;
+  result_id: string;
+  download_url: string;
+  preview_url: string;
+  gif_url: string;
+  gif_live_url: string;
+  status: string;
+  message: string;
 }
 
 /**
@@ -43,9 +50,6 @@ export const saveComposition = async (
 export const useSaveComposition = () => {
   return useMutation({
     mutationFn: saveComposition,
-    onSuccess: (data) => {
-      console.log('Composition saved:', data.imageUrl);
-    },
     onError: (error) => {
       console.error('Failed to save composition:', error);
     },
