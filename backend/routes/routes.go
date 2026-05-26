@@ -70,10 +70,12 @@ func Setup(storagePath string) http.Handler {
 		// ── Photo ───────────────────────────────────────────────────────────
 		r.Route("/photo", func(r chi.Router) {
 			r.Post("/upload", handlers.UploadPhoto)
-			r.Post("/select", handlers.SelectPhotos)
 			r.Post("/compose", handlers.ComposeFrame)
 			r.Get("/session/{sessionID}", handlers.GetSessionPhotos)
 			r.Get("/session/{sessionID}/framed", handlers.GetFramedPhotos)
+			r.Get("/session/{sessionID}/gif", handlers.DownloadSessionGIF)
+			r.Get("/session/{sessionID}/gif-live", handlers.DownloadSessionLiveGIF)
+			r.Get("/session/{sessionID}/gif-live/available", handlers.GetSessionLiveGIFAvailable)
 			r.Get("/download/{photoID}", handlers.DownloadPhoto)
 		})
 

@@ -36,13 +36,23 @@ func flipJPEGHorizontal(frame []byte) []byte {
 		return frame
 	}
 
-	src := image.NewRGBA(b)
-	draw.Draw(src, b, img, b.Min, draw.Src)
-	dst := image.NewRGBA(b)
+	// Decode ke RGBA sekali, lalu reverse setiap baris via pixel-swap di
+	// buffer Pix langsung. Lebih cepat dibanding loop image.Set per pixel:
+	// hot path MJPEG stream jalan ~10 fps per client, jadi setiap microsec
+	// counts. 4-byte pixel swap = move RGBA bytes pairwise.
+	dst := image.NewRGBA(image.Rect(0, 0, w, h))
+	draw.Draw(dst, dst.Bounds(), img, b.Min, draw.Src)
 
+	stride := dst.Stride
 	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
-			dst.Set(x+b.Min.X, y+b.Min.Y, src.At((w-1-x)+b.Min.X, y+b.Min.Y))
+		row := dst.Pix[y*stride : y*stride+w*4]
+		for x := 0; x < w/2; x++ {
+			i := x * 4
+			j := (w - 1 - x) * 4
+			row[i], row[j] = row[j], row[i]
+			row[i+1], row[j+1] = row[j+1], row[i+1]
+			row[i+2], row[j+2] = row[j+2], row[i+2]
+			row[i+3], row[j+3] = row[j+3], row[i+3]
 		}
 	}
 
@@ -75,70 +85,80 @@ func RobotCapture(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validasi sesi
-	session, err := GetSessionByID(req.SessionID)
+	if err := ensureShootingSession(req.SessionID); err != nil {
+		respondError(w, http.StatusForbidden, err.Error())
+		return
+	}
+
+	photo, err := recordCanonCapture(req.SessionID)
 	if err != nil {
-		respondError(w, http.StatusNotFound, "Session tidak ditemukan")
+		respondError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
+	respondJSON(w, http.StatusCreated, models.SuccessResponse(*photo))
+}
+
+// ensureShootingSession validasi sesi siap foto (status paid/shooting) dan
+// promote ke 'shooting' kalau masih 'paid'. Dipakai oleh kedua jalur capture
+// (handler manual + auto capture via robot webhook).
+func ensureShootingSession(sessionID string) error {
+	session, err := GetSessionByID(sessionID)
+	if err != nil {
+		return fmt.Errorf("Session tidak ditemukan")
+	}
 	if session.Status != models.StatusPaid && session.Status != models.StatusShooting {
-		respondError(w, http.StatusForbidden, "Sesi tidak dalam status foto")
-		return
+		return fmt.Errorf("Sesi tidak dalam status foto")
 	}
-
-	// Update status ke shooting kalau masih paid
 	if session.Status == models.StatusPaid {
-		if _, err := database.DB.Exec(`UPDATE sessions SET status = 'shooting' WHERE id = ?`, req.SessionID); err != nil {
-			respondError(w, http.StatusInternalServerError, "Gagal memperbarui status sesi")
-			return
+		if _, err := database.DB.Exec(
+			`UPDATE sessions SET status = 'shooting' WHERE id = ?`, sessionID,
+		); err != nil {
+			return fmt.Errorf("Gagal memperbarui status sesi")
 		}
 	}
+	return nil
+}
 
-	// Trigger Canon via digiCamControl
-	filePath, err := services.TriggerCapture(req.SessionID)
+// recordCanonCapture trigger Canon shutter dan persist photo metadata ke DB.
+// Tidak memvalidasi sesi — caller harus panggil ensureShootingSession() dulu.
+func recordCanonCapture(sessionID string) (*models.Photo, error) {
+	filePath, err := services.TriggerCapture(sessionID)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal trigger kamera: "+err.Error())
-		return
+		return nil, fmt.Errorf("Gagal trigger kamera: %w", err)
 	}
 
-	// Hitung relative path untuk DB
 	storagePath := config.App.StoragePath
 	relPath, err := filepath.Rel(storagePath, filePath)
 	if err != nil {
 		relPath = filePath
 	}
-	// Normalize path separator
 	relPath = filepath.ToSlash(relPath)
 
 	fileName := filepath.Base(filePath)
 	photoID := uuid.New().String()
+	now := time.Now()
 
-	// Simpan metadata ke DB
-	_, err = database.DB.Exec(`
+	if _, err := database.DB.Exec(`
 		INSERT INTO photos
 			(id, session_id, file_path, file_name, type, selected, created_at)
 		VALUES
 			(?, ?, ?, ?, 'raw', 0, ?)`,
-		photoID, req.SessionID, relPath, fileName, time.Now().UTC(),
-	)
-	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal simpan metadata foto")
-		return
+		photoID, sessionID, relPath, fileName, now.UTC(),
+	); err != nil {
+		return nil, fmt.Errorf("Gagal simpan metadata foto")
 	}
 
-	photo := models.Photo{
+	return &models.Photo{
 		ID:        photoID,
-		SessionID: req.SessionID,
+		SessionID: sessionID,
 		FilePath:  relPath,
 		FileName:  fileName,
 		Type:      models.PhotoRaw,
 		Selected:  false,
-		CreatedAt: time.Now(),
+		CreatedAt: now,
 		URL:       fmt.Sprintf("/storage/%s", relPath),
-	}
-
-	respondJSON(w, http.StatusCreated, models.SuccessResponse(photo))
+	}, nil
 }
 
 // GET /api/robot/liveview
@@ -440,6 +460,12 @@ func RobotDone(w http.ResponseWriter, r *http.Request) {
 
 	// Try to resolve session ID and schedule capture
 	resolvedSessionID, err := resolveRobotCaptureSessionID(req.SessionID)
+	if err == nil && resolvedSessionID != "" {
+		// Mulai burst capture liveview frames untuk animated-strip GIF.
+		// Berjalan paralel selama countdown, di-promote ke photoID setelah
+		// capture sukses (lihat captureRobotSessionPhoto).
+		services.StartBurstCapture(resolvedSessionID)
+	}
 	if err != nil {
 		// No session to capture, return accepted but note missing session
 		if config.App != nil {
@@ -507,21 +533,8 @@ func captureRobotSessionPhoto(sessionID string) (*models.Photo, error) {
 		return nil, err
 	}
 
-	// Validasi sesi
-	session, err := GetSessionByID(resolvedSessionID)
-	if err != nil {
-		return nil, fmt.Errorf("Session tidak ditemukan")
-	}
-
-	if session.Status != models.StatusPaid && session.Status != models.StatusShooting {
-		return nil, fmt.Errorf("Sesi tidak dalam status foto")
-	}
-
-	// Update status ke shooting kalau masih paid
-	if session.Status == models.StatusPaid {
-		if _, err := database.DB.Exec(`UPDATE sessions SET status = 'shooting' WHERE id = ?`, resolvedSessionID); err != nil {
-			return nil, fmt.Errorf("Gagal memperbarui status sesi")
-		}
+	if err := ensureShootingSession(resolvedSessionID); err != nil {
+		return nil, err
 	}
 
 	// Builtin mode (laptop webcam): frontend captures via <video> getUserMedia
@@ -532,47 +545,15 @@ func captureRobotSessionPhoto(sessionID string) (*models.Photo, error) {
 		return nil, nil
 	}
 
-	// Trigger Canon via digiCamControl
-	filePath, err := services.TriggerCapture(resolvedSessionID)
+	photo, err := recordCanonCapture(resolvedSessionID)
 	if err != nil {
-		return nil, fmt.Errorf("Gagal trigger kamera: %w", err)
+		return nil, err
 	}
 
-	// Hitung relative path untuk DB
-	storagePath := config.App.StoragePath
-	relPath, err := filepath.Rel(storagePath, filePath)
-	if err != nil {
-		relPath = filePath
-	}
-	// Normalize path separator
-	relPath = filepath.ToSlash(relPath)
-
-	fileName := filepath.Base(filePath)
-	photoID := uuid.New().String()
-	now := time.Now()
-
-	// Simpan metadata ke DB
-	_, err = database.DB.Exec(`
-		INSERT INTO photos
-			(id, session_id, file_path, file_name, type, selected, created_at)
-		VALUES
-			(?, ?, ?, ?, 'raw', 0, ?)`,
-		photoID, resolvedSessionID, relPath, fileName, now.UTC(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("Gagal simpan metadata foto")
-	}
-
-	photo := &models.Photo{
-		ID:        photoID,
-		SessionID: resolvedSessionID,
-		FilePath:  relPath,
-		FileName:  fileName,
-		Type:      models.PhotoRaw,
-		Selected:  false,
-		CreatedAt: now,
-		URL:       fmt.Sprintf("/storage/%s", relPath),
-	}
+	// Pindahkan burst frames (yang diambil selama countdown 3 detik tadi)
+	// ke folder yang dimiliki photoID. Dijalankan async biar tidak block
+	// response — promote butuh wait sampai goroutine burst selesai.
+	go services.PromoteBurstToPhoto(resolvedSessionID, photo.ID)
 
 	return photo, nil
 }

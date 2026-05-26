@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"mime"
 	"net/http"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"photobooth/config"
 	"photobooth/database"
 	"photobooth/models"
+	"photobooth/services"
 	"strings"
 	"time"
 
@@ -173,47 +175,6 @@ func GetSessionPhotos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, models.SuccessResponse(photos))
-}
-
-// POST /api/photo/select
-// User pilih tepat 3 foto untuk dimasukkan ke strip, urutan = posisi
-func SelectPhotos(w http.ResponseWriter, r *http.Request) {
-	var req models.SelectPhotosRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		respondError(w, http.StatusBadRequest, "Invalid request body")
-		return
-	}
-
-	if len(req.PhotoIDs) != 3 {
-		respondError(w, http.StatusBadRequest, "Harus memilih tepat 3 foto untuk strip")
-		return
-	}
-
-	// Validasi semua foto milik sesi ini
-	for _, photoID := range req.PhotoIDs {
-		var count int
-		database.DB.QueryRow(`
-			SELECT COUNT(*) FROM photos 
-			WHERE id = ? AND session_id = ? AND type = 'raw'`,
-			photoID, req.SessionID,
-		).Scan(&count)
-
-		if count == 0 {
-			respondError(w, http.StatusBadRequest, fmt.Sprintf("Foto %s tidak ditemukan di sesi ini", photoID))
-			return
-		}
-	}
-
-	if err := updateSelectedPhotos(req.SessionID, req.PhotoIDs); err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal menyimpan pilihan foto")
-		return
-	}
-
-	respondJSON(w, http.StatusOK, models.SuccessResponse(map[string]interface{}{
-		"session_id":     req.SessionID,
-		"selected_count": 3,
-		"photo_ids":      req.PhotoIDs,
-	}))
 }
 
 // GET /api/frames
@@ -386,12 +347,31 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Pre-generate kedua varian GIF di background supaya saat user buka
+	// halaman download di HP, file sudah siap (tidak perlu wait beberapa
+	// detik di first hit).
+	go func(sid string) {
+		if opts, err := collectAnimationSources(sid); err != nil {
+			log.Printf("⚠️  gif pre-generate skip (%s): %v", sid, err)
+		} else if _, err := services.GenerateSessionGIF(opts); err != nil {
+			log.Printf("⚠️  gif pre-generate failed (%s): %v", sid, err)
+		}
+
+		if opts, err := collectLiveStripSources(sid); err != nil {
+			log.Printf("ℹ️  gif-live pre-generate skip (%s): %v", sid, err)
+		} else if _, err := services.GenerateLiveStripGIF(opts); err != nil {
+			log.Printf("⚠️  gif-live pre-generate failed (%s): %v", sid, err)
+		}
+	}(sessionID)
+
 	respondJSON(w, http.StatusOK, models.SuccessResponse(map[string]interface{}{
-		"result_id":    resultID,
-		"download_url": fmt.Sprintf("/api/photo/download/%s", resultID),
-		"preview_url":  fmt.Sprintf("/storage/%s", framedRelPath),
-		"status":       "composed",
-		"message":      "Strip foto berhasil disimpan",
+		"result_id":     resultID,
+		"download_url":  fmt.Sprintf("/api/photo/download/%s", resultID),
+		"preview_url":   fmt.Sprintf("/storage/%s", framedRelPath),
+		"gif_url":       fmt.Sprintf("/api/photo/session/%s/gif", sessionID),
+		"gif_live_url":  fmt.Sprintf("/api/photo/session/%s/gif-live", sessionID),
+		"status":        "composed",
+		"message":       "Strip foto berhasil disimpan",
 	}))
 }
 
@@ -419,7 +399,11 @@ func DownloadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fullPath := filepath.Join(config.App.StoragePath, filePath)
+	fullPath, ok := safeStoragePath(filePath)
+	if !ok {
+		respondError(w, http.StatusForbidden, "Path foto tidak valid")
+		return
+	}
 	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
 		respondError(w, http.StatusNotFound, "File foto tidak ditemukan di storage")
 		return
@@ -432,6 +416,289 @@ func DownloadPhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", contentType)
 	http.ServeFile(w, r, fullPath)
+}
+
+// GET /api/photo/session/{sessionID}/gif
+// Generate (atau ambil cache) animated GIF: framed strip + tiap foto raw
+// terpilih sebagai frame berurutan, loop forever. File di-cache di
+// storage/sessions/{id}/animation.gif.
+func DownloadSessionGIF(w http.ResponseWriter, r *http.Request) {
+	sessionID := chi.URLParam(r, "sessionID")
+	if sessionID == "" {
+		respondError(w, http.StatusBadRequest, "session_id wajib")
+		return
+	}
+
+	opts, err := collectAnimationSources(sessionID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	gifPath, err := services.GenerateSessionGIF(opts)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError,
+			fmt.Sprintf("Gagal generate GIF: %v", err))
+		return
+	}
+
+	if _, err := os.Stat(gifPath); err != nil {
+		respondError(w, http.StatusInternalServerError, "GIF tidak ditemukan setelah generate")
+		return
+	}
+
+	serveGIFFile(w, r, gifPath, fmt.Sprintf("photobooth_%s.gif", sessionID))
+}
+
+// serveGIFFile serve file GIF dengan disposition yang tepat. Default
+// "attachment" (force download); kalau ?inline=1 → "inline" supaya bisa
+// dipakai sebagai <img src> untuk preview di halaman.
+func serveGIFFile(w http.ResponseWriter, r *http.Request, gifPath, downloadName string) {
+	inline := r.URL.Query().Get("inline") == "1"
+	if inline {
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`inline; filename="%s"`, downloadName))
+		// Cache pendek di browser — file di-update setiap session compose
+		// ulang, tapi dalam sesi yang sama isinya stabil.
+		w.Header().Set("Cache-Control", "public, max-age=60")
+	} else {
+		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, downloadName))
+	}
+	w.Header().Set("Content-Type", "image/gif")
+	http.ServeFile(w, r, gifPath)
+}
+
+// collectAnimationSources mengumpulkan path foto raw (urut posisi terpilih,
+// atau created_at sebagai fallback session Digital) untuk dipakai sebagai
+// frame slideshow GIF #1. Framed strip TIDAK disertakan — GIF #1 murni
+// rotasi foto raw, tidak ada overlay/header/footer frame.
+func collectAnimationSources(sessionID string) (services.GenerateAnimationOptions, error) {
+	opts := services.GenerateAnimationOptions{SessionID: sessionID}
+
+	// Foto raw yang ditandai selected, urut posisi (1..N).
+	rows, err := database.DB.Query(`
+		SELECT file_path FROM photos
+		WHERE session_id = ? AND type = 'raw' AND selected = 1
+		ORDER BY COALESCE(position, 0) ASC, created_at ASC`, sessionID,
+	)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var rel string
+			if scanErr := rows.Scan(&rel); scanErr != nil {
+				continue
+			}
+			if abs, ok := safeStoragePath(rel); ok {
+				opts.SelectedRawPaths = append(opts.SelectedRawPaths, abs)
+			}
+		}
+	}
+
+	// Kalau tidak ada selected (mis. session Digital tanpa pilih frame),
+	// fallback pakai semua raw biar customer tetap dapat animasi.
+	if len(opts.SelectedRawPaths) == 0 {
+		rows, err := database.DB.Query(`
+			SELECT file_path FROM photos
+			WHERE session_id = ? AND type = 'raw'
+			ORDER BY created_at ASC`, sessionID,
+		)
+		if err == nil {
+			defer rows.Close()
+			for rows.Next() {
+				var rel string
+				if scanErr := rows.Scan(&rel); scanErr != nil {
+					continue
+				}
+				if abs, ok := safeStoragePath(rel); ok {
+					opts.SelectedRawPaths = append(opts.SelectedRawPaths, abs)
+				}
+			}
+		}
+	}
+
+	if len(opts.SelectedRawPaths) == 0 {
+		return opts, fmt.Errorf("session %s tidak punya foto", sessionID)
+	}
+	return opts, nil
+}
+
+// GET /api/photo/session/{sessionID}/gif-live/available
+// Cek ringan: apakah GIF #2 (Live Strip) tersedia untuk session ini?
+// Tersedia = ada framed strip + minimal satu foto terpilih yang punya burst
+// frames. Mode builtin webcam tidak menghasilkan burst → endpoint ini akan
+// return false dan frontend bisa hide tombol/preview supaya UX bersih.
+func GetSessionLiveGIFAvailable(w http.ResponseWriter, r *http.Request) {
+	sessionID := chi.URLParam(r, "sessionID")
+	if sessionID == "" {
+		respondError(w, http.StatusBadRequest, "session_id wajib")
+		return
+	}
+
+	respondJSON(w, http.StatusOK, models.SuccessResponse(map[string]interface{}{
+		"available": isLiveGIFAvailable(sessionID),
+	}))
+}
+
+// isLiveGIFAvailable cek cepat tanpa generate apa-apa: ada framed strip
+// & minimal satu foto terpilih dengan burst frames.
+func isLiveGIFAvailable(sessionID string) bool {
+	if sessionID == "" {
+		return false
+	}
+
+	// Harus sudah ada framed strip — kalau belum, compose belum jalan.
+	var framedCount int
+	if err := database.DB.QueryRow(`
+		SELECT COUNT(*) FROM photos
+		WHERE session_id = ? AND type = 'framed'`, sessionID,
+	).Scan(&framedCount); err != nil || framedCount == 0 {
+		return false
+	}
+
+	rows, err := database.DB.Query(`
+		SELECT id FROM photos
+		WHERE session_id = ? AND type = 'raw' AND selected = 1`, sessionID,
+	)
+	if err != nil {
+		return false
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var photoID string
+		if scanErr := rows.Scan(&photoID); scanErr != nil {
+			continue
+		}
+		if len(services.ListBurstFrames(sessionID, photoID)) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+// GET /api/photo/session/{sessionID}/gif-live
+// Generate (atau ambil cache) animated strip GIF: framed strip + tiap slot
+// "hidup" dengan burst liveview frames sebelum settle ke foto final.
+func DownloadSessionLiveGIF(w http.ResponseWriter, r *http.Request) {
+	sessionID := chi.URLParam(r, "sessionID")
+	if sessionID == "" {
+		respondError(w, http.StatusBadRequest, "session_id wajib")
+		return
+	}
+
+	opts, err := collectLiveStripSources(sessionID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, err.Error())
+		return
+	}
+
+	gifPath, err := services.GenerateLiveStripGIF(opts)
+	if err != nil {
+		respondError(w, http.StatusInternalServerError,
+			fmt.Sprintf("Gagal generate live GIF: %v", err))
+		return
+	}
+
+	if _, err := os.Stat(gifPath); err != nil {
+		respondError(w, http.StatusInternalServerError, "GIF tidak ditemukan setelah generate")
+		return
+	}
+
+	serveGIFFile(w, r, gifPath, fmt.Sprintf("photobooth_live_%s.gif", sessionID))
+}
+
+// collectLiveStripSources kumpulkan semua data yang dibutuhkan generator
+// GIF #2: framed strip path, slot coords dari frame yang dipilih, daftar
+// foto terpilih beserta burst frames-nya (ordered by position).
+func collectLiveStripSources(sessionID string) (services.LiveStripOptions, error) {
+	opts := services.LiveStripOptions{SessionID: sessionID}
+
+	// Ambil session → frame_id
+	session, err := GetSessionByID(sessionID)
+	if err != nil {
+		return opts, fmt.Errorf("session tidak ditemukan")
+	}
+	if session.FrameID == "" {
+		return opts, fmt.Errorf("session belum memilih frame")
+	}
+
+	// Frame design: slot coords + canvas dim + file path
+	var slotsBytes []byte
+	var framePath string
+	if err := database.DB.QueryRow(
+		`SELECT file_path, canvas_width, canvas_height, slots FROM frames WHERE id = ?`,
+		session.FrameID,
+	).Scan(&framePath, &opts.CanvasWidth, &opts.CanvasHeight, &slotsBytes); err != nil {
+		return opts, fmt.Errorf("frame %s tidak ditemukan", session.FrameID)
+	}
+	slots, err := services.ParseSlotsJSON(slotsBytes)
+	if err != nil {
+		return opts, fmt.Errorf("slot JSON invalid: %v", err)
+	}
+	opts.Slots = slots
+	if abs, ok := safeStoragePath(framePath); ok {
+		opts.FrameSVGPath = abs
+	}
+
+	// Framed strip terbaru
+	var framedRel string
+	if err := database.DB.QueryRow(`
+		SELECT file_path FROM photos
+		WHERE session_id = ? AND type = 'framed'
+		ORDER BY created_at DESC LIMIT 1`, sessionID,
+	).Scan(&framedRel); err != nil || framedRel == "" {
+		return opts, fmt.Errorf("framed strip belum ada — selesaikan compose dulu")
+	}
+	abs, ok := safeStoragePath(framedRel)
+	if !ok {
+		return opts, fmt.Errorf("path framed strip invalid")
+	}
+	opts.FramedImagePath = abs
+
+	// Foto terpilih + burst frames per photo
+	rows, err := database.DB.Query(`
+		SELECT id, COALESCE(position, 0) FROM photos
+		WHERE session_id = ? AND type = 'raw' AND selected = 1
+		ORDER BY COALESCE(position, 0) ASC, created_at ASC`, sessionID,
+	)
+	if err != nil {
+		return opts, fmt.Errorf("gagal query foto terpilih: %v", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var photoID string
+		var pos int
+		if err := rows.Scan(&photoID, &pos); err != nil {
+			continue
+		}
+		opts.Photos = append(opts.Photos, services.LiveStripPhoto{
+			PhotoID:     photoID,
+			Position:    pos,
+			BurstFrames: services.ListBurstFrames(sessionID, photoID),
+		})
+	}
+
+	if len(opts.Photos) == 0 {
+		return opts, fmt.Errorf("belum ada foto terpilih")
+	}
+	return opts, nil
+}
+
+// safeStoragePath join relPath ke StoragePath dan pastikan hasilnya masih
+// di dalam folder storage (defense-in-depth terhadap path traversal kalau
+// file_path di DB ternyata mengandung "..").
+func safeStoragePath(relPath string) (string, bool) {
+	absStorage, err := filepath.Abs(config.App.StoragePath)
+	if err != nil {
+		return "", false
+	}
+	absPath, err := filepath.Abs(filepath.Join(absStorage, relPath))
+	if err != nil {
+		return "", false
+	}
+	rel, err := filepath.Rel(absStorage, absPath)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", false
+	}
+	return absPath, true
 }
 
 // GET /api/photo/session/{sessionID}/framed

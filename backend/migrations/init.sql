@@ -149,7 +149,7 @@ INSERT INTO frames (id, name, file_path, thumb_url, photo_slots, canvas_width, c
 VALUES
   ('frame-164', 'Frame 164', 'frames/frame-164.svg', '/storage/frames/frame-164.svg', 6, 464, 696,
    '[
-      {"id":"slot-1","shape":"rect","x":8.00,  "y":10.00,  "width":239.00,"height":224.00,"label":"Top Left"},
+      {"id":"slot-1","shape":"rect","x":13.00, "y":22.00,  "width":207.63,"height":204.12,"label":"Top Left"},
       {"id":"slot-2","shape":"rect","x":243.00,"y":22.00,  "width":207.63,"height":204.12,"label":"Top Right"},
       {"id":"slot-3","shape":"rect","x":13.00, "y":234.00, "width":204.63,"height":200.97,"label":"Middle Left"},
       {"id":"slot-4","shape":"rect","x":244.26,"y":232.09, "width":208.63,"height":200.54,"label":"Middle Right"},

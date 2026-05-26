@@ -8,8 +8,9 @@ import { useEffect, useState } from 'react';
 
 interface DoneScreenProps {
   onSessionEnd: () => void;
+  sessionId: string;
 }
-export function DoneScreen({ onSessionEnd }: DoneScreenProps) {
+export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -30,7 +31,11 @@ export function DoneScreen({ onSessionEnd }: DoneScreenProps) {
 
   return (
     <div className="min-h-full w-full flex flex-col items-center justify-center relative overflow-hidden">
-      <Timer duration={30} onTimeUp={onSessionEnd} />
+      <Timer
+        duration={30}
+        onTimeUp={onSessionEnd}
+        storageKey={`done-screen:${sessionId}`}
+      />
 
       {/* Robot Icon */}
       <div className="mb-4">

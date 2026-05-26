@@ -42,8 +42,6 @@ export default function PhotoEditorPage() {
     if (!sessionId) router.replace('/package');
   }, [sessionId, router]);
 
-  if (!sessionId) return null;
-
   // State
   const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('original');
@@ -68,9 +66,12 @@ export default function PhotoEditorPage() {
     setFilter: setCompositionFilter,
   } = usePhotoComposition();
 
-  // Fetch data
+  // Fetch data — disable photos query saat sessionId kosong (saat halaman
+  // mounted tanpa param, useEffect di atas akan redirect, tapi kita tetap
+  // perlu hindari request ke `/api/photo/session/` yang invalid).
   const { data: photos = [], isLoading: photosLoading } = usePhotos({
     sessionId,
+    queryConfig: { enabled: !!sessionId },
   });
 
   const { data: frames = [], isLoading: framesLoading } = useFrames();
@@ -78,8 +79,11 @@ export default function PhotoEditorPage() {
   // Save composition mutation
   const { mutate: saveComposition, isPending: isSaving } = useSaveComposition();
 
-  // Loading state
-  if (photosLoading || framesLoading) {
+  // Loading state — juga handle case sessionId kosong, supaya halaman
+  // menampilkan spinner sembari router.replace('/package') jalan, BUKAN
+  // return null lebih awal yang akan melanggar Rules of Hooks (hooks di
+  // atas sudah dipanggil, conditional early return akan skip render saja).
+  if (!sessionId || photosLoading || framesLoading) {
     return (
       <div className="flex items-center justify-center min-h-full">
         <StatusAnimation status="waiting" className="w-24 h-24" />
@@ -89,11 +93,6 @@ export default function PhotoEditorPage() {
 
   // Frame and filter selection handlers
   const handleFrameSelect = (frame: Frame) => {
-    console.log('[PhotoEditorPage] Frame selected:', {
-      id: frame.id,
-      name: frame.name,
-    });
-
     setSelectedFrame(frame);
     setCompositionFrame(frame);
   };
@@ -113,11 +112,6 @@ export default function PhotoEditorPage() {
     photoId: string,
     photoUrl: string,
   ) => {
-    console.log('[PhotoEditorPage] Photo dropped:', {
-      slotId,
-      photoId,
-      photoUrl,
-    });
     addPhotoToSlot(slotId, photoId, photoUrl);
   };
 
@@ -140,11 +134,24 @@ export default function PhotoEditorPage() {
         .filter((slot) => slot.photoId !== null)
         .map((slot) => slot.photoId as string);
 
-      console.log(
-        '[PhotoEditorPage] Saving composition with photo IDs:',
-        photoIds,
-        silent ? '(timer-triggered)' : '(user-triggered)',
-      );
+      // Backend `/api/photo/compose` (lewat strip generator) berasumsi 3 slot
+      // terisi — kalau kurang, GIF + framed strip jadi tidak konsisten. Block
+      // di sini supaya user dapat alert yang jelas, bukan error 400 dari
+      // server. Saat timer-triggered (silent), tetap navigate ke session-end
+      // tanpa save: user sudah kehabisan waktu.
+      if (photoIds.length < 3) {
+        if (silent) {
+          console.warn(
+            '[PhotoEditorPage] Timer expired with',
+            photoIds.length,
+            'photo(s) selected — skipping save, navigating anyway',
+          );
+          navigateToSessionEnd();
+          return;
+        }
+        alert(`Pilih 3 foto dulu (sekarang ${photoIds.length}/3).`);
+        return;
+      }
 
       // Export canvas at high resolution (kept in-memory; user downloads from
       // /download-photos page, not auto-saved to local directory)
@@ -153,12 +160,6 @@ export default function PhotoEditorPage() {
         quality: 0.95,
         multiplier: 3,
       });
-
-      console.log(
-        'Export size:',
-        (exported.fileSize / 1024 / 1024).toFixed(2),
-        'MB',
-      );
 
       // Save composition to backend, then redirect to download page
       saveComposition(
@@ -204,7 +205,11 @@ export default function PhotoEditorPage() {
   return (
     <div className="h-full w-full flex flex-col overflow-hidden">
       {/* 2 menit untuk pilih frame + foto, lalu auto ke session-end */}
-      <Timer duration={120} onTimeUp={handleTimeUp} />
+      <Timer
+        duration={120}
+        onTimeUp={handleTimeUp}
+        storageKey={sessionId ? `photo-editor:${sessionId}` : null}
+      />
 
       {/* Header */}
       <div className="w-full text-center py-1 shrink-0">

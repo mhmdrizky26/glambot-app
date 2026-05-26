@@ -51,7 +51,11 @@ export function GetPhotosScreen({
 
   return (
     <div className="min-h-full w-full flex flex-col items-center relative overflow-hidden">
-      <Timer duration={30} onTimeUp={onComplete} />
+      <Timer
+        duration={30}
+        onTimeUp={onComplete}
+        storageKey={`get-photos:${sessionId}`}
+      />
       {/* Header */}
       <div className="w-full flex items-center justify-center pt-10 pb-2 relative px-10">
         <div className="text-center">

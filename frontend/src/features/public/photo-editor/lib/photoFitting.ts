@@ -69,38 +69,14 @@ export const fitPhotoToSlot = async (
           const imgAspect = img.width / img.height;
           const slotAspect = slot.width / slot.height;
 
-          console.log('[photoFitting] Calculating fit:', {
-            slotId: slot.id,
-            imgDimensions: { width: img.width, height: img.height },
-            slotDimensions: { width: slot.width, height: slot.height },
-            imgAspect: imgAspect.toFixed(2),
-            slotAspect: slotAspect.toFixed(2),
-          });
-
           // Calculate scale needed to COVER the slot (Math.max logic)
           let targetScale: number;
           if (imgAspect > slotAspect) {
             // Image is wider than slot → fit to HEIGHT (crop sides)
             targetScale = slot.height / img.height;
-            console.log(
-              '[photoFitting] Image wider than slot, fitting to HEIGHT:',
-              {
-                targetScale: targetScale.toFixed(3),
-                resultWidth: (img.width * targetScale).toFixed(1),
-                resultHeight: (img.height * targetScale).toFixed(1),
-              },
-            );
           } else {
             // Image is taller than slot → fit to WIDTH (crop top/bottom)
             targetScale = slot.width / img.width;
-            console.log(
-              '[photoFitting] Image taller than slot, fitting to WIDTH:',
-              {
-                targetScale: targetScale.toFixed(3),
-                resultWidth: (img.width * targetScale).toFixed(1),
-                resultHeight: (img.height * targetScale).toFixed(1),
-              },
-            );
           }
 
           // Prevent excessive upscaling to preserve quality
@@ -113,13 +89,6 @@ export const fitPhotoToSlot = async (
 
           // Apply uniform scale
           img.scale(targetScale);
-
-          console.log('[photoFitting] After scaling:', {
-            scaleX: img.scaleX,
-            scaleY: img.scaleY,
-            scaledWidth: img.getScaledWidth(),
-            scaledHeight: img.getScaledHeight(),
-          });
 
           // Center in slot using originX/originY: 'center'
           // This is the KEY to proper centering — no manual offset calculation!
@@ -138,13 +107,6 @@ export const fitPhotoToSlot = async (
               originalHeight: img.height,
               appliedScale: targetScale,
             },
-          });
-
-          console.log('[photoFitting] Final position:', {
-            left: img.left,
-            top: img.top,
-            originX: img.originX,
-            originY: img.originY,
           });
 
           // Apply clipping path to hide overflow

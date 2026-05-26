@@ -43,19 +43,10 @@ interface FrameItemProps {
 }
 
 function FrameItem({ frame, isSelected, onClick }: FrameItemProps) {
-  const handleClick = () => {
-    console.log('[FrameItem] Clicked:', {
-      id: frame.id,
-      name: frame.name,
-      imageUrl: frame.imageUrl,
-    });
-    onClick();
-  };
-
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={onClick}
       className={`flex flex-col items-center gap-2 p-3 transition-all duration-200
         ${isSelected ? ' scale-105' : ' hover:scale-102'}`}
       aria-pressed={isSelected}

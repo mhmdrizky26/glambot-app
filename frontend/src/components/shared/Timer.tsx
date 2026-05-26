@@ -1,15 +1,25 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { usePersistedCountdown } from '@/lib/usePersistedCountdown';
+import { formatTimeMMSS } from '@/lib/formatTime';
 
 interface TimerProps {
   duration?: number;
   onTimeUp?: () => void;
+  // Opsional: kalau di-pass, sisa waktu disimpan di sessionStorage dan
+  // refresh halaman tetap melanjutkan hitungan (bukan reset ke `duration`).
+  // Biasanya sertakan sessionId di key supaya tidak bocor antar sesi.
+  storageKey?: string | null;
 }
 
-export default function Timer({ duration = 120, onTimeUp }: TimerProps) {
-  const [timeLeft, setTimeLeft] = useState(duration);
+export default function Timer({
+  duration = 120,
+  onTimeUp,
+  storageKey = null,
+}: TimerProps) {
+  const { timeLeft, clear } = usePersistedCountdown(storageKey, duration);
   const router = useRouter();
   // Pastikan onTimeUp / fallback router.push hanya fire SEKALI walaupun
   // efek re-run akibat onTimeUp ref berubah saat parent re-render (misal
@@ -19,34 +29,21 @@ export default function Timer({ duration = 120, onTimeUp }: TimerProps) {
   onTimeUpRef.current = onTimeUp;
 
   useEffect(() => {
-    if (timeLeft <= 0) {
-      if (firedRef.current) return;
-      firedRef.current = true;
-      if (onTimeUpRef.current) {
-        onTimeUpRef.current();
-      } else {
-        router.push('/');
-      }
-      return;
+    if (timeLeft > 0) return;
+    if (firedRef.current) return;
+    firedRef.current = true;
+    clear();
+    if (onTimeUpRef.current) {
+      onTimeUpRef.current();
+    } else {
+      router.push('/');
     }
-
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => prev - 1);
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [timeLeft, router]);
-
-  const formatTime = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-    return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
-  };
+  }, [timeLeft, router, clear]);
 
   return (
-    <div className="fixed p-8 top-4 right-4 z-50">
+    <div className="fixed p-8 top-4 right-4 z-50 pointer-events-none">
       <div className="text-primary text-[40px] font-bold">
-        {formatTime(timeLeft)}
+        {formatTimeMMSS(timeLeft)}
       </div>
     </div>
   );

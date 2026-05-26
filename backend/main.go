@@ -90,7 +90,6 @@ func main() {
 		log.Println("  POST /api/voucher/remove")
 		log.Println("  GET  /api/frames")
 		log.Println("  POST /api/photo/upload")
-		log.Println("  POST /api/photo/select")
 		log.Println("  POST /api/photo/compose")
 		log.Println("  GET  /api/photo/session/{sessionID}")
 		log.Println("  GET  /api/photo/session/{sessionID}/framed")

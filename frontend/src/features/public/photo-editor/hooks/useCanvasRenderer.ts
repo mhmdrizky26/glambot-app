@@ -33,20 +33,12 @@ export const useCanvasRenderer = ({
 
     // Prevent double initialization (React StrictMode)
     if (fabricCanvasRef.current) {
-      console.log('[useCanvasRenderer] Canvas already initialized, skipping');
       const existingCanvas = fabricCanvasRef.current;
-
       return () => {
-        console.log('[useCanvasRenderer] Cleaning up existing canvas');
         existingCanvas.dispose();
         fabricCanvasRef.current = null;
       };
     }
-
-    console.log('[useCanvasRenderer] Initializing new Fabric.js canvas:', {
-      width,
-      height,
-    });
 
     // Initialize Fabric.js canvas
     const fabricCanvas = new fabric.Canvas(canvasEl, {
@@ -62,11 +54,8 @@ export const useCanvasRenderer = ({
     // Notify consumer that canvas is ready
     onReadyRef.current?.(fabricCanvas);
 
-    console.log('[useCanvasRenderer] Canvas initialized successfully');
-
     // Cleanup on unmount
     return () => {
-      console.log('[useCanvasRenderer] Disposing canvas on unmount');
       fabricCanvas.dispose();
       fabricCanvasRef.current = null;
     };

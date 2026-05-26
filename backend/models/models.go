@@ -172,11 +172,6 @@ type ApplyVoucherResponse struct {
 	Voucher        *Voucher `json:"voucher,omitempty"`
 }
 
-type SelectPhotosRequest struct {
-	SessionID string   `json:"session_id"`
-	PhotoIDs  []string `json:"photo_ids"`
-}
-
 type ComposeFrameRequest struct {
 	SessionID   string   `json:"session_id"`
 	FrameID     string   `json:"frame_id"`
