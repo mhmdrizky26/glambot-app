@@ -1,17 +1,29 @@
 'use client';
 
 import * as React from 'react';
-import { Printer } from 'lucide-react';
+import { Printer, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/admin/ui/badge';
 import { Button } from '@/components/admin/ui/button';
 import { Input } from '@/components/admin/ui/input';
 import { Label } from '@/components/admin/ui/label';
 import { Switch } from '@/components/admin/ui/switch';
+import { useGetDevices } from '@/features/admin/devices/api/getDevices';
 
 export function PrinterSettingsCard() {
-  const [statusActive, setStatusActive] = React.useState(true);
+  // Status printer diambil dari probe nyata yang sama dengan halaman Devices
+  // (printer fisik OS; printer virtual PDF/XPS diabaikan) — bukan hardcode.
+  const { data, isLoading, isFetching, refetch } = useGetDevices();
+  const printer = data?.printer;
+  const isOnline = printer?.isOnline ?? false;
+
+  // Auto Print masih preferensi lokal (belum ada backend penyimpanannya).
   const [autoPrint, setAutoPrint] = React.useState(true);
-  const [printerName, setPrinterName] = React.useState('Glambot Printer');
+
+  // Nama printer diisi otomatis dari hasil deteksi, tapi tetap bisa diedit.
+  const [printerName, setPrinterName] = React.useState('');
+  React.useEffect(() => {
+    if (printer?.id && printer.id !== 'N/A') setPrinterName(printer.id);
+  }, [printer?.id]);
 
   return (
     <div className="bg-card flex flex-col gap-5 rounded-xl border p-6 shadow-sm">
@@ -29,16 +41,21 @@ export function PrinterSettingsCard() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Status Printer</span>
-            {statusActive && (
+            {isLoading ? (
+              <Loader2 className="text-muted-foreground size-4 animate-spin" />
+            ) : (
               <Badge
                 variant="secondary"
-                className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100/80"
+                className={
+                  isOnline
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100/80'
+                    : 'bg-rose-100 text-rose-800 hover:bg-rose-100/80'
+                }
               >
-                Active
+                {isOnline ? 'Active' : 'Offline'}
               </Badge>
             )}
           </div>
-          <Switch checked={statusActive} onCheckedChange={setStatusActive} />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -49,7 +66,7 @@ export function PrinterSettingsCard() {
             id="printer-name"
             value={printerName}
             onChange={(e) => setPrinterName(e.target.value)}
-            placeholder="Glambot Printer"
+            placeholder="Belum ada printer terdeteksi"
             className="h-9 rounded-[8px] text-sm"
           />
         </div>
@@ -67,9 +84,15 @@ export function PrinterSettingsCard() {
 
       <Button
         variant="outline"
+        onClick={() => refetch()}
+        disabled={isFetching}
         className="border-[#007DFC] text-[#007DFC] hover:bg-[#007DFC]/10 hover:text-[#007DFC] gap-2 rounded-[8px]"
       >
-        <Printer className="size-4" />
+        {isFetching ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Printer className="size-4" />
+        )}
         Test Print
       </Button>
     </div>

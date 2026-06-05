@@ -44,6 +44,11 @@ export const getTransactionsQueryOptions = (input?: GetTransactionsInput) => {
   return queryOptions({
     queryKey: getTransactionsQueryKey(input),
     queryFn: () => getTransactions(input),
+    // Auto-refresh: poll daftar transaksi tiap 15s + saat tab kembali fokus,
+    // jadi transaksi baru yang masuk muncul otomatis tanpa refresh manual.
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 };
 

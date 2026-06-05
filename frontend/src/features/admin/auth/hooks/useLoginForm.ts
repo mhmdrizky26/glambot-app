@@ -1,10 +1,14 @@
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { toast } from 'sonner';
 import { loginSchema, LoginFormData } from '../forms/login';
-import { useRouter } from 'next/navigation';
+import { login } from '../api/login';
+import { setAdminToken, setAdminUser } from '@/lib/api-admin';
 
 export const useLoginForm = () => {
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const form = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
@@ -14,11 +18,19 @@ export const useLoginForm = () => {
     },
   });
 
-  const handleLogin = async (_data: LoginFormData) => {
+  const handleLogin = async (data: LoginFormData) => {
     try {
-      router.push('/dashboard');
+      const result = await login(data);
+      setAdminToken(result.token);
+      setAdminUser(result.admin);
+      const redirect = searchParams.get('redirect');
+      router.push(redirect && redirect.startsWith('/') ? redirect : '/dashboard');
     } catch (error) {
-      console.error('Login failed:', error);
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Login gagal. Periksa email dan password.';
+      toast.error(message);
     }
   };
 

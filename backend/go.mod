@@ -10,3 +10,5 @@ require (
 	github.com/midtrans/midtrans-go v1.3.8
 	golang.org/x/image v0.39.0
 )
+
+require golang.org/x/oauth2 v0.36.0

@@ -35,10 +35,8 @@ var liveFrameState = struct {
 var cameraState = struct {
 	mu         sync.RWMutex
 	cameraType string // "canon" atau "builtin"
-	connected  bool
 }{
 	cameraType: "",
-	connected:  false,
 }
 
 // digiCam URLs di-cache via sync.Once: dipanggil di hot path (liveview,
@@ -208,10 +206,9 @@ func getLastLiveFrameHash() ([16]byte, bool) {
 }
 
 type CameraStatus struct {
-	Connected    bool   `json:"connected"`
-	CameraName   string `json:"camera_name"`
-	CameraType   string `json:"camera_type"` // "canon" atau "builtin"
-	BatteryLevel string `json:"battery_level"`
+	Connected  bool   `json:"connected"`
+	CameraName string `json:"camera_name"`
+	CameraType string `json:"camera_type"` // "canon" atau "builtin"
 }
 
 // CheckCamera cek apakah kamera terhubung ke digiCamControl
@@ -243,7 +240,6 @@ func CheckCamera() (*CameraStatus, error) {
 		root + "/preview.jpg?_ts=" + nonce,
 	}); err == nil && len(frame) > 0 {
 		SetCameraType("canon")
-		SetCameraConnected(true)
 		log.Printf("📷 Canon Camera Detected: %s", cameraName)
 		return &CameraStatus{
 			Connected:  true,
@@ -257,12 +253,55 @@ func CheckCamera() (*CameraStatus, error) {
 	// frontend bisa lanjut.
 	log.Printf("⚠️  Canon camera tidak terdeteksi, menggunakan laptop camera (builtin)")
 	SetCameraType("builtin")
-	SetCameraConnected(true)
 
 	return &CameraStatus{
 		Connected:  true,
 		CameraName: "Laptop Camera (Builtin)",
 		CameraType: "builtin",
+	}, nil
+}
+
+// DetectCanonCamera mengecek KHUSUS kamera Canon via digiCamControl liveview —
+// TANPA fallback ke builtin. Dipakai halaman monitoring admin supaya status
+// "Online" benar-benar berarti kamera Canon fisik terhubung dan mengirim frame
+// JPEG valid. Tidak mengubah cameraState global agar tidak mengganggu alur
+// capture (yang tetap boleh fallback ke builtin lewat CheckCamera).
+func DetectCanonCamera() (*CameraStatus, error) {
+	cameraName := "Canon Camera"
+
+	// Ambil nama kamera dari /api/camera kalau tersedia (versi digiCam tertentu).
+	if resp, err := digiCamGet("/camera"); err == nil {
+		if resp.StatusCode == http.StatusOK {
+			if body, err := io.ReadAll(resp.Body); err == nil && strings.TrimSpace(string(body)) != "" {
+				var result map[string]interface{}
+				if json.Unmarshal(body, &result) == nil {
+					if n, ok := result["name"].(string); ok && strings.TrimSpace(n) != "" {
+						cameraName = n
+					}
+				}
+			}
+		}
+		resp.Body.Close()
+	}
+
+	// Sinyal utama: liveview.jpg yang dipakai digiCamControl untuk streaming.
+	root := digiCamRootURL()
+	nonce := fmt.Sprintf("%d", time.Now().UnixNano())
+	frame, err := digiCamReadFirstAvailable([]string{
+		root + "/liveview.jpg?_ts=" + nonce,
+		root + "/preview.jpg?_ts=" + nonce,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("canon tidak terdeteksi: %w", err)
+	}
+	if len(frame) == 0 {
+		return nil, fmt.Errorf("canon tidak terdeteksi: frame kosong")
+	}
+
+	return &CameraStatus{
+		Connected:  true,
+		CameraName: cameraName,
+		CameraType: "canon",
 	}, nil
 }
 
@@ -442,20 +481,6 @@ func GetCameraType() string {
 	return cameraState.cameraType
 }
 
-// SetCameraConnected set status koneksi camera
-func SetCameraConnected(connected bool) {
-	cameraState.mu.Lock()
-	defer cameraState.mu.Unlock()
-	cameraState.connected = connected
-}
-
-// IsCameraConnected check apakah camera connected
-func IsCameraConnected() bool {
-	cameraState.mu.RLock()
-	defer cameraState.mu.RUnlock()
-	return cameraState.connected
-}
-
 // captureWebcamFrame capture frame dari actual laptop webcam menggunakan ffmpeg
 // Device names: "video0" (Linux), "dshow:...input" (Windows), "/dev/video0" (Mac/Linux)
 func captureWebcamFrame() ([]byte, error) {
@@ -482,8 +507,10 @@ func captureWebcamFrame() ([]byte, error) {
 		rtFormat = "v4l2"
 	}
 
-	// Capture 1 frame dengan ffmpeg
-	cmd := exec.Command("ffmpeg",
+	// Capture 1 frame dengan ffmpeg, dibatasi timeout 2 detik.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "ffmpeg",
 		"-f", rtFormat,
 		"-i", deviceInput,
 		"-frames:v", "1", // Capture hanya 1 frame
@@ -491,22 +518,7 @@ func captureWebcamFrame() ([]byte, error) {
 		"-y", // Overwrite file
 		tmpFile,
 	)
-
 	// Suppress ffmpeg output
-	cmd.Stdout = nil
-	cmd.Stderr = nil
-
-	// Set timeout 2 detik untuk ffmpeg
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
-	cmd = exec.CommandContext(ctx, "ffmpeg",
-		"-f", rtFormat,
-		"-i", deviceInput,
-		"-frames:v", "1",
-		"-q:v", "2",
-		"-y",
-		tmpFile,
-	)
 	cmd.Stdout = nil
 	cmd.Stderr = nil
 

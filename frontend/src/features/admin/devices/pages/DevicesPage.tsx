@@ -3,42 +3,11 @@
 import * as React from 'react';
 import { RefreshCwIcon } from 'lucide-react';
 import { Button } from '@/components/admin/ui/button';
-import { CameraCard, type CameraInfo } from '../components/CameraCard';
-import { PrinterCard, type PrinterInfo } from '../components/PrinterCard';
-import { RobotCard, type RobotInfo } from '../components/RobotCard';
-
-const DUMMY_CAMERA: CameraInfo = {
-  id: 'CAM-001',
-  resolution: '1920x1080',
-  status: 'Active',
-  lastActive: '27 May 2026, 13:24',
-  activeDuration: '4j 12m',
-  isOnline: true,
-};
-
-const DUMMY_PRINTER: PrinterInfo = {
-  id: 'PRT-001',
-  resolution: '300 DPI',
-  status: 'Active',
-  lastActive: '27 May 2026, 13:18',
-  activeDuration: '3j 48m',
-  totalPrint: 1248,
-  isOnline: true,
-  paperRemaining: 320,
-  paperTotal: 500,
-  ribbonRemaining: 72,
-  paperSize: '4R (4x6 inch)',
-  paperType: 'Glossy',
-  isReady: true,
-};
-
-const DUMMY_ROBOT: RobotInfo = {
-  id: 'RBT-001',
-  status: 'Active',
-  lastActive: '27 May 2026, 13:22',
-  activeDuration: '4j 03m',
-  isOnline: true,
-};
+import { Skeleton } from '@/components/admin/ui/skeleton';
+import { CameraCard } from '../components/CameraCard';
+import { PrinterCard } from '../components/PrinterCard';
+import { RobotCard } from '../components/RobotCard';
+import { useGetDevices } from '../api/getDevices';
 
 const formatTimestamp = (date: Date) =>
   date.toLocaleString('id-ID', {
@@ -50,23 +19,10 @@ const formatTimestamp = (date: Date) =>
   });
 
 export function DevicesPage() {
-  const [lastUpdated, setLastUpdated] = React.useState<Date | null>(null);
-  const [isRefreshing, setIsRefreshing] = React.useState(false);
+  const { data, isLoading, isError, isFetching, refetch, dataUpdatedAt } =
+    useGetDevices();
 
-  React.useEffect(() => {
-    // Set initial timestamp client-side to avoid SSR hydration mismatch.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLastUpdated(new Date());
-  }, []);
-
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    // Simulate refresh — replace with real fetch when API is ready
-    setTimeout(() => {
-      setLastUpdated(new Date());
-      setIsRefreshing(false);
-    }, 600);
-  };
+  const lastUpdated = dataUpdatedAt ? new Date(dataUpdatedAt) : null;
 
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
@@ -85,13 +41,13 @@ export function DevicesPage() {
             <Button
               variant="outline"
               size="icon"
-              onClick={handleRefresh}
-              disabled={isRefreshing}
+              onClick={() => refetch()}
+              disabled={isFetching}
               aria-label="Refresh"
               className="rounded-[8px]"
             >
               <RefreshCwIcon
-                className={`size-4 ${isRefreshing ? 'animate-spin' : ''}`}
+                className={`size-4 ${isFetching ? 'animate-spin' : ''}`}
               />
             </Button>
             <span className="text-sm font-medium">Refresh</span>
@@ -104,12 +60,24 @@ export function DevicesPage() {
         </div>
       </div>
 
-      {/* Cards */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
-        <CameraCard data={DUMMY_CAMERA} />
-        <PrinterCard data={DUMMY_PRINTER} />
-        <RobotCard data={DUMMY_ROBOT} />
-      </div>
+      {isError ? (
+        <div className="bg-card text-destructive rounded-xl border p-6 text-sm">
+          Gagal memuat status device. Pastikan backend berjalan lalu coba
+          Refresh.
+        </div>
+      ) : isLoading || !data ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <Skeleton className="h-[520px] rounded-xl" />
+          <Skeleton className="h-[520px] rounded-xl" />
+          <Skeleton className="h-[300px] rounded-xl" />
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+          <CameraCard data={data.camera} />
+          <PrinterCard data={data.printer} />
+          <RobotCard data={data.robot} />
+        </div>
+      )}
     </div>
   );
 }

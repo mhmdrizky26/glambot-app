@@ -1,3 +1,5 @@
+import { toStorageUrl } from '@/lib/storage-url';
+
 export type PackageCode = 'vip' | 'regular';
 export type PackageStatus = 'active' | 'inactive' | 'draft';
 export type PackageType = 'digital' | 'print';
@@ -49,14 +51,6 @@ export type BackendResponse = {
   status?: PackageStatus;
 };
 
-const toAbsoluteUrl = (path: string | undefined): string => {
-  if (!path) return '';
-  if (path.startsWith('http')) return path;
-  if (path.startsWith('/storage/'))
-    return `${process.env.NEXT_PUBLIC_API_URL || ''}${path}`;
-  return path;
-};
-
 export const normalizePackage = (data: BackendResponse): Package => ({
   id: data.id,
   code: data.code,
@@ -66,7 +60,7 @@ export const normalizePackage = (data: BackendResponse): Package => ({
   durationSecs: data.duration_secs,
   durationMins: data.duration_mins,
   type: data.code === 'vip' ? 'print' : 'digital',
-  imageSrc: toAbsoluteUrl(data.image_src),
+  imageSrc: toStorageUrl(data.image_src),
   isPopular: data.is_popular,
   printCount: data.print_count,
   status: data.status || 'draft',

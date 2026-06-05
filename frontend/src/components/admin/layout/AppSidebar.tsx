@@ -3,7 +3,8 @@
 import * as React from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { clearAdminToken, getAdminUser } from '@/lib/api-admin';
 import { SidebarFooter, useSidebar } from '@/components/admin/ui/sidebar';
 import { ChevronLeft } from 'lucide-react';
 import {
@@ -47,14 +48,19 @@ const navItems: NavItem[] = [
     iconKey: 'dashboard',
   },
   {
-    title: 'Frame',
-    url: '/frame',
-    iconKey: 'frame',
+    title: 'Packages',
+    url: '/packages',
+    iconKey: 'package',
   },
   {
     title: 'Voucher',
     url: '/voucher',
     iconKey: 'voucher',
+  },
+  {
+    title: 'Frame',
+    url: '/frame',
+    iconKey: 'frame',
   },
   {
     title: 'Transaction',
@@ -65,11 +71,6 @@ const navItems: NavItem[] = [
     title: 'Devices',
     url: '/devices',
     iconKey: 'monitor',
-  },
-  {
-    title: 'Packages',
-    url: '/packages',
-    iconKey: 'package',
   },
   // {
   //   title: 'Filter',
@@ -100,7 +101,31 @@ function renderSidebarIcon(item: NavItem, isActive: boolean) {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const pathname = usePathname();
+  const router = useRouter();
   const { toggleSidebar, state, isMobile } = useSidebar();
+
+  // Baca admin yang login dari localStorage (client-side, hindari hydration mismatch).
+  const [admin, setAdmin] = React.useState<{ name: string; email: string } | null>(
+    null,
+  );
+  React.useEffect(() => {
+    setAdmin(getAdminUser());
+  }, []);
+
+  const adminName = admin?.name || 'Admin';
+  const adminEmail = admin?.email || '';
+  const adminInitials =
+    adminName
+      .split(' ')
+      .map((w) => w[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase() || 'AD';
+
+  const handleLogout = () => {
+    clearAdminToken();
+    router.push('/login');
+  };
 
   return (
     <Sidebar collapsible="icon" {...props}>
@@ -191,19 +216,19 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   className="w-full justify-start gap-3 border-transparent bg-transparent px-2 hover:border-transparent hover:bg-transparent hover:text-current focus-visible:bg-transparent active:bg-transparent data-[state=open]:border-transparent data-[state=open]:bg-transparent data-[state=open]:text-current"
                 >
                   <Avatar className="h-8 w-8 rounded-lg">
-                    <AvatarImage src="/avatar-placeholder.png" alt="Admin" />
+                    <AvatarImage src="/avatar-placeholder.png" alt={adminName} />
                     <AvatarFallback className="bg-muted rounded-lg text-xs font-semibold">
-                      USR
+                      {adminInitials}
                     </AvatarFallback>
                   </Avatar>
 
                   {state === 'expanded' && (
                     <div className="animate-in fade-in grid flex-1 text-left text-sm leading-tight duration-200">
                       <span className="text-foreground truncate font-semibold">
-                        Username
+                        {adminName}
                       </span>
                       <span className="text-muted-foreground truncate text-xs">
-                        Username@gmail.com
+                        {adminEmail}
                       </span>
                     </div>
                   )}
@@ -223,10 +248,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 <DropdownMenuLabel className="p-2 font-normal">
                   <div className="flex flex-col space-y-1">
                     <p className="text-foreground text-sm leading-none font-medium">
-                      Admin Glambot
+                      {adminName}
                     </p>
                     <p className="text-muted-foreground text-xs leading-none">
-                      admin@glambot.com
+                      {adminEmail}
                     </p>
                   </div>
                 </DropdownMenuLabel>
@@ -235,7 +260,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
                 <DropdownMenuItem
                   className="text-destructive focus:bg-destructive/10 focus:text-destructive cursor-pointer gap-2 py-2 text-sm"
-                  onClick={() => {}}
+                  onClick={handleLogout}
                 >
                   <LogOutIcon className="size-4" />
                   Logout

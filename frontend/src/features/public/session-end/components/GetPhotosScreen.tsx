@@ -7,6 +7,7 @@ import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
 import loadingAnimation from '@/assets/loading.json';
 import Timer from '@/components/shared/Timer';
+import { useDriveLink } from '@/features/public/photo-download/api/getDriveLink';
 
 interface GetPhotosScreenProps {
   onComplete: () => void;
@@ -17,12 +18,13 @@ export function GetPhotosScreen({
   onComplete,
   sessionId,
 }: GetPhotosScreenProps) {
-  const [isLoading, setIsLoading] = useState(true);
   const [downloadUrl, setDownloadUrl] = useState('');
 
+  // Splash minimum supaya loading tidak berkedip sekejap.
+  const [minSplashDone, setMinSplashDone] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 3000);
-    return () => clearTimeout(timer);
+    const t = setTimeout(() => setMinSplashDone(true), 1500);
+    return () => clearTimeout(t);
   }, []);
 
   // Build the download URL after mount (window is undefined during SSR).
@@ -34,6 +36,35 @@ export function GetPhotosScreen({
       window.location.origin;
     setDownloadUrl(`${base}/download-photos/${sessionId}`);
   }, [sessionId]);
+
+  // Link folder Google Drive (kalau fitur aktif). Saat aktif, QR diarahkan ke
+  // folder Drive publik — bisa dibuka dari mana saja, tidak bergantung LAN.
+  const { data: drive } = useDriveLink({ sessionId });
+  const driveActive = drive?.enabled === true;
+  const driveReady = drive?.ready === true;
+
+  // Batas aman: kalau link Drive belum siap setelah 45 detik (mis. upload gagal
+  // / sangat lambat), jangan biarkan loading menggantung — lanjut ke QR dengan
+  // fallback URL download lokal. Start saat mount supaya juga mencakup periode
+  // saat status Drive masih belum diketahui.
+  const [driveTimedOut, setDriveTimedOut] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setDriveTimedOut(true), 45000);
+    return () => clearTimeout(t);
+  }, []);
+
+  // Tahan di loading SELAMA link Drive belum siap (atau status belum diketahui),
+  // supaya QR yang akhirnya muncul DIJAMIN sudah berisi URL Drive — scan QR
+  // langsung membuka folder Drive, bukan QR kosong/menyusul.
+  const driveMaybeActive = drive === undefined || drive.enabled === true;
+  const waitingForDrive = driveMaybeActive && !driveReady && !driveTimedOut;
+  const isLoading = !minSplashDone || waitingForDrive;
+
+  // Nilai QR: link Drive kalau aktif & siap; kalau timeout tanpa siap atau Drive
+  // tidak aktif, pakai URL halaman download lokal sebagai cadangan.
+  const useDrive = driveActive && (driveReady || !driveTimedOut);
+  const qrValue = useDrive ? (drive?.url ?? '') : downloadUrl;
+  const isPreparing = useDrive && !driveReady;
 
   // Loading state
   if (isLoading) {
@@ -103,16 +134,18 @@ export function GetPhotosScreen({
           <div className="bg-primary/80 backdrop-blur-xl rounded-2xl p-6 flex flex-col items-center justify-center gap-3 min-w-95 h-100">
             <h2 className="text-white text-xl font-bold">Scan to download</h2>
             <p className="text-white/60 text-xs text-center">
-              Point your phone&apos;s camera at this QR code.
+              {isPreparing
+                ? 'Menyiapkan link Google Drive...'
+                : "Point your phone's camera at this QR code."}
             </p>
             <div className="rounded-xl p-3 bg-white">
-              {downloadUrl ? (
+              {qrValue ? (
                 <QRCodeSVG
-                  value={downloadUrl}
+                  value={qrValue}
                   size={240}
                   level="M"
                   marginSize={2}
-                  aria-label={`QR Code untuk ${downloadUrl}`}
+                  aria-label={`QR Code untuk ${qrValue}`}
                 />
               ) : (
                 <div className="w-60 h-60 bg-white/10 rounded animate-pulse" />
@@ -120,14 +153,13 @@ export function GetPhotosScreen({
             </div>
           </div>
 
-          {process.env.NODE_ENV === 'development' && (
-            <Link
-              href={`/download-photos/${sessionId}`}
-              className="text-primary/50 underline text-sm hover:text-primary/80 transition-colors"
-            >
-              Buka Halaman Download (Dev)
-            </Link>
-          )}
+          {/* Link ke halaman download (alternatif kalau tidak scan QR). */}
+          <Link
+            href={`/download-photos/${sessionId}`}
+            className="text-primary underline text-sm font-medium hover:text-primary/70 transition-colors"
+          >
+            Buka Halaman Download
+          </Link>
         </div>
       </div>
     </div>

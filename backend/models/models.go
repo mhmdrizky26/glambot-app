@@ -7,13 +7,6 @@ import (
 
 // ─── Package ────────────────────────────────────────────────────────────────
 
-type PackageCode string
-
-const (
-	PackageRegular PackageCode = "regular"
-	PackageVIP     PackageCode = "vip"
-)
-
 type PackageInfo struct {
 	ID           int64  `json:"id"`
 	Code         string `json:"code"`
@@ -60,11 +53,10 @@ type Session struct {
 type TransactionStatus string
 
 const (
-	TxPending   TransactionStatus = "pending"
-	TxPaid      TransactionStatus = "paid"
-	TxFailed    TransactionStatus = "failed"
-	TxExpired   TransactionStatus = "expired"
-	TxCancelled TransactionStatus = "cancelled"
+	TxPending TransactionStatus = "pending"
+	TxPaid    TransactionStatus = "paid"
+	TxFailed  TransactionStatus = "failed"
+	TxExpired TransactionStatus = "expired"
 )
 
 type Transaction struct {
@@ -84,8 +76,7 @@ type Transaction struct {
 type PhotoType string
 
 const (
-	PhotoRaw    PhotoType = "raw"
-	PhotoFramed PhotoType = "framed"
+	PhotoRaw PhotoType = "raw"
 )
 
 type Photo struct {
@@ -107,7 +98,6 @@ type DiscountType string
 
 const (
 	DiscountPercent DiscountType = "percent"
-	DiscountFixed   DiscountType = "fixed"
 )
 
 type Voucher struct {
@@ -170,13 +160,6 @@ type ApplyVoucherResponse struct {
 	DiscountAmount int      `json:"discount_amount"`
 	FinalPrice     int      `json:"final_price"`
 	Voucher        *Voucher `json:"voucher,omitempty"`
-}
-
-type ComposeFrameRequest struct {
-	SessionID   string   `json:"session_id"`
-	FrameID     string   `json:"frame_id"`
-	PhotoIDs    []string `json:"photo_ids"`
-	StripFilter string   `json:"strip_filter,omitempty"`
 }
 
 // ─── Generic Response ─────────────────────────────────────────────────────────

@@ -16,6 +16,7 @@ import { useFrames } from '../api/getFrames';
 import type { Frame } from '../api/getFrames';
 import { exportComposition } from '../lib/exportComposition';
 import { useSaveComposition } from '../api/saveComposition';
+import { printComposition } from '../api/printComposition';
 import { usePhotoComposition } from '../hooks/usePhotoComposition';
 
 // Filter type — keep in sync with `lib/filters.ts`
@@ -172,6 +173,14 @@ export default function PhotoEditorPage() {
         },
         {
           onSuccess: () => {
+            // Saat user menekan Confirm Print (bukan timer), langsung kirim
+            // strip ke printer fisik. Non-blocking & non-fatal: kalau printer
+            // offline/gagal, user tetap lanjut ke halaman download.
+            if (!silent) {
+              printComposition(sessionId).catch((err) => {
+                console.warn('[PhotoEditorPage] auto-print gagal:', err);
+              });
+            }
             navigateToSessionEnd();
           },
           onError: (error) => {
