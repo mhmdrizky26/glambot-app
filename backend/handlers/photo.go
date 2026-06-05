@@ -235,8 +235,8 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	sessionID := firstNonEmpty(r.FormValue("sessionId"), r.FormValue("session_id"))
 	frameID := firstNonEmpty(r.FormValue("frameId"), r.FormValue("frame_id"))
 	photoIDsJSON := firstNonEmpty(r.FormValue("photoIds"), r.FormValue("photo_ids"))
-	// stripFilter sudah baked-in di canvas export; field di-accept untuk forward-compat
-	_ = firstNonEmpty(r.FormValue("filter"), r.FormValue("strip_filter"))
+	// Catatan: field "filter"/"strip_filter" sengaja diabaikan — filter sudah
+	// baked-in di canvas export dari frontend.
 
 	if sessionID == "" {
 		respondError(w, http.StatusBadRequest, "session_id wajib diisi")
@@ -362,6 +362,11 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		} else if _, err := services.GenerateLiveStripGIF(opts); err != nil {
 			log.Printf("⚠️  gif-live pre-generate failed (%s): %v", sid, err)
 		}
+
+		// Setelah strip + GIF siap, upload semua aset sesi ke Google Drive
+		// supaya QR di halaman download bisa mengarah ke folder publik (no-op
+		// kalau Drive belum dikonfigurasi).
+		UploadSessionToDrive(sid)
 	}(sessionID)
 
 	respondJSON(w, http.StatusOK, models.SuccessResponse(map[string]interface{}{
@@ -372,6 +377,60 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		"gif_live_url":  fmt.Sprintf("/api/photo/session/%s/gif-live", sessionID),
 		"status":        "composed",
 		"message":       "Strip foto berhasil disimpan",
+	}))
+}
+
+type printCompositionRequest struct {
+	SessionID string `json:"session_id"`
+}
+
+// POST /api/photo/print — kirim strip foto hasil komposisi sesi ke printer
+// fisik. Jumlah salinan mengikuti print_count paket sesi. Cetak hanya jalan
+// kalau ada printer fisik yang siap (lihat services.PrintFile); kalau tidak,
+// balas error supaya frontend bisa memberi tahu user tanpa menghentikan alur.
+func PrintComposition(w http.ResponseWriter, r *http.Request) {
+	var req printCompositionRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		respondError(w, http.StatusBadRequest, "Body tidak valid")
+		return
+	}
+	sessionID := strings.TrimSpace(req.SessionID)
+	if sessionID == "" {
+		respondError(w, http.StatusBadRequest, "session_id wajib diisi")
+		return
+	}
+
+	// Ambil strip framed terbaru untuk sesi ini.
+	var relPath string
+	if err := database.DB.QueryRow(
+		`SELECT file_path FROM photos
+		 WHERE session_id = ? AND type = 'framed'
+		 ORDER BY created_at DESC LIMIT 1`,
+		sessionID,
+	).Scan(&relPath); err != nil {
+		respondError(w, http.StatusNotFound, "Strip foto belum tersedia untuk sesi ini")
+		return
+	}
+
+	// Jumlah salinan = print_count sesi (default 1 kalau tak terbaca).
+	copies := 1
+	var pc int
+	if err := database.DB.QueryRow(
+		`SELECT print_count FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&pc); err == nil && pc > 0 {
+		copies = pc
+	}
+
+	fullPath := filepath.Join(config.App.StoragePath, relPath)
+	if err := services.PrintFile(fullPath, copies); err != nil {
+		respondError(w, http.StatusServiceUnavailable, fmt.Sprintf("Gagal mencetak: %v", err))
+		return
+	}
+
+	respondJSON(w, http.StatusOK, models.SuccessResponse(map[string]interface{}{
+		"status":  "printing",
+		"copies":  copies,
+		"message": fmt.Sprintf("Mengirim %d salinan ke printer", copies),
 	}))
 }
 
@@ -474,7 +533,26 @@ func serveGIFFile(w http.ResponseWriter, r *http.Request, gifPath, downloadName 
 func collectAnimationSources(sessionID string) (services.GenerateAnimationOptions, error) {
 	opts := services.GenerateAnimationOptions{SessionID: sessionID}
 
-	// Foto raw yang ditandai selected, urut posisi (1..N).
+	// Path raw (urut posisi terpilih, fallback semua raw) → konversi ke abs.
+	for _, rel := range selectedRawRelPaths(sessionID) {
+		if abs, ok := safeStoragePath(rel); ok {
+			opts.SelectedRawPaths = append(opts.SelectedRawPaths, abs)
+		}
+	}
+
+	if len(opts.SelectedRawPaths) == 0 {
+		return opts, fmt.Errorf("session %s tidak punya foto", sessionID)
+	}
+	return opts, nil
+}
+
+// selectedRawRelPaths mengembalikan relative path foto raw TERPILIH (urut
+// posisi), atau semua raw kalau tidak ada yang ditandai selected. Dipakai
+// generator GIF — GIF hanya menampilkan foto yang dipilih untuk strip.
+// (Upload Drive memakai allRawRelPaths di drive.go: semua foto raw.)
+func selectedRawRelPaths(sessionID string) []string {
+	var paths []string
+
 	rows, err := database.DB.Query(`
 		SELECT file_path FROM photos
 		WHERE session_id = ? AND type = 'raw' AND selected = 1
@@ -484,41 +562,30 @@ func collectAnimationSources(sessionID string) (services.GenerateAnimationOption
 		defer rows.Close()
 		for rows.Next() {
 			var rel string
-			if scanErr := rows.Scan(&rel); scanErr != nil {
-				continue
-			}
-			if abs, ok := safeStoragePath(rel); ok {
-				opts.SelectedRawPaths = append(opts.SelectedRawPaths, abs)
+			if rows.Scan(&rel) == nil {
+				paths = append(paths, rel)
 			}
 		}
 	}
+	if len(paths) > 0 {
+		return paths
+	}
 
-	// Kalau tidak ada selected (mis. session Digital tanpa pilih frame),
-	// fallback pakai semua raw biar customer tetap dapat animasi.
-	if len(opts.SelectedRawPaths) == 0 {
-		rows, err := database.DB.Query(`
-			SELECT file_path FROM photos
-			WHERE session_id = ? AND type = 'raw'
-			ORDER BY created_at ASC`, sessionID,
-		)
-		if err == nil {
-			defer rows.Close()
-			for rows.Next() {
-				var rel string
-				if scanErr := rows.Scan(&rel); scanErr != nil {
-					continue
-				}
-				if abs, ok := safeStoragePath(rel); ok {
-					opts.SelectedRawPaths = append(opts.SelectedRawPaths, abs)
-				}
+	rows2, err := database.DB.Query(`
+		SELECT file_path FROM photos
+		WHERE session_id = ? AND type = 'raw'
+		ORDER BY created_at ASC`, sessionID,
+	)
+	if err == nil {
+		defer rows2.Close()
+		for rows2.Next() {
+			var rel string
+			if rows2.Scan(&rel) == nil {
+				paths = append(paths, rel)
 			}
 		}
 	}
-
-	if len(opts.SelectedRawPaths) == 0 {
-		return opts, fmt.Errorf("session %s tidak punya foto", sessionID)
-	}
-	return opts, nil
+	return paths
 }
 
 // GET /api/photo/session/{sessionID}/gif-live/available

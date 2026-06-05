@@ -27,6 +27,20 @@ type Config struct {
 	UseBuiltinCamera     bool // Force menggunakan builtin camera (laptop) untuk testing
 	CurrentPreset        int
 	AutoCaptureAt        time.Time
+
+	// ─── Admin / Auth ────────────────────────────────────────────────────────
+	JWTSecret     string // secret untuk menandatangani token admin (HMAC-SHA256)
+	AdminEmail    string // kredensial admin default yang di-seed saat startup
+	AdminPassword string
+
+	// ─── Google Drive (upload hasil sesi) ────────────────────────────────────
+	// OAuth2 refresh-token akun Gmail. Lihat cmd/gdrive-token untuk mendapatkan
+	// refresh token. GoogleDriveFolderID opsional: ID folder induk tempat
+	// folder per-sesi dibuat (kosong = root My Drive).
+	GoogleClientID      string
+	GoogleClientSecret  string
+	GoogleRefreshToken  string
+	GoogleDriveFolderID string
 }
 
 var App *Config
@@ -51,6 +65,13 @@ func Load() {
 		RobotAPIURL:          getEnv("ROBOT_API_URL", ""),
 		RobotEnabled:         getEnv("ROBOT_ENABLED", "false") == "true",
 		UseBuiltinCamera:     getEnv("USE_BUILTIN_CAMERA", "false") == "true",
+		JWTSecret:            getEnv("JWT_SECRET", "glambot-dev-secret-change-me"),
+		AdminEmail:           getEnv("ADMIN_EMAIL", "admin@glambot.com"),
+		AdminPassword:        getEnv("ADMIN_PASSWORD", "admin123"),
+		GoogleClientID:       getEnv("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret:   getEnv("GOOGLE_CLIENT_SECRET", ""),
+		GoogleRefreshToken:   getEnv("GOOGLE_REFRESH_TOKEN", ""),
+		GoogleDriveFolderID:  getEnv("GOOGLE_DRIVE_FOLDER_ID", ""),
 	}
 }
 

@@ -1,17 +1,25 @@
 'use client';
 
 import * as React from 'react';
-import { Camera } from 'lucide-react';
+import { Camera, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/admin/ui/badge';
 import { Button } from '@/components/admin/ui/button';
 import { Input } from '@/components/admin/ui/input';
 import { Label } from '@/components/admin/ui/label';
-import { Switch } from '@/components/admin/ui/switch';
+import { useGetDevices } from '@/features/admin/devices/api/getDevices';
 
 export function CameraSettingsCard() {
-  const [statusActive, setStatusActive] = React.useState(true);
-  const [cameraName, setCameraName] = React.useState('Glambot Camera');
-  const isConnected = true;
+  // Status kamera diambil dari probe nyata yang sama dengan halaman Devices
+  // (Canon-only via digiCamControl) — bukan nilai hardcode.
+  const { data, isLoading, isFetching, refetch } = useGetDevices();
+  const camera = data?.camera;
+  const isConnected = camera?.isOnline ?? false;
+
+  // Nama kamera diisi otomatis dari hasil deteksi, tapi tetap bisa diedit.
+  const [cameraName, setCameraName] = React.useState('');
+  React.useEffect(() => {
+    if (camera?.id) setCameraName(camera.id);
+  }, [camera?.id]);
 
   return (
     <div className="bg-card flex flex-col gap-5 rounded-xl border p-6 shadow-sm">
@@ -29,16 +37,21 @@ export function CameraSettingsCard() {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">Status Camera</span>
-            {statusActive && (
+            {isLoading ? (
+              <Loader2 className="text-muted-foreground size-4 animate-spin" />
+            ) : (
               <Badge
                 variant="secondary"
-                className="bg-emerald-100 text-emerald-800 hover:bg-emerald-100/80"
+                className={
+                  isConnected
+                    ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100/80'
+                    : 'bg-rose-100 text-rose-800 hover:bg-rose-100/80'
+                }
               >
-                Active
+                {isConnected ? 'Active' : 'Inactive'}
               </Badge>
             )}
           </div>
-          <Switch checked={statusActive} onCheckedChange={setStatusActive} />
         </div>
 
         <div className="flex flex-col gap-2">
@@ -69,7 +82,11 @@ export function CameraSettingsCard() {
               }`}
             />
             <span className="text-sm font-medium">
-              {isConnected ? 'Connected' : 'Disconnected'}
+              {isLoading
+                ? 'Checking…'
+                : isConnected
+                  ? 'Connected'
+                  : 'Disconnected'}
             </span>
           </div>
         </div>
@@ -77,9 +94,15 @@ export function CameraSettingsCard() {
 
       <Button
         variant="outline"
+        onClick={() => refetch()}
+        disabled={isFetching}
         className="border-[#007DFC] text-[#007DFC] hover:bg-[#007DFC]/10 hover:text-[#007DFC] gap-2 rounded-[8px]"
       >
-        <Camera className="size-4" />
+        {isFetching ? (
+          <Loader2 className="size-4 animate-spin" />
+        ) : (
+          <Camera className="size-4" />
+        )}
         Test Camera
       </Button>
     </div>

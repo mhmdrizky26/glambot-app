@@ -94,6 +94,10 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS completed_at TIMESTAMPTZ`,
+		// Google Drive: link folder publik hasil sesi + ID folder-nya. drive_url
+		// kosong = upload belum selesai/tidak aktif.
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS drive_url TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS drive_folder_id TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qris_url TEXT`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qris_raw_string TEXT`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`,
@@ -101,6 +105,28 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS max_uses INTEGER NOT NULL DEFAULT 1`,
 		`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS used_count INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ`,
+
+		// ─── Admin: kolom tambahan yang dibutuhkan UI admin ───────────────────
+		// Packages: UI admin pakai status enum 3-nilai (active|inactive|draft).
+		// DB lama hanya punya is_active 0/1 → backfill status dari is_active.
+		`ALTER TABLE packages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
+		`UPDATE packages SET status = CASE WHEN is_active = 1 THEN 'active' ELSE 'inactive' END WHERE status IS NULL OR status = ''`,
+
+		// Frames: UI admin butuh frame_code, category, description, file_size.
+		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS frame_code TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Standard'`,
+		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS description TEXT NOT NULL DEFAULT ''`,
+		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS file_size TEXT NOT NULL DEFAULT ''`,
+		`UPDATE frames SET frame_code = id WHERE frame_code = ''`,
+
+		// Admin accounts untuk login dashboard.
+		`CREATE TABLE IF NOT EXISTS admins (
+			id BIGSERIAL PRIMARY KEY,
+			email TEXT NOT NULL UNIQUE,
+			password_hash TEXT NOT NULL,
+			name TEXT NOT NULL DEFAULT 'Admin',
+			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
 	}
 
 	for _, statement := range statements {

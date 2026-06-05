@@ -1,3 +1,5 @@
+import { toStorageUrl } from '@/lib/storage-url';
+
 export type FrameStatus = 'active' | 'inactive';
 export type SlotShape = 'rect' | 'circle' | 'ellipse';
 export type FrameCategory = 'Standard' | 'Premium' | 'Special' | 'Event';
@@ -78,8 +80,8 @@ export const normalizeFrame = (data: BackendResponse): Frame => ({
   name: data.name,
   category: data.category,
   description: data.description ?? '',
-  filePath: data.file_path ?? '',
-  thumbUrl: data.thumb_url ?? '',
+  filePath: toStorageUrl(data.file_path),
+  thumbUrl: toStorageUrl(data.thumb_url || data.file_path),
   photoSlots: data.photo_slots ?? (data.slots?.length ?? 0),
   canvasWidth: data.canvas_width ?? 0,
   canvasHeight: data.canvas_height ?? 0,

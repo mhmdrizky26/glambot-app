@@ -16,6 +16,10 @@ export const getTransactionStatsQueryOptions = () => {
   return queryOptions({
     queryKey: getTransactionStatsQueryKey(),
     queryFn: getTransactionStats,
+    // Auto-refresh: statistik ikut ter-update tiap 15s + saat tab kembali fokus.
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 };
 

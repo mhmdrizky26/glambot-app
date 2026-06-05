@@ -38,7 +38,7 @@ export function DashboardHeader() {
   const crumbs = buildCrumbs(pathname);
 
   return (
-    <header className="bg-background flex h-14 shrink-0 items-center justify-between border-b px-5">
+    <header className="sticky top-0 z-10 flex h-14 shrink-0 items-center justify-between border-b border-white/40 bg-white/55 px-5 backdrop-blur-md">
       <div className="flex items-center gap-3">
         <SidebarTrigger
           className="md:hidden"

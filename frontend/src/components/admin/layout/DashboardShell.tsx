@@ -8,7 +8,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   return (
     <SidebarProvider>
       <AppSidebar />
-      <SidebarInset>
+      <SidebarInset className="bg-[url('/bg.webp')] bg-cover bg-center bg-fixed">
         <DashboardHeader />
         {children}
       </SidebarInset>

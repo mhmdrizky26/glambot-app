@@ -21,19 +21,18 @@ export default function InstructionPage() {
   const searchParams = useSearchParams();
 
   const sessionId = searchParams.get('sessionId') ?? '';
+  const step = instructionSteps[currentStep];
+  const isLast = currentStep === instructionSteps.length - 1;
 
+  const { mutate } = usePatchSessionStatus();
+
+  // Semua hook harus dipanggil tanpa syarat (rules-of-hooks); early-return
+  // untuk sessionId kosong ditangani SETELAH semua hook dideklarasikan.
   useEffect(() => {
     if (!sessionId) {
       router.replace('/package');
     }
   }, [sessionId, router]);
-
-  if (!sessionId) return null;
-
-  const step = instructionSteps[currentStep];
-  const isLast = currentStep === instructionSteps.length - 1;
-
-  const { mutate } = usePatchSessionStatus();
 
   // Play preset.mp3 saat masuk step gesture-controls
   useEffect(() => {
@@ -41,6 +40,8 @@ export default function InstructionPage() {
       playBackendAudio('preset.mp3');
     }
   }, [step?.type]);
+
+  if (!sessionId) return null;
 
   const goToPhotoSession = () => {
     // Robot enable saat user lanjut ke photo session (manual atau timeout)

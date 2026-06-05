@@ -71,11 +71,13 @@ func Setup(storagePath string) http.Handler {
 		r.Route("/photo", func(r chi.Router) {
 			r.Post("/upload", handlers.UploadPhoto)
 			r.Post("/compose", handlers.ComposeFrame)
+			r.Post("/print", handlers.PrintComposition)
 			r.Get("/session/{sessionID}", handlers.GetSessionPhotos)
 			r.Get("/session/{sessionID}/framed", handlers.GetFramedPhotos)
 			r.Get("/session/{sessionID}/gif", handlers.DownloadSessionGIF)
 			r.Get("/session/{sessionID}/gif-live", handlers.DownloadSessionLiveGIF)
 			r.Get("/session/{sessionID}/gif-live/available", handlers.GetSessionLiveGIFAvailable)
+			r.Get("/session/{sessionID}/drive", handlers.GetSessionDriveLink)
 			r.Get("/download/{photoID}", handlers.DownloadPhoto)
 		})
 
@@ -111,6 +113,56 @@ func Setup(storagePath string) http.Handler {
 
 			// Cek konfigurasi robot saat ini
 			r.Get("/config", handlers.GetRobotConfig)
+		})
+
+		// ── Admin ───────────────────────────────────────────────────────────
+		r.Route("/admin", func(r chi.Router) {
+			// Login publik (tanpa auth)
+			r.Post("/login", handlers.AdminLogin)
+
+			// Semua route di bawah diproteksi token admin.
+			// Catatan: rute flat (bukan Route("/x")+Get("/")) agar cocok dengan
+			// path FE tanpa trailing slash. chi memprioritaskan segmen statis
+			// (/stats, /export) di atas wildcard /{id}, jadi urutan aman.
+			r.Group(func(r chi.Router) {
+				r.Use(middleware.AdminAuth)
+
+				r.Get("/dashboard/summary", handlers.GetDashboardSummary)
+
+				// Devices (tes koneksi nyata kamera/printer/robot)
+				r.Get("/devices", handlers.AdminGetDevices)
+
+				// Packages
+				r.Get("/packages", handlers.AdminListPackages)
+				r.Post("/packages", handlers.AdminCreatePackage)
+				r.Get("/packages/stats", handlers.AdminPackageStats)
+				r.Get("/packages/{id}", handlers.AdminGetPackage)
+				r.Patch("/packages/{id}", handlers.AdminUpdatePackage)
+				r.Delete("/packages/{id}", handlers.AdminDeletePackage)
+
+				// Frames
+				r.Get("/frames", handlers.AdminListFrames)
+				r.Post("/frames", handlers.AdminCreateFrame)
+				r.Get("/frames/stats", handlers.AdminFrameStats)
+				r.Get("/frames/{id}", handlers.AdminGetFrame)
+				r.Patch("/frames/{id}", handlers.AdminUpdateFrame)
+				r.Put("/frames/{id}", handlers.AdminUpdateFrame)
+				r.Delete("/frames/{id}", handlers.AdminDeleteFrame)
+
+				// Vouchers ({id} = code)
+				r.Get("/vouchers", handlers.AdminListVouchers)
+				r.Post("/vouchers", handlers.AdminCreateVoucher)
+				r.Get("/vouchers/stats", handlers.AdminVoucherStats)
+				r.Get("/vouchers/{id}", handlers.AdminGetVoucher)
+				r.Patch("/vouchers/{id}", handlers.AdminUpdateVoucher)
+				r.Delete("/vouchers/{id}", handlers.AdminDeleteVoucher)
+
+				// Transactions
+				r.Get("/transactions", handlers.AdminListTransactions)
+				r.Get("/transactions/stats", handlers.AdminTransactionStats)
+				r.Get("/transactions/export", handlers.AdminExportTransactions)
+				r.Get("/transactions/{id}", handlers.AdminGetTransaction)
+			})
 		})
 
 	})

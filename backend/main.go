@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"photobooth/config"
 	"photobooth/database"
+	"photobooth/handlers"
 	"photobooth/routes"
 	"photobooth/services"
 	"syscall"
@@ -38,6 +39,9 @@ func main() {
 	}
 	defer database.Close()
 
+	// Seed akun admin default kalau tabel admins masih kosong
+	handlers.EnsureDefaultAdmin()
+
 	// ─── 4. Init Midtrans ─────────────────────────────────────────────────────
 	if config.App.MidtransServerKey == "" {
 		log.Println("⚠️  MIDTRANS_SERVER_KEY belum diset, fitur pembayaran tidak aktif")
@@ -49,7 +53,6 @@ func main() {
 	// ─── 4.5. Init Camera System ─────────────────────────────────────────────
 	if config.App.UseBuiltinCamera {
 		services.SetCameraType("builtin")
-		services.SetCameraConnected(true)
 		log.Printf("📷 Camera: Builtin (Laptop) - forced by USE_BUILTIN_CAMERA")
 	} else {
 		// Auto-detect camera (Canon first, then fallback to builtin)

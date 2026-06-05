@@ -1,13 +1,79 @@
 import axios, { AxiosError } from 'axios';
 
+// Token admin disimpan di dua tempat:
+// - localStorage  → dibaca interceptor axios (client-side request).
+// - cookie        → dibaca Next.js middleware (server-side route guard),
+//                   karena middleware tidak bisa mengakses localStorage.
+// Nama cookie ini HARUS sama dengan yang dicek di `src/middleware.ts`.
+export const ADMIN_TOKEN_KEY = 'admin_token';
+export const ADMIN_USER_KEY = 'admin_user';
+
+// 24 jam (samakan dengan masa berlaku token di backend).
+const TOKEN_MAX_AGE = 60 * 60 * 24;
+
+export interface AdminUser {
+  email: string;
+  name: string;
+}
+
+export const setAdminToken = (token: string) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(ADMIN_TOKEN_KEY, token);
+  document.cookie = `${ADMIN_TOKEN_KEY}=${token}; path=/; max-age=${TOKEN_MAX_AGE}; samesite=lax`;
+};
+
+export const setAdminUser = (user: AdminUser) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(ADMIN_USER_KEY, JSON.stringify(user));
+};
+
+export const getAdminUser = (): AdminUser | null => {
+  if (typeof window === 'undefined') return null;
+  const raw = window.localStorage.getItem(ADMIN_USER_KEY);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as AdminUser;
+  } catch {
+    return null;
+  }
+};
+
+export const clearAdminToken = () => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.removeItem(ADMIN_TOKEN_KEY);
+  window.localStorage.removeItem(ADMIN_USER_KEY);
+  document.cookie = `${ADMIN_TOKEN_KEY}=; path=/; max-age=0; samesite=lax`;
+};
+
 export const axiosInstance = axios.create({
   baseURL: `${process.env.NEXT_PUBLIC_API_URL}`,
   withCredentials: false,
 });
 
+// Sisipkan Bearer token (disimpan saat login) ke setiap request admin.
+axiosInstance.interceptors.request.use((config) => {
+  if (typeof window !== 'undefined') {
+    const token = window.localStorage.getItem(ADMIN_TOKEN_KEY);
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
 axiosInstance.interceptors.response.use(
   (response) => response,
   (error: AxiosError) => {
+    // Token invalid/expired → bersihkan sesi & arahkan ke login.
+    if (
+      error.response?.status === 401 &&
+      typeof window !== 'undefined'
+    ) {
+      clearAdminToken();
+      if (!window.location.pathname.startsWith('/login')) {
+        window.location.href = '/login';
+      }
+    }
     const message =
       (error.response?.data as { message?: string })?.message ??
       error.message ??

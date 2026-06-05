@@ -32,7 +32,13 @@ interface PrinterCardProps {
 }
 
 export function PrinterCard({ data }: PrinterCardProps) {
-  const paperPct = Math.round((data.paperRemaining / data.paperTotal) * 100);
+  // Konsumabel (kertas/ribbon) tidak selalu bisa dibaca dari OS print spooler.
+  // Saat tidak tersedia (total/ribbon = 0) tampilkan "N/A", bukan angka palsu.
+  const hasPaperInfo = data.paperTotal > 0;
+  const hasRibbonInfo = data.ribbonRemaining > 0;
+  const paperPct = hasPaperInfo
+    ? Math.round((data.paperRemaining / data.paperTotal) * 100)
+    : 0;
 
   return (
     <div className="bg-card flex flex-col gap-4 rounded-xl border p-6 shadow-sm">
@@ -122,11 +128,13 @@ export function PrinterCard({ data }: PrinterCardProps) {
                 </span>
               </div>
               <span className="text-sm font-semibold">
-                {data.paperRemaining}/{data.paperTotal}
+                {hasPaperInfo ? `${data.paperRemaining}/${data.paperTotal}` : 'N/A'}
               </span>
             </div>
             <p className="text-muted-foreground mt-1 text-xs">
-              {data.paperRemaining} sheets left
+              {hasPaperInfo
+                ? `${data.paperRemaining} sheets left`
+                : 'Data tidak tersedia dari printer'}
             </p>
             <Progress value={paperPct} className="mt-3 h-2" />
           </div>
@@ -136,10 +144,13 @@ export function PrinterCard({ data }: PrinterCardProps) {
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium">Remaining Ribbon</span>
               <span className="text-sm font-semibold">
-                {data.ribbonRemaining}%
+                {hasRibbonInfo ? `${data.ribbonRemaining}%` : 'N/A'}
               </span>
             </div>
-            <Progress value={data.ribbonRemaining} className="mt-3 h-2" />
+            <Progress
+              value={hasRibbonInfo ? data.ribbonRemaining : 0}
+              className="mt-3 h-2"
+            />
           </div>
 
           {/* Paper info */}
