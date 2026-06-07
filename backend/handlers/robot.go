@@ -309,10 +309,6 @@ func TriggerPreset(w http.ResponseWriter, r *http.Request) {
 				log.Printf("⚠️  Auto capture gagal (session: %s, preset: %d): %v", sessionID, preset, err)
 				return
 			}
-			if photo == nil {
-				// Builtin mode: capture dilakukan oleh frontend
-				return
-			}
 
 			log.Printf("📸 Auto capture selesai (session: %s, preset: %d, photo: %s)", sessionID, preset, photo.ID)
 		}(req.SessionID, req.Preset)
@@ -496,13 +492,6 @@ func RobotDone(w http.ResponseWriter, r *http.Request) {
 			log.Printf("⚠️  Auto capture (robot done) gagal (session: %s, preset: %d): %v", sessionID, preset, err)
 			return
 		}
-		if photo == nil {
-			// Builtin mode: capture dilakukan oleh frontend
-			if config.App != nil {
-				config.App.ResetRobotState()
-			}
-			return
-		}
 
 		log.Printf("📸 Auto capture (robot done) selesai (session: %s, preset: %d, photo: %s)", sessionID, preset, photo.ID)
 
@@ -535,14 +524,6 @@ func captureRobotSessionPhoto(sessionID string) (*models.Photo, error) {
 
 	if err := ensureShootingSession(resolvedSessionID); err != nil {
 		return nil, err
-	}
-
-	// Builtin mode (laptop webcam): frontend captures via <video> getUserMedia
-	// dan upload ke /api/photo/upload sendiri. Skip backend capture untuk
-	// menghindari test-image pollution dari ffmpeg fallback.
-	if services.GetCameraType() == "builtin" {
-		log.Printf("📷 Builtin mode: skipping backend capture (session: %s) — menunggu upload dari frontend", resolvedSessionID)
-		return nil, nil
 	}
 
 	photo, err := recordCanonCapture(resolvedSessionID)

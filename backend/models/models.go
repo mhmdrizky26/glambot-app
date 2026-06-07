@@ -18,6 +18,8 @@ type PackageInfo struct {
 	ImageSrc     string `json:"image_src,omitempty"`
 	IsPopular    bool   `json:"is_popular"`
 	PrintCount   int    `json:"print_count"`
+	// PrintUnitPrice harga per cetak ekstra (di luar print_count bawaan paket).
+	PrintUnitPrice int `json:"print_unit_price"`
 }
 
 // ─── Session ─────────────────────────────────────────────────────────────────
@@ -33,19 +35,20 @@ const (
 )
 
 type Session struct {
-	ID           string        `json:"id"`
-	PackageID    int64         `json:"package_id"`
-	PackageCode  string        `json:"package_code,omitempty"`
-	DurationSecs int           `json:"duration_secs"`
-	PrintCount   int           `json:"print_count"`
-	Price        int           `json:"price"`
-	Discount     int           `json:"discount"`
-	FinalPrice   int           `json:"final_price"`
-	Status       SessionStatus `json:"status"`
-	FrameID      string        `json:"frame_id,omitempty"`
-	CreatedAt    time.Time     `json:"created_at"`
-	ExpiresAt    time.Time     `json:"expires_at"`
-	CompletedAt  *time.Time    `json:"completed_at,omitempty"`
+	ID             string        `json:"id"`
+	PackageID      int64         `json:"package_id"`
+	PackageCode    string        `json:"package_code,omitempty"`
+	DurationSecs   int           `json:"duration_secs"`
+	PrintCount     int           `json:"print_count"`
+	PrintUnitPrice int           `json:"print_unit_price"`
+	Price          int           `json:"price"`
+	Discount       int           `json:"discount"`
+	FinalPrice     int           `json:"final_price"`
+	Status         SessionStatus `json:"status"`
+	FrameID        string        `json:"frame_id,omitempty"`
+	CreatedAt      time.Time     `json:"created_at"`
+	ExpiresAt      time.Time     `json:"expires_at"`
+	CompletedAt    *time.Time    `json:"completed_at,omitempty"`
 }
 
 // ─── Transaction ─────────────────────────────────────────────────────────────

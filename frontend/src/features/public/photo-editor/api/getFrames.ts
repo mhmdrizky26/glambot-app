@@ -2,7 +2,7 @@ import { useQuery, queryOptions } from '@tanstack/react-query';
 import { apiClient, toAbsoluteUrl } from '@/lib/api-client';
 import type { QueryConfig } from '@/lib/react-query';
 
-export type SlotShape = 'rect' | 'ellipse';
+export type SlotShape = 'rect' | 'ellipse' | 'circle';
 
 export interface FrameSlot {
   id: string;

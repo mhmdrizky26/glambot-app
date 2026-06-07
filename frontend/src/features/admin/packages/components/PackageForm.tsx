@@ -243,8 +243,8 @@ export function PackageForm({
             />
           </div>
 
-          {/* Duration & Print Count */}
-          <div className="grid grid-cols-2 gap-4">
+          {/* Duration, Print Count & Print Unit Price */}
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="duration">
                 Duration (minutes) <span className="text-destructive">*</span>
@@ -299,6 +299,36 @@ export function PackageForm({
                     />
                     <p className="text-muted-foreground mt-1 text-xs">
                       Number of prints included
+                    </p>
+                    {fieldState.invalid && (
+                      <p className="text-destructive mt-1 flex items-center gap-1 text-xs">
+                        <AlertCircleIcon className="size-3" />
+                        {fieldState.error?.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="printUnitPrice">Print Unit Price (IDR)</Label>
+              <Controller
+                control={form.control}
+                name="printUnitPrice"
+                render={({ field, fieldState }) => (
+                  <div>
+                    <Input
+                      {...field}
+                      id="printUnitPrice"
+                      type="number"
+                      min={0}
+                      placeholder="0"
+                      className={fieldState.invalid ? 'border-destructive' : ''}
+                      onChange={(e) => field.onChange(Number(e.target.value))}
+                    />
+                    <p className="text-muted-foreground mt-1 text-xs">
+                      Price per extra print
                     </p>
                     {fieldState.invalid && (
                       <p className="text-destructive mt-1 flex items-center gap-1 text-xs">

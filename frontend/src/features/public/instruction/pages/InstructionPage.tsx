@@ -8,7 +8,7 @@ import {
   SafetyRulesCard,
   GestureControlsCard,
 } from '../components/InstructionCards';
-import { usePatchSessionStatus } from '@/shared/api/session';
+import { usePatchSessionStatus, useGetSession } from '@/shared/api/session';
 import { sendSessionBroadcast } from '@/features/public/photo-session/lib/broadcastChannel';
 import { apiClient } from '@/lib/api-client';
 import { playBackendAudio } from '@/lib/audio';
@@ -25,6 +25,10 @@ export default function InstructionPage() {
   const isLast = currentStep === instructionSteps.length - 1;
 
   const { mutate } = usePatchSessionStatus();
+  const { data: session, isFetching: isSessionFetching } = useGetSession({
+    sessionId,
+    queryConfig: { enabled: !!sessionId },
+  });
 
   // Semua hook harus dipanggil tanpa syarat (rules-of-hooks); early-return
   // untuk sessionId kosong ditangani SETELAH semua hook dideklarasikan.
@@ -33,6 +37,19 @@ export default function InstructionPage() {
       router.replace('/package');
     }
   }, [sessionId, router]);
+
+  // Guard: sesi yang belum dibayar / kedaluwarsa tidak boleh masuk instruksi.
+  // PENTING: tunggu data FRESH — jangan bertindak saat masih fetching, karena
+  // cache `['session', id]` bisa berisi 'pending_payment' lama tepat setelah
+  // bayar (status 'paid' belum sempat ter-refetch) → kalau tidak, user yang
+  // baru bayar malah ke-redirect balik ke /package. Backend tetap menolak
+  // transisi ke 'shooting' tanpa 'paid' sebagai batas keamanan sebenarnya.
+  useEffect(() => {
+    if (isSessionFetching) return;
+    if (session?.status === 'pending_payment' || session?.status === 'expired') {
+      router.replace('/package');
+    }
+  }, [session?.status, isSessionFetching, router]);
 
   // Play preset.mp3 saat masuk step gesture-controls
   useEffect(() => {

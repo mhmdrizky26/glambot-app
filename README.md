@@ -1,30 +1,55 @@
 # Glambot Photo Booth
 
-Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis gesture/preset. Mendukung dua mode kamera: **Canon DSLR** via [digiCamControl](https://digicamcontrol.com/) atau **webcam laptop** (built-in) sebagai fallback testing.
+Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis gesture/preset. Kamera memakai **Canon DSLR** via [digiCamControl](https://digicamcontrol.com/). Dilengkapi **dashboard admin** untuk kelola frame, paket, voucher, transaksi, dan perangkat — semua data bisa diedit dari UI tanpa sentuh database.
 
 ---
 
 ## Daftar Isi
 
-1. [Arsitektur](#arsitektur)
-2. [Tech Stack](#tech-stack)
-3. [Prerequisites](#prerequisites)
-4. [Instalasi](#instalasi)
-5. [Konfigurasi Environment](#konfigurasi-environment)
-6. [Setup Database](#setup-database)
-7. [Menjalankan Aplikasi](#menjalankan-aplikasi)
-8. [Production Build](#production-build)
-9. [Struktur Project](#struktur-project)
-10. [Skema Database](#skema-database)
-11. [API Endpoints](#api-endpoints)
-12. [User Flow](#user-flow)
-13. [Integrasi Robot](#integrasi-robot)
-14. [Mode Kamera](#mode-kamera)
-15. [Audio Cues](#audio-cues)
-16. [Animated GIF Output](#animated-gif-output)
-17. [Safeguard Sesi Foto](#safeguard-sesi-foto)
-18. [Testing dengan curl](#testing-dengan-curl)
-19. [Troubleshooting](#troubleshooting)
+1. [Update Terbaru](#update-terbaru)
+2. [Arsitektur](#arsitektur)
+3. [Tech Stack](#tech-stack)
+4. [Prerequisites](#prerequisites)
+5. [Instalasi](#instalasi)
+6. [Konfigurasi Environment](#konfigurasi-environment)
+7. [Setup Database](#setup-database)
+8. [Menjalankan Aplikasi](#menjalankan-aplikasi)
+9. [Admin Dashboard](#admin-dashboard)
+10. [Production Build](#production-build)
+11. [Struktur Project](#struktur-project)
+12. [Skema Database](#skema-database)
+13. [API Endpoints](#api-endpoints)
+14. [User Flow](#user-flow)
+15. [Integrasi Robot](#integrasi-robot)
+16. [Mode Kamera](#mode-kamera)
+17. [Audio Cues](#audio-cues)
+18. [Animated GIF Output](#animated-gif-output)
+19. [Safeguard Sesi Foto](#safeguard-sesi-foto)
+20. [Testing dengan curl](#testing-dengan-curl)
+21. [Troubleshooting](#troubleshooting)
+
+---
+
+## Update Terbaru
+
+Ringkasan perubahan terbaru (per Juni 2026):
+
+### Data default kini permanen & editable (penting)
+- Seed `packages`, `frames`, `vouchers` di [`init.sql`](backend/migrations/init.sql) diubah dari `ON CONFLICT … DO UPDATE` → **`DO NOTHING`** (insert-only).
+- **Sebelumnya** setiap server restart menimpa kembali data default (frame-164…167, paket regular/vip, voucher) ke nilai seed — sehingga edit admin (mis. ganti nama frame) **balik lagi** setiap boot.
+- **Sekarang** seed hanya mengisi data awal pada install baru; **dashboard admin jadi sumber kebenaran**. Semua data default bisa diedit dan tidak ter-reset saat build/restart ulang.
+
+### Photo editor (VIP) — canvas
+- Fix crash `Cannot read properties of null (reading 'clearRect')` saat ganti frame dengan dimensi berbeda — canvas Fabric kini di-handle via instance hidup (ref), bukan closure basi.
+- Canvas dirender di **ruang koordinat asli frame** (`canvas_width`/`canvas_height`), bukan lagi hardcode 464×696 — posisi slot selalu pas walau frame beda dimensi.
+- Dukungan shape slot `circle` (selain `rect`/`ellipse`), dengan fallback aman ke `rect` untuk shape tak dikenal.
+
+### Admin — frame & paket
+- Form frame: tombol **Next** tidak lagi macet di Step 1, rasio canvas dikunci **2:3** (mis. 464×696), dan slot di-normalisasi id-nya di backend (`ensureSlotIDs`) supaya tiap slot punya id unik & stabil.
+- Paket: tambah field **`print_unit_price`** (harga cetak ekstra per-paket) — menggantikan hardcode `vip = 15000` di kode lama. Disimpan juga sebagai snapshot di tabel `sessions`.
+
+### Halaman Photo Session
+- Bar "Photo Session" + area preview kini **full-screen** (`fixed inset-0`), lepas dari batas `max-w` layout publik, agar pas di layar kiosk lebar.
 
 ---
 
@@ -74,6 +99,8 @@ Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis
 - **[lib/pq](https://github.com/lib/pq)** — PostgreSQL driver
 - **[uuid](https://github.com/google/uuid)** — ID generation
 - **[Midtrans Go SDK](https://github.com/Midtrans/midtrans-go)** — payment gateway
+- **JWT (HMAC-SHA256) + bcrypt** — auth dashboard admin (login + token)
+- **[Google Drive API](https://developers.google.com/drive)** — upload hasil sesi ke Drive (opsional)
 
 ### Frontend
 - **Next.js 16** (Turbopack, App Router)
@@ -144,8 +171,9 @@ Migration ini berisi:
   - `FREESHIP` — Rp 15k flat off
   - `GLAMSHINE` — 50% off, no minimum
   - `GLAMHERO` — 100% off (gratis), no minimum
+- **1 admin** default di-seed otomatis oleh backend saat startup (kalau tabel `admins` kosong) — kredensial dari env `ADMIN_EMAIL` / `ADMIN_PASSWORD` (lihat [Admin Dashboard](#admin-dashboard))
 
-Idempotent via `CREATE TABLE IF NOT EXISTS` + `ON CONFLICT DO UPDATE` — aman dijalankan berulang. Re-run akan sync content (nama, harga, slot data) ke versi terbaru tanpa duplicate.
+Idempotent via `CREATE TABLE IF NOT EXISTS` + `ON CONFLICT DO NOTHING` (**insert-only**) — aman dijalankan berulang. Seed hanya mengisi data awal pada install baru; **re-run TIDAK menimpa data yang sudah ada**, jadi edit via dashboard admin (nama frame, harga paket, slot, voucher) tetap aman walau server di-restart.
 
 ### 3. Setup Backend
 
@@ -197,14 +225,27 @@ CLEANUP_INTERVAL_HOURS=24
 # CORS allowed origin
 FRONTEND_URL=http://localhost:3000
 
-# Camera mode
-# true  = paksa pakai webcam laptop (untuk testing tanpa Canon)
-# false = auto-detect (coba Canon dulu, fallback ke laptop)
-USE_BUILTIN_CAMERA=false
+# Camera: Canon-only via digiCamControl (lihat DIGICAM_BASE_URL).
 
 # Robot integration (opsional)
 ROBOT_API_URL=https://your-robot-ngrok.ngrok-free.dev
 ROBOT_ENABLED=false
+
+# Admin dashboard auth
+# JWT_SECRET dipakai menandatangani token login admin (HMAC-SHA256) — WAJIB
+# diganti di production. ADMIN_EMAIL/ADMIN_PASSWORD = kredensial admin default
+# yang di-seed sekali saat tabel admins masih kosong.
+JWT_SECRET=ganti-dengan-secret-acak-panjang
+ADMIN_EMAIL=admin@glambot.com
+ADMIN_PASSWORD=admin123
+
+# Google Drive upload (opsional) — upload hasil tiap sesi ke Drive, lalu QR di
+# halaman download mengarah ke folder publiknya. Kosongkan untuk menonaktifkan.
+# Cara dapat refresh token: isi CLIENT_ID/SECRET, lalu `go run ./cmd/gdrive-token`.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REFRESH_TOKEN=
+GOOGLE_DRIVE_FOLDER_ID=
 ```
 
 ### Frontend (`frontend/.env.local`)
@@ -248,8 +289,10 @@ psql -U postgres -d photobooth -f backend/migrations/init.sql
 
 Akan:
 - Skip table yang sudah ada (NOTICE: "already exists")
-- Update content packages/frames/vouchers ke nilai canonical (kalau berubah)
-- Preserve `used_count` voucher (history tidak hilang)
+- **Tidak menimpa** data packages/frames/vouchers yang sudah ada (`ON CONFLICT DO NOTHING`) — edit admin aman, hanya baris baru pada install fresh yang di-insert
+- Jalankan compatibility migrations (tambah kolom baru via `ADD COLUMN IF NOT EXISTS`, backfill nilai kosong/null saja)
+
+> ⚠️ **Reset paksa ke data default:** karena seed sekarang insert-only, untuk mengembalikan satu baris ke nilai seed kamu harus hapus dulu barisnya (mis. `DELETE FROM frames WHERE id = 'frame-164';`) lalu re-run migration. Atau cukup edit lewat dashboard admin.
 
 ### Tambah frame baru manual
 
@@ -316,6 +359,50 @@ Di HP (browser):
 
 ---
 
+## Admin Dashboard
+
+Dashboard internal untuk kelola konten kiosk tanpa sentuh database langsung.
+
+### Login
+
+- URL: `http://localhost:3000/login`
+- Kredensial default (dari env, di-seed saat tabel `admins` kosong):
+  - Email: `ADMIN_EMAIL` (default `admin@glambot.com`)
+  - Password: `ADMIN_PASSWORD` (default `admin123`)
+- Auth pakai JWT (HMAC-SHA256, secret `JWT_SECRET`). **Ganti `JWT_SECRET` & password default di production.**
+
+> Admin default hanya dibuat sekali saat tabel `admins` masih kosong. Mau ganti password? Ubah lewat dashboard, atau hapus baris di tabel `admins` lalu set `ADMIN_PASSWORD` baru dan restart backend.
+
+### Halaman
+
+| Route | Fungsi |
+|---|---|
+| `/dashboard` | Ringkasan (summary metrics) |
+| `/frame` | CRUD frame (upload PNG/SVG, atur canvas 2:3, slot editor, aktif/nonaktif) |
+| `/packages` | CRUD paket (harga, durasi, print_count, `print_unit_price`, popular) |
+| `/voucher` | CRUD voucher (percent/fixed, min price, max uses, expiry) |
+| `/transaction` | Riwayat transaksi pembayaran |
+| `/devices` | Status koneksi kamera / printer / robot (tes nyata) |
+| `/settings` | Pengaturan |
+
+Semua perubahan **tersimpan permanen** dan **tidak ter-reset** saat server restart (lihat [Update Terbaru](#update-terbaru)).
+
+### API admin (ringkas)
+
+Semua di-prefix `/api/admin` dan butuh token JWT (header `Authorization: Bearer <token>`):
+
+| Method | Path | Tujuan |
+|---|---|---|
+| POST | `/api/admin/login` | Login → return token + info admin |
+| GET/POST/PATCH/DELETE | `/api/admin/frames[/{id}]` | CRUD frame (+ `/stats`) |
+| GET/POST/PATCH/DELETE | `/api/admin/packages[/{id}]` | CRUD paket |
+| GET/POST/PATCH/DELETE | `/api/admin/vouchers[/{id}]` | CRUD voucher |
+| GET | `/api/admin/transactions` | List transaksi |
+| GET | `/api/admin/devices` | Tes koneksi perangkat |
+| GET | `/api/admin/dashboard/summary` | Metrics ringkasan |
+
+---
+
 ## Production Build
 
 ### Backend
@@ -354,7 +441,13 @@ glambot-app/
 │   │   ├── photo.go               # UploadPhoto, ComposeFrame, GetSessionPhotos, GetFramedPhotos, GetFrames, DownloadPhoto
 │   │   ├── robot.go               # GetCameraStatus, RobotCapture, GetLiveView, EnableRobot, DisableRobot, TriggerPreset, RobotMoving, RobotDone, RobotWebhook, GetRobotConfig
 │   │   ├── session.go             # GetPackages, CreateSession, GetSession, UpdateSessionStatus
-│   │   └── voucher.go             # ApplyVoucher, RemoveVoucher
+│   │   ├── voucher.go             # ApplyVoucher, RemoveVoucher
+│   │   ├── admin_auth.go          # EnsureDefaultAdmin (seed), AdminLogin (JWT)
+│   │   ├── admin_frames.go        # CRUD frame + ensureSlotIDs (normalisasi slot id)
+│   │   ├── admin_packages.go      # CRUD paket (+ print_unit_price)
+│   │   ├── admin_vouchers.go      # CRUD voucher
+│   │   ├── admin_dashboard.go     # Summary metrics
+│   │   └── admin_devices.go       # Tes koneksi kamera/printer/robot
 │   ├── middleware/
 │   │   └── cors.go                # CORS allow list (localhost + LAN private ranges)
 │   ├── migrations/
@@ -364,7 +457,7 @@ glambot-app/
 │   ├── routes/
 │   │   └── routes.go              # All HTTP route definitions
 │   ├── services/
-│   │   ├── camera.go              # Canon (digiCamControl) + builtin webcam abstraction
+│   │   ├── camera.go              # Canon liveview + capture via digiCamControl
 │   │   ├── burst.go               # Burst-capture liveview frames during 3s countdown (untuk Live Strip GIF)
 │   │   ├── gif.go                 # Slideshow GIF generator (raw photos terpilih, loop)
 │   │   ├── gif_live.go            # Live Strip GIF generator (framed + burst overlay + frame design top-layer)
@@ -376,7 +469,7 @@ glambot-app/
 │   │   ├── frames/                # Frame SVG assets (embedded base64 PNG → frame overlay)
 │   │   ├── packages/              # Package thumbnails (digital.svg, print.svg)
 │   │   └── sessions/{id}/         # Per-session output:
-│   │       ├── raw/               #   - canon_*.jpg / webcam_*.jpg (foto hasil capture)
+│   │       ├── raw/               #   - canon_*.jpg (foto hasil capture)
 │   │       ├── framed/            #   - result_*.jpg (komposisi frame + foto, dari Fabric canvas)
 │   │       ├── burst/             #   - {photoID}/frame_*.jpg (liveview frames selama countdown)
 │   │       ├── animation.gif      #   - slideshow GIF (lazy-generated saat request pertama)
@@ -389,6 +482,10 @@ glambot-app/
 │   ├── public/                    # Static assets (Container.svg, bg.webp, finger/, etc.)
 │   ├── src/
 │   │   ├── app/
+│   │   │   ├── (admin)/           # Admin dashboard (login + protected routes)
+│   │   │   │   ├── login/page.tsx
+│   │   │   │   └── (dashboard)/   # dashboard, frame, packages, voucher,
+│   │   │   │                      # transaction, devices, settings, filter
 │   │   │   ├── (public)/          # Public routes (kiosk + download)
 │   │   │   │   ├── package/page.tsx
 │   │   │   │   ├── payment/summary/page.tsx
@@ -415,7 +512,7 @@ glambot-app/
 │   │   │       ├── instruction/   # Multi-step instruction (3 cards + 60s timer)
 │   │   │       ├── package/       # Package selection
 │   │   │       ├── payment/       # QRIS + voucher
-│   │   │       ├── photo-session/ # Live preview + capture (Canon/builtin) + countdown overlay + grace-period safeguard
+│   │   │       ├── photo-session/ # Live preview + capture (Canon) + countdown overlay + grace-period safeguard
 │   │   │       │                  # api/getRobotConfig.ts: shared useRobotConfig() hook (React Query, 250ms poll dedupe)
 │   │   │       ├── photo-editor/  # Select & Edit (Fabric canvas) — VIP only
 │   │   │       ├── photo-download/# Download grid (HP) — slideshow GIF + live-strip GIF preview/download cards
@@ -456,9 +553,11 @@ Master katalog paket photo booth.
 | base_price | INT | Harga dasar (Rp) |
 | duration_secs | INT | Durasi sesi foto |
 | print_count | SMALLINT | Jumlah cetak default |
+| print_unit_price | INT | Harga cetak ekstra per lembar (di luar `print_count`) |
 | image_src | TEXT | URL gambar paket |
 | is_popular | INT (0/1) | Badge "Popular" |
 | is_active | INT (0/1) | Toggle aktif |
+| status | TEXT | `active` / `inactive` / `draft` (dipakai UI admin) |
 | sort_order | INT | Urutan tampil |
 
 ### `sessions`
@@ -471,6 +570,7 @@ Sesi photo booth per user.
 | package_code | TEXT | Denormalized cache |
 | duration_secs | INT | Copied from package |
 | print_count | INT | |
+| print_unit_price | INT | Snapshot harga cetak ekstra saat sesi dibuat |
 | price, discount, final_price | INT | |
 | status | TEXT | `pending_payment` → `paid` → `shooting` → `completed` |
 | frame_id | TEXT | Frame yang dipilih (NULL kalau Digital) |
@@ -501,7 +601,7 @@ Master frame strips dengan slot coordinates.
 | thumb_url | TEXT | `/storage/frames/frame-164.svg` |
 | photo_slots | INT | Jumlah slot |
 | canvas_width, canvas_height | INT | Default 464×696 |
-| slots | JSONB | `[{id, shape: 'rect'/'ellipse', x, y, width, height, label}, ...]` |
+| slots | JSONB | `[{id, shape: 'rect'/'ellipse'/'circle', x, y, width, height, label}, ...]` — id selalu dinormalisasi unik oleh backend (`ensureSlotIDs`) |
 | is_active, sort_order | | |
 
 ### `photos`
@@ -550,14 +650,14 @@ Diskon code.
 | POST | `/api/voucher/apply` | Apply voucher ke session |
 | POST | `/api/voucher/remove` | Cabut voucher |
 | GET | `/api/frames` | List frames dari DB (dengan slots) |
-| POST | `/api/photo/upload` | Upload single photo (multipart) — dipakai builtin camera mode |
+| POST | `/api/photo/upload` | Upload single photo (multipart) |
 | POST | `/api/photo/compose` | Save composition (multipart: frame + filter + image blob) |
 | GET | `/api/photo/session/{id}` | List raw photos |
 | GET | `/api/photo/session/{id}/framed` | List framed photos |
 | GET | `/api/photo/download/{photoID}` | Download single photo |
 | GET | `/api/photo/session/{id}/gif` | Slideshow GIF — loop foto raw terpilih. Pakai `?inline=1` untuk preview di `<img>` (Content-Disposition: inline). |
 | GET | `/api/photo/session/{id}/gif-live` | Live strip GIF — framed strip dengan tiap slot animated dari burst frames. Pakai `?inline=1` untuk inline preview. |
-| GET | `/api/photo/session/{id}/gif-live/available` | Cek ringan apakah Live Strip GIF tersedia (perlu framed + burst frames). Mode builtin webcam selalu false. |
+| GET | `/api/photo/session/{id}/gif-live/available` | Cek ringan apakah Live Strip GIF tersedia (perlu framed + burst frames). |
 | GET | `/api/robot/status` | Cek kamera connected + type |
 | POST | `/api/robot/capture` | Manual trigger capture (Canon) |
 | GET | `/api/robot/liveview` | Single live frame JPEG (Canon, mirrored) |
@@ -678,44 +778,15 @@ backend save JPEG to storage/sessions/{id}/raw/canon_*.jpg
 done.
 ```
 
-### Capture flow di mode builtin (webcam)
-
-```
-Robot → POST /api/robot/done
-        │
-        ↓ backend schedules
-        ↓ time.Sleep(3s)
-        ↓ captureRobotSessionPhoto detect cameraType=builtin → SKIP
-        ↓ (backend tidak ambil foto, return early)
-        
-Frontend (polling /api/robot/config 250ms)
-        ↓ deteksi transisi active=true → active=false (countdown selesai)
-        ↓ grab frame dari <video> getUserMedia (UNMIRRORED)
-        ↓ canvas.toBlob → POST /api/photo/upload (multipart)
-        ↓ backend save ke storage/sessions/{id}/raw/webcam_*.jpg
-done.
-```
-
 ---
 
 ## Mode Kamera
 
-Backend auto-detect saat startup ([services/camera.go:CheckCamera](backend/services/camera.go)):
-
-1. **Coba Canon** via `GET ${DIGICAM_BASE_URL}/camera`
-2. Kalau sukses → `cameraType = "canon"`
-3. Kalau gagal → `cameraType = "builtin"` (laptop webcam)
-
-Force builtin untuk testing tanpa Canon: set `USE_BUILTIN_CAMERA=true` di `backend/.env`.
+Canon-only via digiCamControl. Saat startup ([services/camera.go:CheckCamera](backend/services/camera.go)) backend probe `GET ${DIGICAM_BASE_URL}/camera` + liveview; kalau frame valid → kamera online, kalau tidak → offline (tidak ada lagi fallback webcam laptop).
 
 ### Mirror behavior
 
-| Mode | Preview | Capture |
-|---|---|---|
-| Canon | Backend `flipJPEGHorizontal` mirror JPEG sebelum kirim | Canon natural orientation, tidak di-flip |
-| Builtin | Canvas `ctx.scale(-1, 1)` mirror video (selfie style) | Offscreen canvas tanpa scale → natural orientation |
-
-User lihat preview mirrored (familiar selfie), tapi hasil foto = orientation asli dari kamera.
+Backend `flipJPEGHorizontal` mirror JPEG liveview sebelum kirim ke frontend, jadi user lihat preview mirrored (familiar selfie). Hasil foto Canon disimpan apa adanya (natural orientation, tidak di-flip).
 
 ---
 
@@ -752,7 +823,7 @@ Setiap sesi yang sukses compose menghasilkan **dua varian animated GIF** yang bi
 
 - File: `storage/sessions/{id}/animation-live-v2.gif` (suffix `-v2` versioned — bump saat compositing logic berubah supaya cache lama otomatis di-skip)
 - Endpoint: `GET /api/photo/session/{id}/gif-live` (tambah `?inline=1` untuk inline preview)
-- Availability cek: `GET /api/photo/session/{id}/gif-live/available` → frontend hide tombol kalau tidak available (mis. mode builtin webcam, tidak ada burst frames)
+- Availability cek: `GET /api/photo/session/{id}/gif-live/available` → frontend hide tombol kalau tidak available (mis. liveview Canon gagal saat countdown, tidak ada burst frames)
 - Isi: framed strip sebagai base, tiap slot foto diisi rentetan burst-frame liveview (3 detik momen sebelum jepret), lalu settle ke foto final
 - Compositing: **z-order benar** — burst di-draw di tengah, frame design (extracted dari embedded base64 PNG di SVG) di-overlay ON TOP supaya dekorasi window (rounded corner / border) tidak ke-timpa burst
 - Frame yang tidak punya embedded PNG (mis. path-based SVG) gracefully fall back ke compositing lama — di-log dengan `ℹ️  frame overlay: SVG ... tidak punya embedded PNG (non-standar)`
@@ -762,7 +833,7 @@ Setiap sesi yang sukses compose menghasilkan **dua varian animated GIF** yang bi
 
 Selama 3 detik countdown (antara `POST /api/robot/done` dan shutter trigger), backend men-snapshot liveview frames ke `storage/sessions/{id}/burst/pending/frame_NNN.jpg`. Setelah capture sukses dan `photoID` di-assign, folder pending di-rename ke `burst/{photoID}/` (atomic move).
 
-- Hanya jalan di mode Canon — builtin webcam pakai browser camera yang tidak punya backend liveview cepat
+- Sumber frame = liveview Canon (digiCamControl)
 - Interval 280ms, max 12 frames, durasi 3 detik
 - Per-frame call wrapped `time.After(560ms)` supaya satu frame lambat tidak nahan loop
 - Implementation: [`services/burst.go`](backend/services/burst.go)
@@ -850,11 +921,12 @@ curl -X POST http://localhost:8080/api/robot/done -H "Content-Type: application/
 - Pastikan `allowedDevOrigins` di `next.config.ts` include IP Anda
 - Windows Firewall: allow TCP port 3000 + 8080
 
-### "ffmpeg failed: executable file not found"
-Mode builtin tidak butuh ffmpeg lagi — backend skip capture, frontend handle via `<video>` browser. Log warning ini muncul kalau ada code lama yang masih panggil `captureWebcamFrame()`. Verifikasi:
-- `USE_BUILTIN_CAMERA=true` OR Canon tidak terdeteksi
-- `/api/robot/status` return `camera_type: "builtin"`
-- Frontend di-buka di `/photo-session` dengan izin kamera diberikan
+### Live preview kosong / "Stream tidak tersedia"
+Kamera Canon-only via digiCamControl — kalau preview kosong:
+- Pastikan digiCamControl jalan dan kamera Canon terhubung (liveview aktif)
+- Cek `DIGICAM_BASE_URL` di `.env` benar (default `http://localhost:5513/api`)
+- `/api/robot/status` harus return `connected: true`
+- Tes cepat: `go run ./cmd/probecheck` dari folder backend
 
 ### QR code di kiosk tidak bisa di-scan dari HP
 - QR encode current `window.location.origin` + sessionId
@@ -894,6 +966,14 @@ Mode builtin tidak butuh ffmpeg lagi — backend skip capture, frontend handle v
 - Safeguard: backend masih sibuk (preset moving atau countdown shutter) — frontend tampil timer negatif `-00:01`, `-00:02`, ...
 - Hard cap 30 detik (lihat [Safeguard Sesi Foto](#safeguard-sesi-foto))
 - Kalau lebih dari 30s masih stuck: cek `/api/robot/config` — kemungkinan `current_preset` tidak pernah reset (robot webhook `/done` tidak fire ke backend). Reset manual via `POST /api/robot/webhook` dengan `{"event":"ended","preset":N}`.
+
+### Edit frame/paket/voucher balik ke nilai awal setiap restart
+- Penyebab (versi lama): seed `init.sql` pakai `ON CONFLICT DO UPDATE` yang menimpa data tiap server boot. Hanya data **default** (frame-164…167, paket regular/vip, 4 voucher) yang terdampak; data baru aman.
+- **Sudah fixed:** seed diubah ke `ON CONFLICT DO NOTHING` (insert-only). Pastikan kamu pakai `init.sql` terbaru, lalu restart backend dan edit ulang sekali data yang sempat ke-reset — setelah itu permanen.
+
+### Photo editor crash `Cannot read properties of null (reading 'clearRect')`
+- Terjadi saat ganti frame dengan dimensi berbeda — canvas Fabric lama sudah di-dispose tapi masih dipanggil `.clear()`.
+- **Sudah fixed:** effect render kini memakai instance canvas hidup via `getFabricCanvas()` (ref), bukan closure basi. Pastikan pakai versi terbaru `PreviewArea.tsx` + `useCanvasRenderer.ts`.
 
 ### "Pilih 3 foto dulu" saat klik Confirm di photo-editor
 - Slot belum terisi semua (kurang dari 3). Frontend block submit supaya tidak hit error 400 backend

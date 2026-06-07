@@ -1,14 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiClient, resolveBaseUrl } from '@/lib/api-client';
 import { playBackendAudio } from '@/lib/audio';
-import type { CameraType } from '../api/getLivePreview';
 import { useRobotConfig } from '../api/getRobotConfig';
 
 interface CameraPreviewProps {
   frameUrl?: string | null;
   streamUrl?: string | null;
-  cameraType?: CameraType;
-  mediaStream?: MediaStream | null;
   sessionId?: string;
   onError?: () => void;
   onRetry?: () => void;
@@ -20,8 +17,6 @@ interface CameraPreviewProps {
 export function CameraPreview({
   frameUrl,
   streamUrl,
-  cameraType,
-  mediaStream,
   sessionId,
   onError,
   onRetry,
@@ -33,8 +28,6 @@ export function CameraPreview({
   const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const frameCountRef = useRef(0);
   const pendingRef = useRef(false);
-  const rafRef = useRef<number | null>(null);
-  const videoRef = useRef<HTMLVideoElement | null>(null);
   const audioRefs = useRef<Record<number, HTMLAudioElement>>({});
   const playedRef = useRef<Set<number>>(new Set());
   const wasActiveRef = useRef(false);
@@ -51,9 +44,8 @@ export function CameraPreview({
   const capturedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const capturedBlobUrlRef = useRef<string | null>(null);
 
-  const isBuiltin = cameraType === 'builtin';
   const displayUrl = frameUrl || streamUrl;
-  const hasContent = isBuiltin ? !!mediaStream : !!displayUrl;
+  const hasContent = !!displayUrl;
 
   // Show captured photo modal for 3s, then auto-hide.
   // Tracks blob URLs separately so we can revoke after hiding.
@@ -110,45 +102,6 @@ export function CameraPreview({
       audioRefs.current = {};
     };
   }, []);
-
-  // Capture from <video> (UNMIRRORED — natural orientation) and upload
-  const captureAndUpload = useCallback(async () => {
-    const video = videoRef.current;
-    if (!video || !sessionId) return;
-
-    const w = video.videoWidth || 1280;
-    const h = video.videoHeight || 720;
-    const captureCanvas = document.createElement('canvas');
-    captureCanvas.width = w;
-    captureCanvas.height = h;
-    const ctx = captureCanvas.getContext('2d');
-    if (!ctx) return;
-    // Natural orientation (NOT mirrored) — preview is mirrored for UX,
-    // but the saved photo should look "normal" from camera's POV.
-    ctx.drawImage(video, 0, 0, w, h);
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      captureCanvas.toBlob((b) => resolve(b), 'image/jpeg', 0.92);
-    });
-    if (!blob) return;
-
-    // Show preview modal immediately from local blob (instant, no waiting for upload)
-    const previewUrl = URL.createObjectURL(blob);
-    if (!isMountedRef.current) {
-      URL.revokeObjectURL(previewUrl);
-      return;
-    }
-    showCapturedModal(previewUrl, true);
-
-    const formData = new FormData();
-    formData.append('session_id', sessionId);
-    formData.append('photo', blob, `webcam_${Date.now()}.jpg`);
-    try {
-      await apiClient.post('/api/photo/upload', formData);
-    } catch (err) {
-      console.error('[CameraPreview] Builtin upload failed:', err);
-    }
-  }, [sessionId, showCapturedModal]);
 
   // Canon path: after capture finishes, fetch most recent photo from backend
   // and show it in the modal. Backend writes photo to DB inside a goroutine,
@@ -240,67 +193,15 @@ export function CameraPreview({
     if (wasActiveRef.current && !captureTriggeredRef.current) {
       // Transition active → inactive = countdown just finished.
       captureTriggeredRef.current = true;
-      if (isBuiltin) {
-        captureAndUpload();
-      } else {
-        showLatestCanonCapture();
-      }
+      showLatestCanonCapture();
     }
 
     wasActiveRef.current = false;
     playedRef.current.clear();
-  }, [active, remainingMs, isBuiltin, captureAndUpload, showLatestCanonCapture]);
-
-  // Builtin mode: render webcam via getUserMedia → <video> → canvas (mirrored)
-  useEffect(() => {
-    if (!isBuiltin || !mediaStream) return;
-
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = 1280;
-    canvas.height = 720;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const video = document.createElement('video');
-    video.srcObject = mediaStream;
-    video.muted = true;
-    video.playsInline = true;
-    videoRef.current = video;
-
-    const render = () => {
-      if (video.readyState >= 2) {
-        // Mirror PREVIEW (selfie style). Capture uses a separate offscreen
-        // canvas without scaling, so saved photos remain natural orientation.
-        ctx.save();
-        ctx.scale(-1, 1);
-        ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
-        ctx.restore();
-      }
-      rafRef.current = requestAnimationFrame(render);
-    };
-
-    video
-      .play()
-      .then(() => {
-        rafRef.current = requestAnimationFrame(render);
-      })
-      .catch(() => {});
-
-    return () => {
-      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-      rafRef.current = null;
-      video.srcObject = null;
-      videoRef.current = null;
-    };
-  }, [isBuiltin, mediaStream]);
+  }, [active, remainingMs, showLatestCanonCapture]);
 
   // Canon mode: polling JPEG frames (backend already returns mirrored)
   useEffect(() => {
-    if (isBuiltin) return;
     if (!displayUrl || hasError) {
       if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
       return;
@@ -344,9 +245,9 @@ export function CameraPreview({
     return () => {
       if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
     };
-  }, [isBuiltin, displayUrl, hasError]);
+  }, [displayUrl, hasError]);
 
-  const showError = hasError || (!isBuiltin && !displayUrl) || (isBuiltin && !mediaStream && hasError);
+  const showError = hasError || !displayUrl;
   void onError; // accepted for API compatibility
 
   return (

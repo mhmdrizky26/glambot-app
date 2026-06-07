@@ -16,6 +16,7 @@ export interface Package {
   imageSrc: string;
   isPopular: boolean;
   printCount: number;
+  printUnitPrice: number;
   status: PackageStatus;
 }
 
@@ -48,6 +49,7 @@ export type BackendResponse = {
   image_src: string;
   is_popular: boolean;
   print_count: number;
+  print_unit_price?: number;
   status?: PackageStatus;
 };
 
@@ -63,5 +65,6 @@ export const normalizePackage = (data: BackendResponse): Package => ({
   imageSrc: toStorageUrl(data.image_src),
   isPopular: data.is_popular,
   printCount: data.print_count,
+  printUnitPrice: data.print_unit_price ?? 0,
   status: data.status || 'draft',
 });

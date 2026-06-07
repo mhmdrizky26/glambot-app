@@ -13,7 +13,7 @@ export const LoginForm = () => {
   return (
     <div
       className={cn(
-        'font-inter w-full rounded-2xl border border-white/60 bg-white/95 shadow-2xl shadow-[#112D4E]/15 backdrop-blur-md',
+        'font-grotesk w-full rounded-2xl border border-white/60 bg-white/95 shadow-2xl shadow-[#112D4E]/15 backdrop-blur-md',
         'p-7 md:p-9 lg:p-10 xl:p-20',
         'max-w-md md:max-w-lg lg:max-w-xl xl:max-w-160',
         'flex flex-col justify-center',

@@ -1,7 +1,8 @@
 import { fabric } from 'fabric';
 import { Image as FabricImage } from 'fabric/fabric-impl';
 
-// Keep in sync with `pages/PhotoEditorPage.tsx` FilterType
+// Definisi KANONIK FilterType. Modul lain (mis. PhotoEditorPage) me-re-export
+// dari sini agar tidak ada dua definisi yang bisa drift.
 export type FilterType =
   | 'original'
   | 'warm'

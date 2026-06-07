@@ -2,11 +2,18 @@ package config
 
 import (
 	"bufio"
+	"log"
 	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+)
+
+// Default dev — TIDAK boleh dipakai di production (lihat pengecekan di Load).
+const (
+	defaultJWTSecret     = "glambot-dev-secret-change-me"
+	defaultAdminPassword = "admin123"
 )
 
 type Config struct {
@@ -24,7 +31,6 @@ type Config struct {
 	FrontendURL          string
 	RobotAPIURL          string
 	RobotEnabled         bool
-	UseBuiltinCamera     bool // Force menggunakan builtin camera (laptop) untuk testing
 	CurrentPreset        int
 	AutoCaptureAt        time.Time
 
@@ -64,14 +70,22 @@ func Load() {
 		FrontendURL:          getEnv("FRONTEND_URL", "http://localhost:3000"),
 		RobotAPIURL:          getEnv("ROBOT_API_URL", ""),
 		RobotEnabled:         getEnv("ROBOT_ENABLED", "false") == "true",
-		UseBuiltinCamera:     getEnv("USE_BUILTIN_CAMERA", "false") == "true",
-		JWTSecret:            getEnv("JWT_SECRET", "glambot-dev-secret-change-me"),
+		JWTSecret:            getEnv("JWT_SECRET", defaultJWTSecret),
 		AdminEmail:           getEnv("ADMIN_EMAIL", "admin@glambot.com"),
-		AdminPassword:        getEnv("ADMIN_PASSWORD", "admin123"),
+		AdminPassword:        getEnv("ADMIN_PASSWORD", defaultAdminPassword),
 		GoogleClientID:       getEnv("GOOGLE_CLIENT_ID", ""),
 		GoogleClientSecret:   getEnv("GOOGLE_CLIENT_SECRET", ""),
 		GoogleRefreshToken:   getEnv("GOOGLE_REFRESH_TOKEN", ""),
 		GoogleDriveFolderID:  getEnv("GOOGLE_DRIVE_FOLDER_ID", ""),
+	}
+
+	// Hardening: tolak start di production kalau secret/password masih default.
+	if App.AppEnv == "production" {
+		if App.JWTSecret == defaultJWTSecret || App.AdminPassword == defaultAdminPassword {
+			log.Fatal("FATAL: JWT_SECRET / ADMIN_PASSWORD masih nilai default di production — set env yang aman sebelum menjalankan backend.")
+		}
+	} else if App.JWTSecret == defaultJWTSecret {
+		log.Println("⚠️  JWT_SECRET memakai default dev — wajib diganti sebelum deploy ke production.")
 	}
 }
 

@@ -13,21 +13,22 @@ import (
 
 // packageResponse — bentuk yang diharapkan frontend (packages/api/types.ts).
 type packageResponse struct {
-	ID           int64  `json:"id"`
-	Code         string `json:"code"`
-	Name         string `json:"name"`
-	Price        int    `json:"price"`
-	DurationSecs int    `json:"duration_secs"`
-	DurationMins int    `json:"duration_mins"`
-	Description  string `json:"description"`
-	ImageSrc     string `json:"image_src"`
-	IsPopular    bool   `json:"is_popular"`
-	PrintCount   int    `json:"print_count"`
-	Status       string `json:"status"`
+	ID             int64  `json:"id"`
+	Code           string `json:"code"`
+	Name           string `json:"name"`
+	Price          int    `json:"price"`
+	DurationSecs   int    `json:"duration_secs"`
+	DurationMins   int    `json:"duration_mins"`
+	Description    string `json:"description"`
+	ImageSrc       string `json:"image_src"`
+	IsPopular      bool   `json:"is_popular"`
+	PrintCount     int    `json:"print_count"`
+	PrintUnitPrice int    `json:"print_unit_price"`
+	Status         string `json:"status"`
 }
 
 const packageSelectCols = `id, code, name, description, base_price, duration_secs,
-	print_count, COALESCE(image_src, ''), is_popular, COALESCE(status, 'active')`
+	print_count, print_unit_price, COALESCE(image_src, ''), is_popular, COALESCE(status, 'active')`
 
 func scanPackage(s interface{ Scan(...any) error }) (packageResponse, error) {
 	var (
@@ -35,7 +36,7 @@ func scanPackage(s interface{ Scan(...any) error }) (packageResponse, error) {
 		isPopular int
 	)
 	err := s.Scan(&p.ID, &p.Code, &p.Name, &p.Description, &p.Price,
-		&p.DurationSecs, &p.PrintCount, &p.ImageSrc, &isPopular, &p.Status)
+		&p.DurationSecs, &p.PrintCount, &p.PrintUnitPrice, &p.ImageSrc, &isPopular, &p.Status)
 	if err != nil {
 		return p, err
 	}
@@ -168,6 +169,10 @@ func AdminCreatePackage(w http.ResponseWriter, r *http.Request) {
 	if printCount <= 0 {
 		printCount = 3
 	}
+	printUnitPrice, _ := strconv.Atoi(r.FormValue("print_unit_price"))
+	if printUnitPrice < 0 {
+		printUnitPrice = 0
+	}
 	status := strings.TrimSpace(r.FormValue("status"))
 	if status == "" {
 		status = "active"
@@ -187,13 +192,13 @@ func AdminCreatePackage(w http.ResponseWriter, r *http.Request) {
 	var id int64
 	err := database.DB.QueryRow(
 		`INSERT INTO packages (code, name, description, base_price, duration_secs,
-			print_count, image_src, is_popular, is_active, status)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+			print_count, print_unit_price, image_src, is_popular, is_active, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
 		code, name, r.FormValue("description"), price, durationSecs,
-		printCount, imageSrc, boolToInt(isPopular), boolToInt(status == "active"), status,
+		printCount, printUnitPrice, imageSrc, boolToInt(isPopular), boolToInt(status == "active"), status,
 	).Scan(&id)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal membuat package: "+err.Error())
+		respondInternal(w, "create package", err)
 		return
 	}
 
@@ -251,6 +256,11 @@ func AdminUpdatePackage(w http.ResponseWriter, r *http.Request) {
 			addSet("print_count", n)
 		}
 	}
+	if v := r.FormValue("print_unit_price"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			addSet("print_unit_price", n)
+		}
+	}
 	if file, header, err := r.FormFile("image"); err == nil {
 		path, _, uErr := saveUpload(file, header, "packages")
 		if uErr != nil {
@@ -265,7 +275,7 @@ func AdminUpdatePackage(w http.ResponseWriter, r *http.Request) {
 		query := "UPDATE packages SET " + strings.Join(sets, ", ") + " WHERE id = ?"
 		args = append(args, id)
 		if _, err := database.DB.Exec(query, args...); err != nil {
-			respondError(w, http.StatusInternalServerError, "Gagal mengupdate package: "+err.Error())
+			respondInternal(w, "update package", err)
 			return
 		}
 	}

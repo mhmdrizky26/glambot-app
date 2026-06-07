@@ -28,7 +28,6 @@ interface UsePaymentReturn {
   qrisUrl: string | null;
   totalPrice: number | null;
   retry: () => void;
-  triggerStatus: (state: PaymentState) => void;
 }
 
 export function usePayment({
@@ -154,39 +153,11 @@ export function usePayment({
     initPayment();
   }, [initPayment]);
 
-  const triggerStatus = useCallback(
-    (state: PaymentState) => {
-      cleanup();
-      if (state === 'processing') {
-        setStatus('processing');
-
-        // Update session status to 'paid' when triggered
-        updateSessionStatus({ sessionId, status: 'paid' });
-
-        processingTimeoutRef.current = setTimeout(() => {
-          setStatus('success');
-          redirectTimeoutRef.current = setTimeout(() => {
-            onSuccess?.(sessionId);
-          }, SUCCESS_REDIRECT_DELAY_MS);
-        }, PROCESSING_DELAY_MS);
-      } else {
-        setStatus(state);
-        if (state === 'success') {
-          redirectTimeoutRef.current = setTimeout(() => {
-            onSuccess?.(sessionId);
-          }, SUCCESS_REDIRECT_DELAY_MS);
-        }
-      }
-    },
-    [cleanup, onSuccess, sessionId, updateSessionStatus],
-  );
-
   return {
     isPending,
     status,
     qrisUrl,
     totalPrice,
     retry,
-    triggerStatus,
   };
 }

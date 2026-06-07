@@ -1,5 +1,4 @@
 import { fabric } from 'fabric';
-import type { FrameSlot } from '../api/getFrames';
 
 // Load frame image as overlay (above photos)
 export const loadFrameImage = async (
@@ -40,50 +39,6 @@ export const loadFrameImage = async (
       { crossOrigin: 'anonymous' },
     );
   });
-};
-
-// Remove frame from canvas
-export const removeFrameFromCanvas = (canvas: fabric.Canvas): void => {
-  const frameObjects = canvas.getObjects().filter((obj) => obj.data?.isFrame);
-  frameObjects.forEach((obj) => canvas.remove(obj));
-  canvas.renderAll();
-};
-
-// Create invisible drop zone for slot
-export const createSlotDropZone = (
-  slot: FrameSlot,
-  canvas: fabric.Canvas,
-): fabric.Rect => {
-  const rect = new fabric.Rect({
-    left: slot.x,
-    top: slot.y,
-    width: slot.width,
-    height: slot.height,
-    fill: 'transparent',
-    stroke: 'transparent',
-    strokeWidth: 2,
-    selectable: false,
-    evented: false,
-    data: { isDropZone: true, slotId: slot.id },
-  });
-
-  canvas.add(rect);
-  return rect;
-};
-
-// Create drop zones for all slots
-export const createAllSlotDropZones = (
-  slots: FrameSlot[],
-  canvas: fabric.Canvas,
-): fabric.Rect[] => {
-  return slots.map((slot) => createSlotDropZone(slot, canvas));
-};
-
-// Remove all photos from canvas
-export const removeAllPhotosFromCanvas = (canvas: fabric.Canvas): void => {
-  const photoObjects = canvas.getObjects().filter((obj) => obj.data?.isPhoto);
-  photoObjects.forEach((obj) => canvas.remove(obj));
-  canvas.renderAll();
 };
 
 // Remove photo by slot ID

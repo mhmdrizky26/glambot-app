@@ -14,7 +14,7 @@ import (
 )
 
 func getSessionTotalPrice(session *models.Session) int {
-	return session.Price + (session.PrintCount * getPrintUnitPrice(session.PackageCode))
+	return session.Price + (session.PrintCount * session.PrintUnitPrice)
 }
 
 // POST /api/voucher/apply

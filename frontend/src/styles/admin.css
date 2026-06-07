@@ -8,6 +8,7 @@
   /* Font variables */
   --font-sans: var(--font-public-sans); /* Public Sans untuk app */
   --font-inter: var(--font-inter); /* Inter untuk auth */
+  --font-grotesk: var(--font-space-grotesk); /* Space Grotesk — tema brand (login) */
   --font-heading: var(--font-public-sans);
 
   /* Shadcn core variables */
@@ -139,6 +140,10 @@
 @layer utilities {
   .font-inter {
     font-family: var(--font-inter);
+  }
+
+  .font-grotesk {
+    font-family: var(--font-grotesk);
   }
 
   .font-sans {

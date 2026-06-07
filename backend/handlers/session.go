@@ -17,7 +17,7 @@ import (
 func GetPackages(w http.ResponseWriter, r *http.Request) {
 	rows, err := database.DB.Query(`
 		SELECT id, code, name, base_price, duration_secs, COALESCE(description, ''),
-		       COALESCE(image_src, ''), is_popular, print_count
+		       COALESCE(image_src, ''), is_popular, print_count, print_unit_price
 		FROM packages
 		WHERE is_active = 1
 		ORDER BY sort_order ASC, code ASC`)
@@ -33,7 +33,7 @@ func GetPackages(w http.ResponseWriter, r *http.Request) {
 		var isPopularInt int
 		if err := rows.Scan(
 			&pkg.ID, &pkg.Code, &pkg.Name, &pkg.Price, &pkg.DurationSecs,
-			&pkg.Description, &pkg.ImageSrc, &isPopularInt, &pkg.PrintCount,
+			&pkg.Description, &pkg.ImageSrc, &isPopularInt, &pkg.PrintCount, &pkg.PrintUnitPrice,
 		); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to read packages")
 			return
@@ -66,17 +66,17 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 
 	var pkgInfo models.PackageInfo
 	err := database.DB.QueryRow(`
-		SELECT id, code, name, base_price, duration_secs, COALESCE(description, '')
+		SELECT id, code, name, base_price, duration_secs, COALESCE(description, ''), print_unit_price
 		FROM packages
 		WHERE id = ? AND is_active = 1`, req.PackageID,
-	).Scan(&pkgInfo.ID, &pkgInfo.Code, &pkgInfo.Name, &pkgInfo.Price, &pkgInfo.DurationSecs, &pkgInfo.Description)
+	).Scan(&pkgInfo.ID, &pkgInfo.Code, &pkgInfo.Name, &pkgInfo.Price, &pkgInfo.DurationSecs, &pkgInfo.Description, &pkgInfo.PrintUnitPrice)
 	if err != nil {
 		log.Printf("CreateSession package lookup failed: packageId=%d err=%v", req.PackageID, err)
 		respondError(w, http.StatusBadRequest, "Invalid package id")
 		return
 	}
 
-	printUnitPrice := getPrintUnitPrice(pkgInfo.Code)
+	printUnitPrice := pkgInfo.PrintUnitPrice
 
 	printCount := req.PrintCount
 	if printCount < 0 {
@@ -92,16 +92,17 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 	expiresAt := now.Add(time.Duration(config.App.SessionExpiryHours) * time.Hour)
 
 	_, err = database.DB.Exec(`
-		INSERT INTO sessions 
-			(id, package_id, package_code, category, duration_secs, print_count, price, discount, final_price, status, created_at, expires_at)
-		VALUES 
-			(?, ?, ?, ?, ?, ?, ?, 0, ?, 'pending_payment', ?, ?)`,
+		INSERT INTO sessions
+			(id, package_id, package_code, category, duration_secs, print_count, print_unit_price, price, discount, final_price, status, created_at, expires_at)
+		VALUES
+			(?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 'pending_payment', ?, ?)`,
 		sessionID,
 		pkgInfo.ID,
 		pkgInfo.Code,
 		pkgInfo.Code,
 		pkgInfo.DurationSecs,
 		printCount,
+		printUnitPrice,
 		pkgInfo.Price,
 		finalPrice,
 		now.UTC(),
@@ -114,17 +115,18 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	session := models.Session{
-		ID:           sessionID,
-		PackageID:    pkgInfo.ID,
-		PackageCode:  pkgInfo.Code,
-		DurationSecs: pkgInfo.DurationSecs,
-		PrintCount:   printCount,
-		Price:        pkgInfo.Price,
-		Discount:     0,
-		FinalPrice:   finalPrice,
-		Status:       models.StatusPendingPayment,
-		CreatedAt:    now,
-		ExpiresAt:    expiresAt,
+		ID:             sessionID,
+		PackageID:      pkgInfo.ID,
+		PackageCode:    pkgInfo.Code,
+		DurationSecs:   pkgInfo.DurationSecs,
+		PrintCount:     printCount,
+		PrintUnitPrice: printUnitPrice,
+		Price:          pkgInfo.Price,
+		Discount:       0,
+		FinalPrice:     finalPrice,
+		Status:         models.StatusPendingPayment,
+		CreatedAt:      now,
+		ExpiresAt:      expiresAt,
 	}
 
 	respondJSON(w, http.StatusCreated, models.SuccessResponse(session))
@@ -155,7 +157,20 @@ func UpdateSessionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := database.DB.Exec(
+	// Validasi transisi status — cegah lompat ke 'shooting' tanpa lewat 'paid'
+	// (mis. user akses /photo-session langsung tanpa bayar). Hanya transisi yang
+	// masuk akal yang diizinkan; status target di luar enum ditolak.
+	session, err := GetSessionByID(sessionID)
+	if err != nil {
+		respondError(w, http.StatusNotFound, "Session tidak ditemukan")
+		return
+	}
+	if !isAllowedStatusTransition(session.Status, body.Status) {
+		respondError(w, http.StatusConflict, "Transisi status sesi tidak diizinkan")
+		return
+	}
+
+	_, err = database.DB.Exec(
 		`UPDATE sessions SET status = ? WHERE id = ?`,
 		string(body.Status), sessionID,
 	)
@@ -170,14 +185,35 @@ func UpdateSessionStatus(w http.ResponseWriter, r *http.Request) {
 	}))
 }
 
+// isAllowedStatusTransition membatasi perpindahan status sesi agar pembayaran
+// tidak bisa dilewati. Kunci: 'shooting' hanya boleh dari 'paid'/'shooting'.
+// 'expired' selalu boleh (timeout/cleanup). Status target tak dikenal → ditolak.
+func isAllowedStatusTransition(cur, next models.SessionStatus) bool {
+	if cur == next {
+		return true
+	}
+	switch next {
+	case models.StatusPaid:
+		return cur == models.StatusPendingPayment
+	case models.StatusShooting:
+		return cur == models.StatusPaid
+	case models.StatusCompleted:
+		return cur == models.StatusShooting || cur == models.StatusPaid
+	case models.StatusExpired:
+		return true
+	default:
+		return false
+	}
+}
+
 // ─── Shared helper, dipakai handler lain ─────────────────────────────────────
 
 func GetSessionByID(id string) (*models.Session, error) {
 	row := database.DB.QueryRow(`
-		SELECT 
-			id, package_id, package_code, duration_secs, print_count, price, discount, final_price,
+		SELECT
+			id, package_id, package_code, duration_secs, print_count, print_unit_price, price, discount, final_price,
 			status, COALESCE(frame_id, ''), created_at, expires_at
-		FROM sessions 
+		FROM sessions
 		WHERE id = ?`, id)
 
 	var s models.Session
@@ -188,6 +224,7 @@ func GetSessionByID(id string) (*models.Session, error) {
 		&s.PackageCode,
 		&s.DurationSecs,
 		&s.PrintCount,
+		&s.PrintUnitPrice,
 		&s.Price,
 		&s.Discount,
 		&s.FinalPrice,
@@ -202,13 +239,4 @@ func GetSessionByID(id string) (*models.Session, error) {
 
 	s.FrameID = frameID
 	return &s, nil
-}
-
-func getPrintUnitPrice(packageCode string) int {
-	switch packageCode {
-	case "vip":
-		return 15000
-	default:
-		return 0
-	}
 }

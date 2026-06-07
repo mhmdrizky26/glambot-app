@@ -205,9 +205,9 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
 
           {/* GIF #2: Live strip — strip frame dengan slot yang "hidup" pakai
               burst liveview frames sebelum settle ke foto final.
-              Hanya tampil kalau backend punya burst frames (Canon mode +
-              liveview sempat capture). Di mode builtin webcam tidak ada
-              burst → card di-hide supaya user tidak lihat tombol gagal. */}
+              Hanya tampil kalau backend punya burst frames (liveview Canon
+              sempat capture). Kalau tidak ada burst → card di-hide supaya
+              user tidak lihat tombol gagal. */}
           {framed.length > 0 && isLiveGifAvailable && (
             <GlassCard
               variant="default"

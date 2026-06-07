@@ -50,16 +50,11 @@ func main() {
 		log.Printf("💳 Midtrans aktif [%s]", config.App.MidtransEnv)
 	}
 
-	// ─── 4.5. Init Camera System ─────────────────────────────────────────────
-	if config.App.UseBuiltinCamera {
-		services.SetCameraType("builtin")
-		log.Printf("📷 Camera: Builtin (Laptop) - forced by USE_BUILTIN_CAMERA")
+	// ─── 4.5. Init Camera System (Canon via digiCamControl) ──────────────────
+	if status, _ := services.CheckCamera(); status.Connected {
+		log.Printf("📷 Camera: %s", status.CameraName)
 	} else {
-		// Auto-detect camera (Canon first, then fallback to builtin)
-		status, _ := services.CheckCamera()
-		if status.Connected {
-			log.Printf("📷 Camera: %s", status.CameraName)
-		}
+		log.Printf("⚠️  Canon camera tidak terdeteksi (cek digiCamControl)")
 	}
 
 	// ─── 5. Jalankan cleanup job di background ────────────────────────────────

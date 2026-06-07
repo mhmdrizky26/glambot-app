@@ -112,6 +112,17 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		`ALTER TABLE packages ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active'`,
 		`UPDATE packages SET status = CASE WHEN is_active = 1 THEN 'active' ELSE 'inactive' END WHERE status IS NULL OR status = ''`,
 
+		// Packages: harga cetak ekstra per-paket (dulu di-hardcode "vip"=15000 di
+		// kode). Sessions menyimpan snapshot harganya saat sesi dibuat.
+		`ALTER TABLE packages ADD COLUMN IF NOT EXISTS print_unit_price INTEGER NOT NULL DEFAULT 0`,
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS print_unit_price INTEGER NOT NULL DEFAULT 0`,
+		// Backfill perilaku lama (vip = 15000/cetak) HANYA jika belum ada paket
+		// yang dikonfigurasi harga cetaknya — sekali jalan, tidak menimpa
+		// pengaturan admin pada boot berikutnya.
+		`UPDATE packages SET print_unit_price = 15000
+		   WHERE code = 'vip'
+		     AND NOT EXISTS (SELECT 1 FROM packages WHERE print_unit_price <> 0)`,
+
 		// Frames: UI admin butuh frame_code, category, description, file_size.
 		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS frame_code TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'Standard'`,
@@ -127,6 +138,28 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 			name TEXT NOT NULL DEFAULT 'Admin',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
+
+		// ─── Cegah transaksi pending duplikat per sesi ───────────────────────
+		// Akar bug "2 pembayaran untuk 1 sesi yang sama": CreatePayment dulu
+		// SELECT-lalu-INSERT (tidak atomik), jadi 2 request bersamaan bisa
+		// sama-sama membuat baris 'pending'. Saat satu dibayar, sisanya jadi
+		// 'expired' → muncul 2 baris di admin.
+		//
+		// 1) Rapikan data lama: kalau satu sesi punya >1 pending, sisakan yang
+		//    terbaru, sisanya jadi 'expired' (kalau tidak, pembuatan unique
+		//    index di bawah akan gagal).
+		`UPDATE transactions t SET status = 'expired'
+		   WHERE status = 'pending'
+		     AND EXISTS (
+		       SELECT 1 FROM transactions t2
+		       WHERE t2.session_id = t.session_id
+		         AND t2.status = 'pending'
+		         AND (t2.created_at > t.created_at
+		              OR (t2.created_at = t.created_at AND t2.id > t.id))
+		     )`,
+		// 2) Jaminan level DB: maksimal 1 transaksi 'pending' per sesi.
+		`CREATE UNIQUE INDEX IF NOT EXISTS uniq_transactions_pending_per_session
+		   ON transactions (session_id) WHERE status = 'pending'`,
 	}
 
 	for _, statement := range statements {
