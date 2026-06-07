@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"photobooth/database"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // POST /api/payment/create
@@ -111,6 +113,19 @@ func CreatePayment(w http.ResponseWriter, r *http.Request) {
 		now.UTC(),
 	)
 	if err != nil {
+		// Race condition: request lain sudah membuat transaksi 'pending' untuk
+		// sesi ini lebih dulu (ditolak partial unique index). Kembalikan
+		// transaksi yang sudah ada itu daripada membuat baris kedua — inilah
+		// yang dulu memunculkan 2 pembayaran untuk 1 sesi yang sama.
+		if isUniqueViolation(err) {
+			if existing, gerr := getPendingTransactionBySession(req.SessionID); gerr == nil {
+				respondJSON(w, http.StatusOK, models.SuccessResponse(models.CreatePaymentResponse{
+					Transaction: *existing,
+					Session:     *session,
+				}))
+				return
+			}
+		}
 		respondError(w, http.StatusInternalServerError, "Gagal menyimpan transaksi")
 		return
 	}
@@ -267,6 +282,27 @@ func PaymentWebhook(w http.ResponseWriter, r *http.Request) {
 
 // ─── Helper ──────────────────────────────────────────────────────────────────
 
+// isUniqueViolation true kalau err adalah pelanggaran unique constraint Postgres
+// (SQLSTATE 23505), mis. dari partial unique index 1-pending-per-sesi.
+func isUniqueViolation(err error) bool {
+	var pqErr *pq.Error
+	return errors.As(err, &pqErr) && pqErr.Code == "23505"
+}
+
+// getPendingTransactionBySession ambil transaksi 'pending' milik sesi (kalau ada).
+func getPendingTransactionBySession(sessionID string) (*models.Transaction, error) {
+	var id string
+	if err := database.DB.QueryRow(`
+		SELECT id FROM transactions
+		WHERE session_id = ? AND status = 'pending'
+		ORDER BY created_at DESC
+		LIMIT 1`, sessionID,
+	).Scan(&id); err != nil {
+		return nil, err
+	}
+	return getTransactionByID(id)
+}
+
 func getTransactionByID(id string) (*models.Transaction, error) {
 	row := database.DB.QueryRow(`
 		SELECT 
@@ -331,6 +367,17 @@ func markTransactionPaid(orderID string) (string, error) {
 
 	if _, err := tx.Exec(`
 		UPDATE sessions SET status = 'paid' WHERE id = ?`, sessionID,
+	); err != nil {
+		return "", err
+	}
+
+	// Batalkan transaksi pending lain milik sesi yang sama (duplikat dari
+	// retry/buka-ulang/race) supaya tidak menggantung sebagai "Pending" di admin
+	// padahal sesinya sudah lunas. Hanya yang masih 'pending' yang disentuh.
+	if _, err := tx.Exec(`
+		UPDATE transactions SET status = 'expired'
+		WHERE session_id = ? AND status = 'pending' AND midtrans_order_id <> ?`,
+		sessionID, orderID,
 	); err != nil {
 		return "", err
 	}

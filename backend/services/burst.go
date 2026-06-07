@@ -57,17 +57,10 @@ func BurstFramesDir(sessionID, photoID string) string {
 	return filepath.Join(burstSessionDir(sessionID), photoID)
 }
 
-// StartBurstCapture spawn goroutine yang capture liveview frame berkala
-// selama countdown. Aman dipanggil walau kamera tipe builtin (akan no-op
-// karena GetLiveViewFrame dari builtin shell out ffmpeg per call dan
-// mahal — kita skip dan biarkan frontend yang capture sendiri kalau perlu).
+// StartBurstCapture spawn goroutine yang capture liveview frame Canon berkala
+// selama countdown, untuk animated-strip GIF.
 func StartBurstCapture(sessionID string) {
 	if sessionID == "" {
-		return
-	}
-	// Hanya Canon yang punya liveview cepat di backend. Builtin pakai
-	// browser camera, jadi backend tidak punya frame source yang murah.
-	if GetCameraType() == "builtin" {
 		return
 	}
 

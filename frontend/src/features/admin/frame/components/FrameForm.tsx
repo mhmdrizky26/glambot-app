@@ -99,42 +99,63 @@ export function FrameForm({
     reader.readAsDataURL(selectedFile);
   };
 
-  const handleNext = async () => {
-    const isStep1Valid = await form.trigger(['canvasWidth', 'canvasHeight', 'slots']);
+  const handleNext = () => {
+    // Hanya butuh file (mode create) untuk lanjut. Validasi canvas/slot
+    // dijalankan saat Save — kalau gerbang ini memvalidasi slot di sini, frame
+    // dengan slot lama yang sedikit beda bisa membuat Next "diam" tak pernah
+    // masuk Step 2. Error Step 1 (kalau ada) dimunculkan saat submit.
     const hasFile = mode === 'edit' || file || previewUrl;
-
     if (!hasFile) {
       setFileError('File frame wajib diupload');
       return;
     }
-
-    if (isStep1Valid) {
-      setFileError('');
-      setCurrentStep(2);
-    }
+    setFileError('');
+    setCurrentStep(2);
   };
 
   const handleBack = () => {
     setCurrentStep(1);
   };
 
-  const handleFormSubmit = form.handleSubmit(async (data: FrameFormData) => {
-    const submitData: UpdateFrameInput = {
-      name: data.name,
-      category: data.category,
-      description: data.description,
-      status: data.status,
-      canvasWidth: data.canvasWidth,
-      canvasHeight: data.canvasHeight,
-      slots: data.slots,
-    };
+  const submitForm = form.handleSubmit(
+    async (data: FrameFormData) => {
+      const submitData: UpdateFrameInput = {
+        name: data.name,
+        category: data.category,
+        description: data.description,
+        status: data.status,
+        canvasWidth: data.canvasWidth,
+        canvasHeight: data.canvasHeight,
+        slots: data.slots,
+      };
 
-    if (file) {
-      submitData.file = file;
+      if (file) {
+        submitData.file = file;
+      }
+
+      await onSubmit(submitData);
+    },
+    (errors) => {
+      // Field Step 1 (canvas/slot) tidak terlihat saat di Step 2 — balik ke
+      // Step 1 agar admin bisa melihat & memperbaiki errornya.
+      if (errors.canvasWidth || errors.canvasHeight || errors.slots) {
+        setCurrentStep(1);
+      }
+    },
+  );
+
+  // Penjaga submit: form HANYA menyimpan saat di Step 2. Submit apa pun di
+  // Step 1 (mis. tombol Enter di input, atau event yang lolos) dialihkan jadi
+  // "lanjut ke Step 2" — bukan menyimpan & keluar. Ini mencegah bug "Next
+  // malah submit / tidak pernah masuk Step 2".
+  const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (currentStep !== 2) {
+      handleNext();
+      return;
     }
-
-    await onSubmit(submitData);
-  });
+    void submitForm(e);
+  };
 
   const progress = (currentStep / 2) * 100;
 
@@ -249,6 +270,10 @@ export function FrameForm({
                   {/* Canvas Size */}
                   <div className="space-y-3">
                     <Label className="text-sm font-semibold">Canvas Size</Label>
+                    <p className="text-muted-foreground text-xs">
+                      Rasio terkunci 2:3 (mis. 464×696, 400×600) — ubah salah satu,
+                      yang lain menyesuaikan otomatis.
+                    </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div>
                         <Label htmlFor="canvasWidth" className="text-xs">
@@ -264,9 +289,16 @@ export function FrameForm({
                                 id="canvasWidth"
                                 type="number"
                                 className={`mt-1 ${fieldState.invalid ? 'border-destructive' : ''}`}
-                                onChange={(e) =>
-                                  field.onChange(Number(e.target.value))
-                                }
+                                onChange={(e) => {
+                                  // Kunci rasio 2:3 (464×696). Height ikut width.
+                                  const w = Number(e.target.value);
+                                  field.onChange(w);
+                                  form.setValue(
+                                    'canvasHeight',
+                                    Math.round(w * 1.5),
+                                    { shouldValidate: true },
+                                  );
+                                }}
                               />
                               {fieldState.invalid && (
                                 <p className="text-destructive mt-1 flex items-center gap-1 text-xs">
@@ -292,9 +324,16 @@ export function FrameForm({
                                 id="canvasHeight"
                                 type="number"
                                 className={`mt-1 ${fieldState.invalid ? 'border-destructive' : ''}`}
-                                onChange={(e) =>
-                                  field.onChange(Number(e.target.value))
-                                }
+                                onChange={(e) => {
+                                  // Kunci rasio 2:3 (464×696). Width ikut height.
+                                  const h = Number(e.target.value);
+                                  field.onChange(h);
+                                  form.setValue(
+                                    'canvasWidth',
+                                    Math.round(h / 1.5),
+                                    { shouldValidate: true },
+                                  );
+                                }}
                               />
                               {fieldState.invalid && (
                                 <p className="text-destructive mt-1 flex items-center gap-1 text-xs">
@@ -522,9 +561,13 @@ export function FrameForm({
             <Button
               type="button"
               variant="outline"
-              onClick={() =>
-                currentStep === 1 ? router.push('/frame') : handleBack()
-              }
+              onClick={() => {
+                if (currentStep === 1) {
+                  router.push('/frame');
+                } else {
+                  handleBack();
+                }
+              }}
               disabled={isSubmitting}
             >
               {currentStep === 1 ? (
@@ -539,6 +582,7 @@ export function FrameForm({
 
             {currentStep === 1 ? (
               <Button
+                key="frame-step-next"
                 type="button"
                 onClick={handleNext}
                 disabled={isSubmitting}
@@ -548,7 +592,12 @@ export function FrameForm({
                 <ArrowRight className="size-4" />
               </Button>
             ) : (
-              <Button type="submit" disabled={isSubmitting} className="gap-2">
+              <Button
+                key="frame-step-save"
+                type="submit"
+                disabled={isSubmitting}
+                className="gap-2"
+              >
                 {isSubmitting ? 'Saving...' : 'Save Frame'}
                 <Check className="size-4" />
               </Button>

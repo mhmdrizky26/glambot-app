@@ -244,7 +244,7 @@ func AdminCreateVoucher(w http.ResponseWriter, r *http.Request) {
 		code, description, discountType, discountValue, minPrice, maxUses, isActive, expiresAt,
 	)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal membuat voucher: "+err.Error())
+		respondInternal(w, "create voucher", err)
 		return
 	}
 	loadVoucherByCode(w, code)
@@ -298,7 +298,7 @@ func AdminUpdateVoucher(w http.ResponseWriter, r *http.Request) {
 		query := "UPDATE vouchers SET " + strings.Join(sets, ", ") + " WHERE code = ?"
 		args = append(args, code)
 		if _, err := database.DB.Exec(query, args...); err != nil {
-			respondError(w, http.StatusInternalServerError, "Gagal mengupdate voucher: "+err.Error())
+			respondInternal(w, "update voucher", err)
 			return
 		}
 	}

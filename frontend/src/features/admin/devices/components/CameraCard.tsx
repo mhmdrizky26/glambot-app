@@ -1,13 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import Image from 'next/image';
-import {
-  CameraIcon,
-  WifiIcon,
-  WifiOffIcon,
-  ImageIcon,
-} from 'lucide-react';
+import { CameraIcon, WifiIcon, WifiOffIcon } from 'lucide-react';
 
 interface CameraInfo {
   id: string;
@@ -48,24 +42,6 @@ export function CameraCard({ data }: CameraCardProps) {
         </span>
       </div>
 
-      {/* Image placeholder */}
-      <div className="bg-muted relative mx-auto flex aspect-[383/280] w-full max-w-[383px] items-center justify-center overflow-hidden rounded-lg border">
-        {data.imageSrc ? (
-          <Image
-            src={data.imageSrc}
-            alt="Camera preview"
-            fill
-            className="object-cover"
-            unoptimized
-          />
-        ) : (
-          <div className="flex flex-col items-center gap-2 text-muted-foreground">
-            <ImageIcon className="size-10" />
-            <span className="text-xs">No preview available</span>
-          </div>
-        )}
-      </div>
-
       {/* Connection status */}
       <div
         className={`flex items-center gap-3 rounded-lg border p-3 ${
@@ -104,10 +80,12 @@ export function CameraCard({ data }: CameraCardProps) {
           <span className="text-muted-foreground">ID Camera</span>
           <span className="text-right font-medium">{data.id}</span>
         </div>
+        {/* Resolution belum bisa dibaca dari device (backend kirim N/A) — sembunyikan dulu.
         <div className="flex justify-between border-b pb-2">
           <span className="text-muted-foreground">Resolution</span>
           <span className="text-right font-medium">{data.resolution}</span>
         </div>
+        */}
         <div className="flex justify-between border-b pb-2">
           <span className="text-muted-foreground">Status</span>
           <span className="text-right font-medium">{data.status}</span>
@@ -118,9 +96,7 @@ export function CameraCard({ data }: CameraCardProps) {
         </div>
         <div className="flex justify-between">
           <span className="text-muted-foreground">Active Duration</span>
-          <span className="text-right font-medium">
-            {data.activeDuration}
-          </span>
+          <span className="text-right font-medium">{data.activeDuration}</span>
         </div>
       </div>
     </div>

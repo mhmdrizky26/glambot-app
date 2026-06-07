@@ -81,15 +81,17 @@ func printWindows(path, printer string, copies int) error {
 	return nil
 }
 
-// printScript adalah skrip PowerShell yang men-scale gambar agar MUAT UTUH di
-// kertas 4R (tanpa terpotong) lalu mencetaknya senyap ke printer yang ditentukan.
+// printScript adalah skrip PowerShell yang mencetak frame ke kertas 4R tanpa
+// border putih DAN tanpa desain kepotong, lalu mencetaknya senyap ke printer.
 //
-//   - Memilih paper size 4R/4x6/10x15 biasa (bukan borderless) kalau tersedia.
-//   - Menggambar ke PrintableArea (area cetak nyata), bukan seluruh kertas,
-//     supaya bagian tepi tidak ter-clip oleh margin tak-tercetak printer.
-//   - Skala fit-to-page (Min) menjaga rasio dan menjamin tidak ada yang
-//     terpotong: karena canvas frame 2:3 sama dengan rasio 4R, gambar mengisi
-//     area cetak nyaris penuh (paling ada border putih tipis sebesar margin).
+//   - Memilih paper size 4R/4x6/10x15 BORDERLESS kalau tersedia (tinta sampai
+//     ujung). Kalau tidak ada, fallback ke 4x6 biasa.
+//   - Borderless: teknik SYNTHETIC BLEED — frame digambar di zona aman lalu
+//     tepinya diperlebar (1px terluar diregangkan) untuk mengisi sampai ujung
+//     kertas. Overscan printer cuma memakan perpanjangan tepi itu, jadi desain
+//     frame tetap utuh dan tidak ada border putih.
+//   - Non-borderless: fit-to-page ke PrintableArea — frame utuh, ada border
+//     putih tipis sebesar margin tak-tercetak printer.
 const printScript = `param(
   [Parameter(Mandatory=$true)][string]$ImagePath,
   [Parameter(Mandatory=$true)][string]$Printer,
@@ -108,10 +110,11 @@ try {
   $doc.DocumentName = 'Photobooth Strip'
 
   # Pilih ukuran kertas 4R (4x6 inch = 400x600 ratusan-inci). Utamakan varian
-  # 4x6 BIASA (bukan borderless): mode borderless membuat driver sengaja meng-
-  # overscan (memperbesar lalu memotong tepi) supaya tanpa border putih, dan itu
-  # justru bikin frame kepotong. Borderless hanya dipakai kalau tidak ada 4x6
-  # biasa sama sekali.
+  # BORDERLESS supaya tinta sampai ke ujung kertas (tanpa border putih). Untuk
+  # mencegah desain frame kepotong oleh overscan borderless, dipakai teknik
+  # synthetic bleed di add_PrintPage (lihat di bawah). Kalau printer tidak punya
+  # 4x6 borderless, pakai 4x6 biasa + jalur fit-to-page (ada border tipis, tapi
+  # tidak kepotong).
   $best = $null
   $bestBorderless = $null
   foreach ($ps in $doc.PrinterSettings.PaperSizes) {
@@ -125,11 +128,13 @@ try {
       $best = $ps
     }
   }
-  $chosen = if ($best) { $best } else { $bestBorderless }
+  $chosen = if ($bestBorderless) { $bestBorderless } else { $best }
+  $isBorderless = ($null -ne $bestBorderless) -and ($chosen -eq $bestBorderless)
   if ($chosen) {
     $doc.DefaultPageSettings.PaperSize = $chosen
-    Write-Output ("PaperSize: {0} ({1}x{2})" -f $chosen.PaperName, $chosen.Width, $chosen.Height)
+    Write-Output ("PaperSize: {0} ({1}x{2}) borderless={3}" -f $chosen.PaperName, $chosen.Width, $chosen.Height, $isBorderless)
   } else {
+    $isBorderless = $false
     Write-Output 'PaperSize: (tidak ada 4x6 cocok, pakai default driver)'
   }
 
@@ -140,23 +145,70 @@ try {
 
   $doc.add_PrintPage({
     param($s, $e)
-    # Pakai AREA CETAK NYATA, bukan seluruh kertas. Printer punya margin tak-
-    # tercetak di tepi; kalau kita menggambar ke seluruh kertas, bagian yang
-    # jatuh di margin itu ter-clip hardware dan kelihatan seperti kepotong.
-    # Dengan fit ke PrintableArea, seluruh frame dijamin muat utuh (paling ada
-    # border putih tipis sebesar margin printer, tapi tidak ada yang terpotong).
-    $area = $e.PageSettings.PrintableArea
-    $ox = $area.X; $oy = $area.Y
-    $aw = $area.Width; $ah = $area.Height
+    $g = $e.Graphics
+    $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $iw = $img.Width; $ih = $img.Height
-    # Fit-to-PAGE (contain): skala TERKECIL supaya seluruh gambar muat utuh.
-    $scale = [Math]::Min($aw / $iw, $ah / $ih)
-    $dw = $iw * $scale; $dh = $ih * $scale
-    $dx = $ox + ($aw - $dw) / 2
-    $dy = $oy + ($ah - $dh) / 2
-    $e.Graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-    $e.Graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
-    $e.Graphics.DrawImage($img, $dx, $dy, $dw, $dh)
+
+    if ($isBorderless) {
+      # === SYNTHETIC BLEED (borderless) ===
+      # Printer borderless WAJIB meng-overscan: ia memperbesar isi lalu memotong
+      # tepinya supaya tinta sampai ke ujung kertas. Kalau frame digambar penuh,
+      # tepi DESAIN-nya yang kepotong. Solusinya: gambar frame di "zona aman"
+      # (sedikit lebih kecil dari kertas), lalu ISI sisa tepi sampai ujung dengan
+      # MEREGANGKAN 1px tepi frame keluar. Jadi yang dimakan overscan hanyalah
+      # perpanjangan tepi itu, bukan desain frame -> tanpa border putih & utuh.
+      $page = $e.PageBounds
+      $pw = $page.Width; $ph = $page.Height
+      # Sisakan ~3% tiap sisi sebagai "umpan" overscan.
+      $bleed = [int][Math]::Round([Math]::Max($pw, $ph) * 0.03)
+      $innerW = $pw - 2 * $bleed
+      $innerH = $ph - 2 * $bleed
+      $scale = [Math]::Min($innerW / $iw, $innerH / $ih)
+      $fw = $iw * $scale; $fh = $ih * $scale
+      $fx = ($pw - $fw) / 2
+      $fy = ($ph - $fh) / 2
+      $rB = $fx + $fw; $bB = $fy + $fh
+
+      # Clamp/mirror tepi supaya peregangan tidak menarik garis transparan.
+      $ia = New-Object System.Drawing.Imaging.ImageAttributes
+      $ia.SetWrapMode([System.Drawing.Drawing2D.WrapMode]::TileFlipXY)
+
+      function DrawPart($g, $img, $dx, $dy, $dw, $dh, $sx, $sy, $sw, $sh, $ia) {
+        if ($dw -le 0 -or $dh -le 0) { return }
+        $dest = New-Object System.Drawing.Rectangle(
+          [int][Math]::Floor($dx), [int][Math]::Floor($dy),
+          [int][Math]::Ceiling($dw), [int][Math]::Ceiling($dh))
+        $g.DrawImage($img, $dest, $sx, $sy, $sw, $sh,
+          [System.Drawing.GraphicsUnit]::Pixel, $ia)
+      }
+
+      # Tengah: frame utuh di zona aman.
+      DrawPart $g $img $fx $fy $fw $fh 0 0 $iw $ih $ia
+      # Empat tepi (regangkan 1px baris/kolom terluar).
+      DrawPart $g $img $fx 0   $fw $fy        0        0        $iw 1   $ia
+      DrawPart $g $img $fx $bB $fw ($ph-$bB)  0        ($ih-1)  $iw 1   $ia
+      DrawPart $g $img 0   $fy $fx $fh        0        0        1   $ih $ia
+      DrawPart $g $img $rB $fy ($pw-$rB) $fh  ($iw-1)  0        1   $ih $ia
+      # Empat sudut (regangkan 1px pojok).
+      DrawPart $g $img 0   0   $fx $fy              0       0       1 1 $ia
+      DrawPart $g $img $rB 0   ($pw-$rB) $fy        ($iw-1) 0       1 1 $ia
+      DrawPart $g $img 0   $bB $fx ($ph-$bB)        0       ($ih-1) 1 1 $ia
+      DrawPart $g $img $rB $bB ($pw-$rB) ($ph-$bB)  ($iw-1) ($ih-1) 1 1 $ia
+    } else {
+      # === FIT-TO-PAGE (tanpa borderless) ===
+      # Gambar ke AREA CETAK NYATA (PrintableArea), bukan seluruh kertas, supaya
+      # tepi tidak ter-clip margin tak-tercetak. Seluruh frame utuh; paling ada
+      # border putih tipis sebesar margin printer.
+      $area = $e.PageSettings.PrintableArea
+      $ox = $area.X; $oy = $area.Y
+      $aw = $area.Width; $ah = $area.Height
+      $scale = [Math]::Min($aw / $iw, $ah / $ih)
+      $dw = $iw * $scale; $dh = $ih * $scale
+      $dx = $ox + ($aw - $dw) / 2
+      $dy = $oy + ($ah - $dh) / 2
+      $g.DrawImage($img, $dx, $dy, $dw, $dh)
+    }
     $e.HasMorePages = $false
   })
 

@@ -36,6 +36,7 @@ pnpm-debug.log*
 # ─── Go build artifacts ──────────────────────────────────────────────────────
 backend/bin/
 backend/*.exe
+backend/**/*.exe
 backend/*.test
 backend/*.out
 backend/photobooth
@@ -48,6 +49,18 @@ backend/storage/sessions/
 backend/storage/*.db
 backend/storage/**/*.db
 backend/storage/tmp/
+
+# Frame & package: upload admin saat runtime (nama uuid) JANGAN di-commit.
+# Seed default (frame-164..167.svg, digital.svg, print.svg) tetap di-track via
+# pengecualian "!" di bawah. File seed baru → tambahkan "!"-nya atau `git add -f`.
+backend/storage/frames/*
+!backend/storage/frames/frame-164.svg
+!backend/storage/frames/frame-165.svg
+!backend/storage/frames/frame-166.svg
+!backend/storage/frames/frame-167.svg
+backend/storage/packages/*
+!backend/storage/packages/digital.svg
+!backend/storage/packages/print.svg
 
 # ─── Generic logs ────────────────────────────────────────────────────────────
 *.log
@@ -62,6 +75,14 @@ skills-lock.json
 .claude/settings.local.json
 .claude/cache/
 .claude/logs/
+
+# ─── Kredensial Google Drive (defensif — JANGAN commit) ──────────────────────
+# Integrasi pakai env (GOOGLE_*), tapi cegah kalau ada yang pakai file kredensial.
+credentials.json
+*credentials*.json
+token.json
+gdrive-token.json
+service-account*.json
 
 # ─── Deployment / Misc ───────────────────────────────────────────────────────
 .vercel/

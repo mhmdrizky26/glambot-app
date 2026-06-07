@@ -11,6 +11,7 @@ export type CreatePackageInput = {
   status: PackageStatus;
   isPopular?: boolean;
   printCount?: number;
+  printUnitPrice?: number;
   image?: File;
 };
 
@@ -29,6 +30,8 @@ export const createPackage = async (
     formData.append('is_popular', input.isPopular.toString());
   if (input.printCount !== undefined)
     formData.append('print_count', input.printCount.toString());
+  if (input.printUnitPrice !== undefined)
+    formData.append('print_unit_price', input.printUnitPrice.toString());
   if (input.image) formData.append('image', input.image);
 
   const response = await axiosInstance.post('/api/admin/packages', formData, {

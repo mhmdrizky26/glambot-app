@@ -22,9 +22,12 @@ import (
 
 // POST /api/photo/upload
 func UploadPhoto(w http.ResponseWriter, r *http.Request) {
-	// Max 10MB per foto
+	// Hard cap ukuran request 15MB (cegah upload raksasa mengisi disk/RAM).
+	// ParseMultipartForm(10MB) hanya batas memori; sisanya spill ke temp tanpa
+	// MaxBytesReader. Dengan ini total body dibatasi tegas.
+	r.Body = http.MaxBytesReader(w, r.Body, 15<<20)
 	if err := r.ParseMultipartForm(10 << 20); err != nil {
-		respondError(w, http.StatusBadRequest, "Gagal membaca form upload")
+		respondError(w, http.StatusBadRequest, "File terlalu besar atau form tidak valid")
 		return
 	}
 	if r.MultipartForm != nil {
@@ -203,7 +206,10 @@ func GetFrames(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if len(slotsBytes) > 0 {
-			f.Slots = slotsBytes
+			// Pastikan tiap slot punya id unik — frame lama tersimpan tanpa id,
+			// yang membuat editor publik menumpuk semua slot jadi satu.
+			norm, _ := ensureSlotIDs(slotsBytes)
+			f.Slots = norm
 		} else {
 			f.Slots = []byte("[]")
 		}
@@ -591,8 +597,8 @@ func selectedRawRelPaths(sessionID string) []string {
 // GET /api/photo/session/{sessionID}/gif-live/available
 // Cek ringan: apakah GIF #2 (Live Strip) tersedia untuk session ini?
 // Tersedia = ada framed strip + minimal satu foto terpilih yang punya burst
-// frames. Mode builtin webcam tidak menghasilkan burst → endpoint ini akan
-// return false dan frontend bisa hide tombol/preview supaya UX bersih.
+// frames. Kalau liveview Canon sempat gagal saat countdown (tidak ada burst),
+// endpoint ini return false dan frontend bisa hide tombol/preview supaya UX bersih.
 func GetSessionLiveGIFAvailable(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
 	if sessionID == "" {

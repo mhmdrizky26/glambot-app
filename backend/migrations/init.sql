@@ -2,7 +2,12 @@
 -- init.sql  —  Single-file canonical schema + seed for Glambot Photo Booth
 -- ────────────────────────────────────────────────────────────────────────────
 -- Idempotent: aman di-jalankan berkali-kali, baik di fresh DB maupun DB
--- yang sudah berisi data (pakai IF NOT EXISTS + ON CONFLICT DO UPDATE).
+-- yang sudah berisi data (pakai IF NOT EXISTS + ON CONFLICT DO NOTHING).
+--
+-- PENTING: seed (packages/frames/vouchers) bersifat INSERT-ONLY (DO NOTHING).
+-- File ini di-auto-run TIAP server startup, jadi DO UPDATE akan menimpa hasil
+-- edit admin ke nilai default setiap restart. Seed hanya mengisi data awal pada
+-- install baru; perubahan via dashboard admin yang menjadi sumber kebenaran.
 --
 -- File ini di-auto-run oleh backend saat startup (lihat
 -- backend/database/database.go runMigrations). Bisa juga manual via:
@@ -21,6 +26,7 @@ CREATE TABLE IF NOT EXISTS packages (
   base_price INTEGER NOT NULL CHECK (base_price >= 0),
   duration_secs INTEGER NOT NULL CHECK (duration_secs > 0),
   print_count SMALLINT NOT NULL DEFAULT 3 CHECK (print_count > 0),
+  print_unit_price INTEGER NOT NULL DEFAULT 0 CHECK (print_unit_price >= 0),
   image_src TEXT,
   is_popular INTEGER NOT NULL DEFAULT 0 CHECK (is_popular IN (0, 1)),
   is_active INTEGER NOT NULL DEFAULT 1 CHECK (is_active IN (0, 1)),
@@ -51,6 +57,7 @@ CREATE TABLE IF NOT EXISTS sessions (
   category TEXT NOT NULL DEFAULT '',
   duration_secs INTEGER NOT NULL,
   print_count INTEGER NOT NULL DEFAULT 3,
+  print_unit_price INTEGER NOT NULL DEFAULT 0,
   price INTEGER NOT NULL,
   discount INTEGER NOT NULL DEFAULT 0,
   final_price INTEGER NOT NULL,
@@ -123,6 +130,10 @@ CREATE INDEX IF NOT EXISTS idx_voucher_usage_session_id ON voucher_usage (sessio
 -- Code 'regular' = Digital Package (id=1 di fresh install)
 -- Code 'vip'     = Print Package   (id=2 di fresh install)
 
+-- Catatan: kolom print_unit_price sengaja TIDAK disebut di seed ini. Di DB lama,
+-- init.sql dijalankan sebelum ALTER ADD COLUMN (lihat applyCompatibilityMigrations),
+-- jadi menyebut kolom baru di sini akan gagal. Nilai vip=15000 diisi via backfill
+-- di compatibility migration. Install baru cukup pakai DEFAULT 0 dari CREATE TABLE.
 INSERT INTO packages (code, name, description, base_price, duration_secs, print_count, image_src, is_popular, is_active, sort_order)
 VALUES
   ('regular', 'Digital Package',
@@ -131,17 +142,10 @@ VALUES
   ('vip', 'Print Package',
    'Printed photos with premium frame & digital copies included',
    65000, 300, 3, '/storage/packages/print.svg', 1, 1, 2)
-ON CONFLICT (code) DO UPDATE SET
-  name = EXCLUDED.name,
-  description = EXCLUDED.description,
-  base_price = EXCLUDED.base_price,
-  duration_secs = EXCLUDED.duration_secs,
-  print_count = EXCLUDED.print_count,
-  image_src = EXCLUDED.image_src,
-  is_popular = EXCLUDED.is_popular,
-  is_active = EXCLUDED.is_active,
-  sort_order = EXCLUDED.sort_order,
-  updated_at = NOW();
+-- Insert-only: seed hanya mengisi default pada install baru. Pakai DO NOTHING
+-- (BUKAN DO UPDATE) supaya edit admin TIDAK ditimpa kembali ke nilai seed setiap
+-- kali server restart (init.sql dijalankan ulang di tiap boot).
+ON CONFLICT (code) DO NOTHING;
 
 -- ─── Seed: Frames (4 frame default dengan slot coordinates) ──────────────────
 
@@ -184,16 +188,9 @@ VALUES
       {"id":"slot-5","shape":"ellipse","x":11.26, "y":419.00, "width":210.63,"height":166.00,"label":"Bottom Left"},
       {"id":"slot-6","shape":"ellipse","x":242.63,"y":422.00, "width":209.00,"height":159.00,"label":"Bottom Right"}
    ]'::jsonb, 4)
-ON CONFLICT (id) DO UPDATE SET
-  name = EXCLUDED.name,
-  file_path = EXCLUDED.file_path,
-  thumb_url = EXCLUDED.thumb_url,
-  photo_slots = EXCLUDED.photo_slots,
-  canvas_width = EXCLUDED.canvas_width,
-  canvas_height = EXCLUDED.canvas_height,
-  slots = EXCLUDED.slots,
-  sort_order = EXCLUDED.sort_order,
-  updated_at = NOW();
+-- Insert-only: lihat catatan pada seed packages. DO NOTHING agar nama/slot/canvas
+-- frame default yang diedit admin tidak ke-reset ke nilai seed tiap server boot.
+ON CONFLICT (id) DO NOTHING;
 
 -- ─── Seed: Vouchers (4 voucher default) ──────────────────────────────────────
 
@@ -203,13 +200,8 @@ VALUES
   ('FREESHIP',  'Flat Rp15.000 discount',             'fixed',   15000,  0,     50,  0, 1),
   ('GLAMSHINE', '50% off — special Glambot moment',   'percent', 50,     0,     100, 0, 1),
   ('GLAMHERO',  'Gratis 1 sesi penuh — Glambot Hero', 'percent', 100,    0,     50,  0, 1)
-ON CONFLICT (code) DO UPDATE SET
-  description = EXCLUDED.description,
-  discount_type = EXCLUDED.discount_type,
-  discount_value = EXCLUDED.discount_value,
-  min_price = EXCLUDED.min_price,
-  max_uses = EXCLUDED.max_uses,
-  is_active = EXCLUDED.is_active;
-  -- NOTE: used_count NOT diupdate (preserve usage history)
+-- Insert-only: lihat catatan pada seed packages. DO NOTHING agar voucher default
+-- yang diedit admin tidak ke-reset tiap server boot.
+ON CONFLICT (code) DO NOTHING;
 
 COMMIT;

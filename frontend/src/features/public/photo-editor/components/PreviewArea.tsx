@@ -13,9 +13,9 @@ import {
 import { fitPhotoToSlot } from '../lib/photoFitting';
 import { applyFilterToComposition } from '../lib/filters';
 
-/** Native canvas dimensions (must match frame SVG viewBox) */
-const CANVAS_W = 464;
-const CANVAS_H = 696;
+/** Fallback canvas dimensions bila frame tidak menyimpan ukuran (2:3, 4R). */
+const DEFAULT_CANVAS_W = 464;
+const DEFAULT_CANVAS_H = 696;
 
 interface PreviewAreaProps {
   selectedFrame: Frame | null;
@@ -30,6 +30,11 @@ export default function PreviewArea({
   onPhotoDropped,
   onCanvasReady,
 }: PreviewAreaProps) {
+  // Render di ruang koordinat asli frame (sama dengan slot disimpan di admin).
+  // Server-side GIF & print sudah canvas-aware, jadi cukup samakan di sini.
+  const CANVAS_W = selectedFrame?.canvasWidth || DEFAULT_CANVAS_W;
+  const CANVAS_H = selectedFrame?.canvasHeight || DEFAULT_CANVAS_H;
+
   const { canvasRef, fabricCanvas, getFabricCanvas } = useCanvasRenderer({
     width: CANVAS_W,
     height: CANVAS_H,
@@ -63,44 +68,49 @@ export default function PreviewArea({
     const observer = new ResizeObserver(updateScale);
     observer.observe(container);
     return () => observer.disconnect();
-  }, [selectedFrame]);
+  }, [selectedFrame, CANVAS_W, CANVAS_H]);
 
-  // Load frame when selection changes
+  // Load frame when selection changes.
+  // Pakai instance canvas hidup dari ref (getFabricCanvas), BUKAN nilai closure
+  // `fabricCanvas`. Saat dimensi frame berubah, canvas lama di-dispose & dibuat
+  // ulang dalam commit yang sama; closure `fabricCanvas` masih menunjuk canvas
+  // mati sehingga `.clear()` di atasnya melempar "clearRect of null". `fabricCanvas`
+  // tetap di dependency hanya sebagai pemicu re-run setelah canvas dibuat ulang.
   useEffect(() => {
+    const canvas = getFabricCanvas();
+    if (!canvas) return;
+
     if (!selectedFrame) {
-      if (fabricCanvas) {
-        fabricCanvas.clear();
-        loadedSlotsRef.current.clear();
-        loadedFrameIdRef.current = null;
-      }
+      canvas.clear();
+      loadedSlotsRef.current.clear();
+      loadedFrameIdRef.current = null;
       return;
     }
-
-    if (!fabricCanvas) return;
 
     const frameId = selectedFrame.id;
     if (loadedFrameIdRef.current === frameId) return;
 
-    fabricCanvas.clear();
+    canvas.clear();
     loadedSlotsRef.current.clear();
     loadedFrameIdRef.current = frameId;
 
-    loadFrameImage(fabricCanvas, selectedFrame.imageUrl)
+    loadFrameImage(canvas, selectedFrame.imageUrl)
       .then(() => {
-        organizeCanvasLayers(fabricCanvas);
+        organizeCanvasLayers(canvas);
       })
       .catch((err) => {
         console.error('Failed to load frame:', err);
         loadedFrameIdRef.current = null;
       });
-  }, [selectedFrame?.id, fabricCanvas]);
+  }, [selectedFrame?.id, fabricCanvas, getFabricCanvas]);
 
   // Apply filter when selectedFilter changes
   useEffect(() => {
-    if (!fabricCanvas) return;
+    const canvas = getFabricCanvas();
+    if (!canvas) return;
 
-    applyFilterToComposition(fabricCanvas, selectedFilter);
-  }, [selectedFilter, fabricCanvas]);
+    applyFilterToComposition(canvas, selectedFilter);
+  }, [selectedFilter, fabricCanvas, getFabricCanvas]);
 
   // Determine which slot contains the drop coordinates
   const getSlotAtPosition = useCallback(
@@ -127,7 +137,7 @@ export default function PreviewArea({
         ) ?? null
       );
     },
-    [selectedFrame, canvasRef],
+    [selectedFrame, canvasRef, CANVAS_W, CANVAS_H],
   );
 
   // --- Drag & Drop handlers ---

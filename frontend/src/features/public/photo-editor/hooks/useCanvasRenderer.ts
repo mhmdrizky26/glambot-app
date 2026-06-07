@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import { fabric } from 'fabric';
 
 /**
@@ -22,26 +22,25 @@ export const useCanvasRenderer = ({
 }: UseCanvasRendererOptions = {}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+  // State-driven agar konsumer re-render saat canvas (re)dibuat — penting karena
+  // canvas dibuat ulang ketika dimensi frame berubah (mis. 464×696 → 400×600).
+  const [fabricCanvas, setFabricCanvas] = useState<fabric.Canvas | null>(null);
 
-  // Stabilize onReady callback reference to avoid re-init on every render
+  // Stabilize onReady callback reference to avoid re-init on every render.
+  // Disetel via effect (bukan saat render) agar tidak melanggar aturan refs.
   const onReadyRef = useRef(onReady);
-  onReadyRef.current = onReady;
+  useEffect(() => {
+    onReadyRef.current = onReady;
+  }, [onReady]);
 
+  // Buat ulang canvas saat ukuran berubah. Dimensi diturunkan dari
+  // frame.canvas_width/height (lihat PreviewArea), jadi tiap frame dirender di
+  // ruang koordinat aslinya dan posisi slot selalu pas.
   useEffect(() => {
     const canvasEl = canvasRef.current;
     if (!canvasEl) return;
 
-    // Prevent double initialization (React StrictMode)
-    if (fabricCanvasRef.current) {
-      const existingCanvas = fabricCanvasRef.current;
-      return () => {
-        existingCanvas.dispose();
-        fabricCanvasRef.current = null;
-      };
-    }
-
-    // Initialize Fabric.js canvas
-    const fabricCanvas = new fabric.Canvas(canvasEl, {
+    const canvas = new fabric.Canvas(canvasEl, {
       width,
       height,
       selection: false, // Disable multi-select (not needed for photo editor)
@@ -49,34 +48,27 @@ export const useCanvasRenderer = ({
       preserveObjectStacking: true, // Maintain z-index order on selection
     });
 
-    fabricCanvasRef.current = fabricCanvas;
+    fabricCanvasRef.current = canvas;
+    setFabricCanvas(canvas);
+    onReadyRef.current?.(canvas);
 
-    // Notify consumer that canvas is ready
-    onReadyRef.current?.(fabricCanvas);
-
-    // Cleanup on unmount
+    // Cleanup saat unmount / sebelum re-init (StrictMode & perubahan dimensi).
     return () => {
-      fabricCanvas.dispose();
+      canvas.dispose();
       fabricCanvasRef.current = null;
+      setFabricCanvas(null);
     };
   }, [width, height]);
 
-  const clearCanvas = useCallback(() => {
-    const canvas = fabricCanvasRef.current;
-    if (!canvas) return;
-
-    canvas.clear();
-    canvas.renderAll();
-  }, []);
+  // Stabil agar aman dipakai sebagai dependency effect konsumer.
+  const getFabricCanvas = useCallback(() => fabricCanvasRef.current, []);
 
   return {
     /** Ref to attach to the <canvas> element */
     canvasRef,
     /** The Fabric.js canvas instance (null until initialized) */
-    fabricCanvas: fabricCanvasRef.current,
+    fabricCanvas,
     /** Get the current fabric canvas instance (always up-to-date via ref) */
-    getFabricCanvas: () => fabricCanvasRef.current,
-    /** Clear all objects from the canvas */
-    clearCanvas,
+    getFabricCanvas,
   };
 };

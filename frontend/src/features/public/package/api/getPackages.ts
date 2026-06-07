@@ -35,6 +35,7 @@ type BackendPackage = {
   is_popular?: boolean;
   isPopular?: boolean;
   print_count?: number;
+  print_unit_price?: number;
   pricePerPrint?: number;
 };
 
@@ -68,7 +69,9 @@ const normalizePackage = (pkg: BackendPackage): Package => {
   const durationSecs = pkg.duration_secs ?? pkg.durationSecs ?? 0;
   const title = pkg.name ?? pkg.title ?? code;
   const pricePerPrint =
-    pkg.pricePerPrint ?? (code === 'vip' ? 15000 : 0);
+    pkg.print_unit_price ??
+    pkg.pricePerPrint ??
+    (code === 'vip' ? 15000 : 0);
   const backendImg = toAbsoluteUrl(pkg.image_src ?? pkg.imageSrc);
   const popular = pkg.is_popular ?? pkg.isPopular;
 

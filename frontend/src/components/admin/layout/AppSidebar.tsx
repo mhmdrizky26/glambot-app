@@ -48,6 +48,11 @@ const navItems: NavItem[] = [
     iconKey: 'dashboard',
   },
   {
+    title: 'Transaction',
+    url: '/transaction',
+    iconKey: 'transaction',
+  },
+  {
     title: 'Packages',
     url: '/packages',
     iconKey: 'package',
@@ -63,11 +68,6 @@ const navItems: NavItem[] = [
     iconKey: 'frame',
   },
   {
-    title: 'Transaction',
-    url: '/transaction',
-    iconKey: 'transaction',
-  },
-  {
     title: 'Devices',
     url: '/devices',
     iconKey: 'monitor',
@@ -77,11 +77,12 @@ const navItems: NavItem[] = [
   //   url: '/filter',
   //   iconKey: 'filter',
   // },
-  {
-    title: 'Settings',
-    url: '/settings',
-    iconKey: 'setting',
-  },
+  // Settings di-hide dulu dari navbar (halamannya belum dipakai).
+  // {
+  //   title: 'Settings',
+  //   url: '/settings',
+  //   iconKey: 'setting',
+  // },
 ];
 
 function renderSidebarIcon(item: NavItem, isActive: boolean) {

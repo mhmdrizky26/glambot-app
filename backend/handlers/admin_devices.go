@@ -1,8 +1,10 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"photobooth/services"
@@ -54,8 +56,63 @@ type devicesResponse struct {
 	Robot   robotStatusDTO   `json:"robot"`
 }
 
-func nowStamp() string {
-	return time.Now().Format("02 Jan 2006, 15:04")
+const stampLayout = "02 Jan 2006, 15:04"
+
+// deviceState melacak online/offline tiap device antar-poll. In-memory: reset
+// saat backend restart, dan hanya ter-update saat endpoint /api/admin/devices
+// dipanggil (mis. saat halaman Devices dibuka).
+type deviceState struct {
+	onlineSince time.Time // kapan device mulai online (untuk hitung durasi)
+	lastSeen    time.Time // waktu terakhir device terlihat online
+	wasOnline   bool
+}
+
+var (
+	deviceStates   = map[string]*deviceState{}
+	deviceStatesMu sync.Mutex
+)
+
+// trackDevice menerima status online device sekarang, lalu mengembalikan teks
+// "Last Active" (waktu terakhir online) dan "Active Duration" (lama online
+// berjalan — hanya terisi saat device online; offline → N/A).
+func trackDevice(key string, online bool, now time.Time) (lastActive, activeDuration string) {
+	deviceStatesMu.Lock()
+	defer deviceStatesMu.Unlock()
+
+	st := deviceStates[key]
+	if st == nil {
+		st = &deviceState{}
+		deviceStates[key] = st
+	}
+
+	if online {
+		if !st.wasOnline {
+			st.onlineSince = now // transisi offline→online: mulai hitung durasi
+		}
+		st.wasOnline = true
+		st.lastSeen = now
+		return now.Format(stampLayout), formatActiveDuration(now.Sub(st.onlineSince))
+	}
+
+	st.wasOnline = false
+	// Offline: Active Duration tidak berjalan → "Offline". Last Active = waktu
+	// terakhir online; kalau belum pernah online sejak backend start → "Offline".
+	if st.lastSeen.IsZero() {
+		return "Offline", "Offline"
+	}
+	return st.lastSeen.Format(stampLayout), "Offline"
+}
+
+func formatActiveDuration(d time.Duration) string {
+	if d < time.Minute {
+		return "< 1 menit"
+	}
+	h := int(d.Hours())
+	m := int(d.Minutes()) % 60
+	if h > 0 {
+		return fmt.Sprintf("%d jam %d menit", h, m)
+	}
+	return fmt.Sprintf("%d menit", m)
 }
 
 // GET /api/admin/devices — tes koneksi nyata kamera, printer, robot.
@@ -73,19 +130,19 @@ func probeCamera() cameraStatusDTO {
 	// "Online" benar-benar mencerminkan kamera fisik yang terhubung.
 	cam, err := services.DetectCanonCamera()
 	online := err == nil && cam != nil && cam.Connected
+	lastActive, activeDur := trackDevice("camera", online, time.Now())
 
 	dto := cameraStatusDTO{
 		ID:             "Kamera",
 		Resolution:     naValue,
 		Status:         "Offline",
-		LastActive:     naValue,
-		ActiveDuration: naValue,
+		LastActive:     lastActive,
+		ActiveDuration: activeDur,
 		IsOnline:       false,
 	}
 	if online {
 		dto.ID = cam.CameraName
 		dto.Status = "Active"
-		dto.LastActive = nowStamp()
 		dto.IsOnline = true
 	}
 	return dto
@@ -93,6 +150,8 @@ func probeCamera() cameraStatusDTO {
 
 func probePrinter() printerStatusDTO {
 	p := services.GetPrinterStatus()
+	online := p.Found && p.Online
+	lastActive, activeDur := trackDevice("printer", online, time.Now())
 
 	// Konsumabel (kertas/ribbon/total print) tidak tersedia dari print spooler
 	// OS generik → 0 + ditandai N/A di UI.
@@ -100,8 +159,8 @@ func probePrinter() printerStatusDTO {
 		ID:              naValue,
 		Resolution:      naValue,
 		Status:          "Offline",
-		LastActive:      naValue,
-		ActiveDuration:  naValue,
+		LastActive:      lastActive,
+		ActiveDuration:  activeDur,
 		TotalPrint:      0,
 		IsOnline:        false,
 		PaperRemaining:  0,
@@ -116,21 +175,20 @@ func probePrinter() printerStatusDTO {
 		dto.Status = p.Status
 		dto.IsOnline = p.Online
 		dto.IsReady = p.Ready
-		if p.Online {
-			dto.LastActive = nowStamp()
-		}
 	}
 	return dto
 }
 
 func probeRobot() robotStatusDTO {
 	res := services.PingRobot()
+	online := res.Configured && res.Reachable
+	lastActive, activeDur := trackDevice("robot", online, time.Now())
 
 	dto := robotStatusDTO{
 		ID:             "Robot",
 		Status:         "Not configured",
-		LastActive:     naValue,
-		ActiveDuration: naValue,
+		LastActive:     lastActive,
+		ActiveDuration: activeDur,
 		IsOnline:       false,
 	}
 	if !res.Configured {
@@ -142,7 +200,6 @@ func probeRobot() robotStatusDTO {
 	if res.Reachable {
 		dto.Status = "Active"
 		dto.IsOnline = true
-		dto.LastActive = nowStamp()
 	} else {
 		dto.Status = "Offline"
 	}

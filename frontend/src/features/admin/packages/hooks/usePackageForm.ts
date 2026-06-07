@@ -23,6 +23,7 @@ export const usePackageForm = ({
       status: defaultValues?.status ?? 'draft',
       isPopular: defaultValues?.isPopular ?? false,
       printCount: defaultValues?.printCount ?? 0,
+      printUnitPrice: defaultValues?.printUnitPrice ?? 0,
     },
   });
 

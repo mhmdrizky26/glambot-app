@@ -18,19 +18,11 @@ import { exportComposition } from '../lib/exportComposition';
 import { useSaveComposition } from '../api/saveComposition';
 import { printComposition } from '../api/printComposition';
 import { usePhotoComposition } from '../hooks/usePhotoComposition';
+import type { FilterType } from '../lib/filters';
 
-// Filter type — keep in sync with `lib/filters.ts`
-export type FilterType =
-  | 'original'
-  | 'warm'
-  | 'cool'
-  | 'vintage'
-  | 'dramatic'
-  | 'mono'
-  | 'sepia'
-  | 'vivid'
-  | 'soft'
-  | 'film';
+// FilterType didefinisikan kanonik di lib/filters; di-re-export di sini supaya
+// import lama `from '../pages/PhotoEditorPage'` tetap berfungsi tanpa drift.
+export type { FilterType };
 
 type TabType = 'frame' | 'filter';
 

@@ -14,7 +14,7 @@ const brandGradient = {
 
 export default function LoginPage() {
   return (
-    <main className="font-inter relative min-h-screen w-full overflow-hidden bg-[url('/bg.webp')] bg-cover bg-center bg-fixed">
+    <main className="font-grotesk relative min-h-screen w-full overflow-hidden bg-[url('/bg.webp')] bg-cover bg-center bg-fixed">
       {/* Soft Glambot glow accents */}
       <div className="pointer-events-none absolute inset-0">
         <div className="absolute -top-40 -left-32 h-96 w-96 rounded-full bg-[#3F72AF]/30 blur-[140px]" />

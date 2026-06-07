@@ -30,10 +30,21 @@ export function PhotoSessionPage() {
     if (sessionId) playBackendAudio('inisiasi.mp3');
   }, [sessionId]);
 
-  const { data: session } = useGetSession({
+  const { data: session, isFetching: isSessionFetching } = useGetSession({
     sessionId,
     queryConfig: { enabled: !!sessionId },
   });
+
+  // Guard: sesi belum dibayar / kedaluwarsa tidak boleh masuk sesi foto.
+  // Tunggu data FRESH (jangan bertindak saat fetching) agar cache 'pending_payment'
+  // lama tepat setelah bayar tidak salah me-redirect user. Backend juga menolak
+  // transisi ke 'shooting' tanpa 'paid' sebagai batas keamanan sebenarnya.
+  useEffect(() => {
+    if (isSessionFetching) return;
+    if (session?.status === 'pending_payment' || session?.status === 'expired') {
+      router.replace('/package');
+    }
+  }, [session?.status, isSessionFetching, router]);
 
   // Timer 5 menit dengan persistence — kalau halaman di-refresh sisa waktu
   // dihitung dari awal sesi (bukan reset ke 300 detik).
@@ -48,8 +59,6 @@ export function PhotoSessionPage() {
   const endFiredRef = useRef(false);
   const {
     frameUrl,
-    cameraType,
-    mediaStream,
     hasError,
     errorMessage,
     handleStreamError,
@@ -141,12 +150,16 @@ export function PhotoSessionPage() {
   if (!sessionId) return null;
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
-      <div className="p-6 shrink-0">
+    // Kiosk fullscreen: pakai `fixed inset-0` agar halaman menempel ke viewport
+    // dan LEPAS dari container `max-w-360 mx-auto` layout publik (kalau ikut
+    // container, bar + preview terkunci 1440px di tengah pada layar lebar).
+    // Fixed juga out-of-flow → tidak memicu scroll horizontal di container.
+    <div className="fixed inset-0 flex flex-col overflow-hidden">
+      <div className="px-10 pt-6 shrink-0">
         <SessionHeader sessionTimeLeft={displayTimeLeft} />
       </div>
 
-      <main className="flex flex-1 min-h-0 px-6 pb-6 pt-0">
+      <main className="flex flex-1 min-h-0 px-10 pb-6 pt-3">
         <div className="flex-1 flex flex-col gap-3 min-h-0">
           <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0 text-left">
             Preview Camera
@@ -154,8 +167,6 @@ export function PhotoSessionPage() {
           <div className="flex-1 min-h-0">
             <CameraPreview
               frameUrl={frameUrl}
-              cameraType={cameraType}
-              mediaStream={mediaStream}
               sessionId={sessionId}
               hasError={hasError}
               errorMessage={errorMessage}

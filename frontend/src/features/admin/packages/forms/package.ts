@@ -24,6 +24,10 @@ export const packageSchema = z.object({
     .int()
     .min(0, 'Print count must be at least 0')
     .optional(),
+  printUnitPrice: z
+    .number()
+    .min(0, 'Print unit price must be at least 0')
+    .optional(),
 });
 
 export type PackageFormData = z.infer<typeof packageSchema>;

@@ -36,12 +36,55 @@ type frameResponse struct {
 	LastUsed     string          `json:"last_used"`
 }
 
+// ensureSlotIDs menjamin setiap slot pada JSON array punya id unik & stabil.
+// Editor foto publik mem-key tiap foto berdasarkan slot id; ketika id hilang
+// (form admin membuang id sebelum upload) seluruh slot menumpuk ke satu key
+// sehingga hanya satu foto yang bisa ditempatkan. Id di-assign berdasarkan
+// posisi agar foto selalu jatuh ke slot yang sama di setiap pembacaan.
+// Return: JSON yang sudah dinormalisasi + jumlah slot.
+func ensureSlotIDs(slotsJSON []byte) ([]byte, int) {
+	var slots []map[string]any
+	if err := json.Unmarshal(slotsJSON, &slots); err != nil || len(slots) == 0 {
+		return slotsJSON, len(slots)
+	}
+	seen := make(map[string]bool, len(slots))
+	for i := range slots {
+		id, _ := slots[i]["id"].(string)
+		if id == "" || seen[id] {
+			id = "slot-" + strconv.Itoa(i+1)
+			for seen[id] {
+				id = "slot-" + strconv.Itoa(i+1) + "-" + uuid.NewString()[:4]
+			}
+			slots[i]["id"] = id
+		}
+		seen[id] = true
+	}
+	out, err := json.Marshal(slots)
+	if err != nil {
+		return slotsJSON, len(slots)
+	}
+	return out, len(slots)
+}
+
 const frameSelectCols = `f.id, f.frame_code, f.name, f.category, f.description,
 	f.file_path, f.thumb_url, f.photo_slots, f.canvas_width, f.canvas_height,
 	f.slots, f.is_active, f.file_size, f.created_at, f.updated_at,
-	(SELECT COUNT(*) FROM sessions s WHERE s.frame_id = f.id) AS used_count,
-	(SELECT COUNT(*) FROM sessions s WHERE s.frame_id = f.id AND s.created_at::date = NOW()::date) AS used_today,
-	(SELECT MAX(s.created_at) FROM sessions s WHERE s.frame_id = f.id) AS last_used`
+	COALESCE(agg.used_count, 0) AS used_count,
+	COALESCE(agg.used_today, 0) AS used_today,
+	agg.last_used AS last_used`
+
+// frameFromJoin: agregat pemakaian dihitung SEKALI via LEFT JOIN (bukan 3
+// subquery correlated per baris) — jauh lebih murah saat tabel sessions besar.
+const frameFromJoin = `FROM frames f
+	LEFT JOIN (
+		SELECT frame_id,
+			COUNT(*) AS used_count,
+			COUNT(*) FILTER (WHERE created_at::date = NOW()::date) AS used_today,
+			MAX(created_at) AS last_used
+		FROM sessions
+		WHERE frame_id IS NOT NULL AND frame_id <> ''
+		GROUP BY frame_id
+	) agg ON agg.frame_id = f.id`
 
 func scanFrame(s interface{ Scan(...any) error }) (frameResponse, error) {
 	var (
@@ -117,7 +160,7 @@ func AdminListFrames(w http.ResponseWriter, r *http.Request) {
 	}
 
 	rows, err := database.DB.Query(
-		`SELECT `+frameSelectCols+` FROM frames f WHERE `+whereSQL+
+		`SELECT `+frameSelectCols+` `+frameFromJoin+` WHERE `+whereSQL+
 			` ORDER BY `+orderBy+` LIMIT ? OFFSET ?`,
 		append(args, limit, offset)...,
 	)
@@ -157,27 +200,31 @@ func AdminFrameStats(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, stats)
 }
 
+// fetchFrameByID memuat satu frame — dipakai bersama oleh GET detail dan
+// load-after-write (create/update) agar query SELECT+scan tidak diduplikasi.
+func fetchFrameByID(id string) (frameResponse, error) {
+	row := database.DB.QueryRow(`SELECT `+frameSelectCols+` `+frameFromJoin+` WHERE f.id = ?`, id)
+	return scanFrame(row)
+}
+
 // GET /api/admin/frames/{id}
 func AdminGetFrame(w http.ResponseWriter, r *http.Request) {
-	id := chi.URLParam(r, "id")
-	row := database.DB.QueryRow(`SELECT `+frameSelectCols+` FROM frames f WHERE f.id = ?`, id)
-	f, err := scanFrame(row)
+	f, err := fetchFrameByID(chi.URLParam(r, "id"))
 	if err == sql.ErrNoRows {
 		respondError(w, http.StatusNotFound, "Frame tidak ditemukan")
 		return
 	}
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal memuat frame")
+		respondInternal(w, "get frame", err)
 		return
 	}
 	respondJSON(w, http.StatusOK, f)
 }
 
 func loadFrameByID(w http.ResponseWriter, id string) {
-	row := database.DB.QueryRow(`SELECT `+frameSelectCols+` FROM frames f WHERE f.id = ?`, id)
-	f, err := scanFrame(row)
+	f, err := fetchFrameByID(id)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal memuat frame")
+		respondInternal(w, "load frame", err)
 		return
 	}
 	respondJSON(w, http.StatusOK, f)
@@ -220,6 +267,9 @@ func AdminCreateFrame(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusBadRequest, "Format slots tidak valid")
 		return
 	}
+	normSlots, slotCount := ensureSlotIDs([]byte(slotsJSON))
+	slotsJSON = string(normSlots)
+	photoSlots = slotCount
 
 	id := "frame-" + uuid.NewString()[:8]
 	filePath, thumbURL, fileSize := "", "", ""
@@ -240,7 +290,7 @@ func AdminCreateFrame(w http.ResponseWriter, r *http.Request) {
 		boolToInt(status != "inactive"), id, category, r.FormValue("description"), fileSize,
 	)
 	if err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal membuat frame: "+err.Error())
+		respondInternal(w, "create frame", err)
 		return
 	}
 
@@ -292,12 +342,9 @@ func AdminUpdateFrame(w http.ResponseWriter, r *http.Request) {
 			respondError(w, http.StatusBadRequest, "Format slots tidak valid")
 			return
 		}
-		addSet("slots = ?::jsonb", v)
-		if ps := r.FormValue("photo_slots"); ps != "" {
-			if n, err := strconv.Atoi(ps); err == nil {
-				addSet("photo_slots = ?", n)
-			}
-		}
+		normSlots, slotCount := ensureSlotIDs([]byte(v))
+		addSet("slots = ?::jsonb", string(normSlots))
+		addSet("photo_slots = ?", slotCount)
 	}
 	if file, header, err := r.FormFile("file"); err == nil {
 		path, size, uErr := saveUpload(file, header, "frames")
@@ -315,7 +362,7 @@ func AdminUpdateFrame(w http.ResponseWriter, r *http.Request) {
 		query := "UPDATE frames SET " + strings.Join(sets, ", ") + " WHERE id = ?"
 		args = append(args, id)
 		if _, err := database.DB.Exec(query, args...); err != nil {
-			respondError(w, http.StatusInternalServerError, "Gagal mengupdate frame: "+err.Error())
+			respondInternal(w, "update frame", err)
 			return
 		}
 	}

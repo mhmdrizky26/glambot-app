@@ -32,6 +32,8 @@ export const updatePackage = async ({
     formData.append('is_popular', data.isPopular.toString());
   if (data.printCount !== undefined)
     formData.append('print_count', data.printCount.toString());
+  if (data.printUnitPrice !== undefined)
+    formData.append('print_unit_price', data.printUnitPrice.toString());
   if (data.image) formData.append('image', data.image);
 
   const response = await axiosInstance.patch(

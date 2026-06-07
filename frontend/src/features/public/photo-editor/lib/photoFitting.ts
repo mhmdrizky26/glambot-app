@@ -16,7 +16,10 @@ export const createClipPath = (slot: FrameSlot): fabric.Object => {
         absolutePositioned: true,
       });
 
+    // 'circle' di editor admin digambar sebagai box w×h dengan border-radius 50%,
+    // jadi secara visual sama dengan ellipse pada bounding box slot.
     case 'ellipse':
+    case 'circle':
       return new fabric.Ellipse({
         left: slot.x + slot.width / 2,
         top: slot.y + slot.height / 2,
@@ -28,7 +31,15 @@ export const createClipPath = (slot: FrameSlot): fabric.Object => {
       });
 
     default:
-      throw new Error(`Unknown shape type: ${slot.shape}`);
+      // Fallback aman: perlakukan bentuk tak dikenal sebagai rect agar foto
+      // tetap masuk ke slot (tidak menggagalkan seluruh komposisi).
+      return new fabric.Rect({
+        left: slot.x,
+        top: slot.y,
+        width: slot.width,
+        height: slot.height,
+        absolutePositioned: true,
+      });
   }
 };
 
