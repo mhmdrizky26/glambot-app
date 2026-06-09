@@ -26,7 +26,7 @@ export interface SalesReport {
   data: SalesReportPoint[];
 }
 
-export type OrderStatus = 'completed' | 'cancel' | 'error';
+export type OrderStatus = 'completed' | 'cancel' | 'error' | 'pending';
 
 export interface RecentOrder {
   id: string;

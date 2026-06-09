@@ -162,8 +162,8 @@ func AdminCreatePackage(w http.ResponseWriter, r *http.Request) {
 	}
 	price, _ := strconv.Atoi(r.FormValue("price"))
 	durationSecs, _ := strconv.Atoi(r.FormValue("duration_secs"))
-	if durationSecs <= 0 {
-		durationSecs = 300
+	if durationSecs < 60 {
+		durationSecs = 60
 	}
 	printCount, _ := strconv.Atoi(r.FormValue("print_count"))
 	if printCount <= 0 {
@@ -237,7 +237,7 @@ func AdminUpdatePackage(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if v := r.FormValue("duration_secs"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		if n, err := strconv.Atoi(v); err == nil && n >= 60 {
 			addSet("duration_secs", n)
 		}
 	}
@@ -252,7 +252,7 @@ func AdminUpdatePackage(w http.ResponseWriter, r *http.Request) {
 		addSet("is_popular", boolToInt(v == "true"))
 	}
 	if v := r.FormValue("print_count"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
 			addSet("print_count", n)
 		}
 	}

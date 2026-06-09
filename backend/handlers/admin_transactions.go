@@ -67,7 +67,8 @@ func packageCodeToType(code string) string {
 
 const txSelect = `t.id, t.session_id, t.midtrans_order_id, t.amount, t.status,
 	COALESCE(t.qris_url, ''), COALESCE(t.qris_raw_string, ''), t.paid_at, t.created_at,
-	p.id, p.code, p.name, f.id, f.name, f.category
+	p.id, p.code, p.name, f.id, f.name, f.category,
+	s.expires_at
 	FROM transactions t
 	LEFT JOIN sessions s ON s.id = t.session_id
 	LEFT JOIN packages p ON p.id = s.package_id
@@ -75,22 +76,29 @@ const txSelect = `t.id, t.session_id, t.midtrans_order_id, t.amount, t.status,
 
 func scanTransaction(s interface{ Scan(...any) error }) (transactionResponse, error) {
 	var (
-		t         transactionResponse
-		dbStatus  string
-		paidAt    sql.NullTime
-		createdAt time.Time
-		pkgID     sql.NullInt64
-		pkgCode   sql.NullString
-		pkgName   sql.NullString
-		frameID   sql.NullString
-		frameName sql.NullString
-		frameCat  sql.NullString
+		t          transactionResponse
+		dbStatus   string
+		paidAt     sql.NullTime
+		createdAt  time.Time
+		pkgID      sql.NullInt64
+		pkgCode    sql.NullString
+		pkgName    sql.NullString
+		frameID    sql.NullString
+		frameName  sql.NullString
+		frameCat   sql.NullString
+		expiresAt  sql.NullTime
 	)
 	err := s.Scan(&t.ID, &t.SessionID, &t.MidtransOrderID, &t.Amount, &dbStatus,
 		&t.QRISUrl, &t.QRISRawString, &paidAt, &createdAt,
-		&pkgID, &pkgCode, &pkgName, &frameID, &frameName, &frameCat)
+		&pkgID, &pkgCode, &pkgName, &frameID, &frameName, &frameCat,
+		&expiresAt)
 	if err != nil {
 		return t, err
+	}
+	// Transaksi pending milik sesi yang sudah lewat expires_at dianggap expired
+	// secara real-time, tanpa tunggu cleanup job jalan.
+	if dbStatus == "pending" && expiresAt.Valid && expiresAt.Time.Before(time.Now()) {
+		dbStatus = "expired"
 	}
 	t.Status = txStatusToFE(dbStatus)
 	t.CreatedAt = createdAt.Format(time.RFC3339)

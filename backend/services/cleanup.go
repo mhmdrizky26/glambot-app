@@ -30,6 +30,20 @@ func StartCleanupJob() {
 func runCleanup() {
 	log.Println("🧹 Menjalankan cleanup sesi yang sudah expired...")
 
+	// Tandai pending transactions milik sesi yang sudah expired sebagai 'expired'
+	// sebelum cleanup per-sesi, supaya status transaksi konsisten dengan sesi
+	// (tidak tersisa sebagai 'pending' untuk sesi yang sudah ditinggalkan).
+	if _, err := database.DB.Exec(`
+		UPDATE transactions SET status = 'expired'
+		WHERE status = 'pending'
+		AND session_id IN (
+			SELECT id FROM sessions
+			WHERE expires_at < NOW() AND status != 'expired'
+		)
+	`); err != nil {
+		log.Printf("⚠️ Gagal expire transaksi pending untuk sesi expired: %v", err)
+	}
+
 	rows, err := database.DB.Query(`
 		SELECT id FROM sessions
 		WHERE expires_at < NOW()

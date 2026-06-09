@@ -63,6 +63,7 @@ const normalizeSession = (
     packageId: session.package_id ?? session.packageId ?? 0,
     packageCode,
     packageTitle: session.packageTitle ?? packageTitle,
+    durationSecs: session.duration_secs ?? session.durationSecs ?? 300,
     printCount,
     basePrice: price,
     extraPrintCost,
@@ -113,6 +114,7 @@ export interface SessionDetailResponse {
   packageId: number;
   packageCode: string;
   packageTitle: string;
+  durationSecs: number;
   printCount: number;
   basePrice: number;
   extraPrintCost: number;

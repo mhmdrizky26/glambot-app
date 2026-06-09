@@ -40,6 +40,7 @@ export function CameraPreview({
   const isMountedRef = useRef(true);
 
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [captureFired, setCaptureFired] = useState(false);
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
   const capturedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const capturedBlobUrlRef = useRef<string | null>(null);
@@ -60,6 +61,7 @@ export function CameraPreview({
 
     capturedTimerRef.current = setTimeout(() => {
       setCapturedUrl(null);
+      setCaptureFired(false);
       if (capturedBlobUrlRef.current) {
         URL.revokeObjectURL(capturedBlobUrlRef.current);
         capturedBlobUrlRef.current = null;
@@ -193,6 +195,20 @@ export function CameraPreview({
     if (wasActiveRef.current && !captureTriggeredRef.current) {
       // Transition active → inactive = countdown just finished.
       captureTriggeredRef.current = true;
+      // Langsung tampilkan overlay freeze 3 detik; foto dari backend
+      // akan mengisi overlay saat selesai di-fetch via showLatestCanonCapture.
+      setCaptureFired(true);
+      if (capturedTimerRef.current) clearTimeout(capturedTimerRef.current);
+      capturedTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setCaptureFired(false);
+          setCapturedUrl(null);
+          if (capturedBlobUrlRef.current) {
+            URL.revokeObjectURL(capturedBlobUrlRef.current);
+            capturedBlobUrlRef.current = null;
+          }
+        }
+      }, 3000);
       showLatestCanonCapture();
     }
 
@@ -296,24 +312,30 @@ export function CameraPreview({
         </div>
       )}
 
-      {/* Capture result modal — fullscreen clean preview for 3s, then auto-hides.
-          Blurred backdrop of the same image fills any aspect-ratio gap so the
-          foreground photo stays uncropped and the screen never shows hard black. */}
-      {capturedUrl && (
-        <div className="fixed inset-0 z-50 overflow-hidden animate-[fadeIn_200ms_ease-out]">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={capturedUrl}
-            alt=""
-            aria-hidden="true"
-            className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl brightness-50"
-          />
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={capturedUrl}
-            alt=""
-            className="relative w-screen h-screen object-contain drop-shadow-2xl"
-          />
+      {/* Capture freeze overlay — muncul langsung saat capture fired (3 detik).
+          Jika foto sudah di-fetch dari backend, tampilkan foto asli.
+          Jika belum, tampilkan flash putih sebagai placeholder. */}
+      {captureFired && (
+        <div className="fixed inset-0 z-50 overflow-hidden animate-[fadeIn_150ms_ease-out]">
+          {capturedUrl ? (
+            <>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={capturedUrl}
+                alt=""
+                aria-hidden="true"
+                className="absolute inset-0 w-full h-full object-cover scale-110 blur-2xl brightness-50"
+              />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={capturedUrl}
+                alt=""
+                className="relative w-screen h-screen object-contain drop-shadow-2xl"
+              />
+            </>
+          ) : (
+            <div className="w-full h-full bg-white animate-[flashFade_400ms_ease-out_forwards]" />
+          )}
         </div>
       )}
 

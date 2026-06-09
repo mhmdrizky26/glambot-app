@@ -172,7 +172,11 @@ func probePrinter() printerStatusDTO {
 	}
 	if p.Found {
 		dto.ID = p.Name
-		dto.Status = p.Status
+		if p.Online {
+			dto.Status = "Online"
+		} else {
+			dto.Status = "Offline"
+		}
 		dto.IsOnline = p.Online
 		dto.IsReady = p.Ready
 	}

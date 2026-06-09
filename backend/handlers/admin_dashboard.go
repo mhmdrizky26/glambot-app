@@ -187,7 +187,8 @@ func buildSalesReport() salesReport {
 }
 
 func buildRecentOrders() []recentOrder {
-	rows, err := database.DB.Query(`SELECT t.id, COALESCE(p.name, ''), t.amount, t.status, t.created_at
+	rows, err := database.DB.Query(`SELECT t.id, COALESCE(p.name, ''), t.amount, t.status,
+		COALESCE(s.status, ''), s.expires_at, t.created_at
 		FROM transactions t
 		LEFT JOIN sessions s ON s.id = t.session_id
 		LEFT JOIN packages p ON p.id = s.package_id
@@ -200,23 +201,33 @@ func buildRecentOrders() []recentOrder {
 	orders := make([]recentOrder, 0, 5)
 	for rows.Next() {
 		var (
-			o         recentOrder
-			pkgName   string
-			status    string
-			createdAt time.Time
+			o           recentOrder
+			pkgName     string
+			txStatus    string
+			sessStatus  string
+			expiresAt   sql.NullTime
+			createdAt   time.Time
 		)
-		if err := rows.Scan(&o.ID, &pkgName, &o.Amount, &status, &createdAt); err != nil {
+		if err := rows.Scan(&o.ID, &pkgName, &o.Amount, &txStatus, &sessStatus, &expiresAt, &createdAt); err != nil {
 			continue
 		}
 		o.Package = pkgName
 		o.Date = createdAt.Format("2006-01-02")
-		switch status {
+
+		sessExpired := sessStatus == "expired" || (expiresAt.Valid && expiresAt.Time.Before(time.Now()))
+		switch txStatus {
 		case "paid":
 			o.Status = "completed"
 		case "failed":
 			o.Status = "error"
-		default: // pending, expired, cancelled
+		case "expired":
 			o.Status = "cancel"
+		default: // pending
+			if sessExpired {
+				o.Status = "cancel"
+			} else {
+				o.Status = "pending"
+			}
 		}
 		orders = append(orders, o)
 	}

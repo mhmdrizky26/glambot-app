@@ -34,6 +34,10 @@ const STATUS_CONFIG: Record<
     label: 'Error',
     className: 'bg-amber-100 text-amber-800 hover:bg-amber-100/80',
   },
+  pending: {
+    label: 'Pending',
+    className: 'bg-amber-100 text-amber-800 hover:bg-amber-100/80',
+  },
 };
 
 const formatCurrency = (n: number) =>

@@ -4,7 +4,7 @@ import { SessionHeader } from '../components/SessionHeader';
 import { CameraPreview } from '../components/CameraPreview';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useGetSession } from '@/shared/api/session';
+import { useGetSession, usePatchSessionStatus } from '@/shared/api/session';
 import { sendSessionBroadcast } from '../lib/broadcastChannel';
 import { useLiveStream } from '../api/getLivePreview';
 import { useRobotConfig } from '../api/getRobotConfig';
@@ -35,6 +35,24 @@ export function PhotoSessionPage() {
     queryConfig: { enabled: !!sessionId },
   });
 
+  const { mutate: patchStatus } = usePatchSessionStatus();
+
+  // Jika masuk langsung dari payment (skip instruction), sesi masih berstatus
+  // 'paid'. Init sekali: aktifkan robot, patch ke 'shooting', broadcast START.
+  const initFiredRef = useRef(false);
+  useEffect(() => {
+    if (!sessionId || isSessionFetching || !session) return;
+    if (session.status !== 'paid') return;
+    if (initFiredRef.current) return;
+    initFiredRef.current = true;
+
+    apiClient.post('/api/robot/enable').catch((err) => {
+      console.warn('[PhotoSession] robot/enable failed:', err);
+    });
+    patchStatus({ sessionId, status: 'shooting' });
+    sendSessionBroadcast({ type: 'SESSION_START', sessionId });
+  }, [sessionId, session, isSessionFetching, patchStatus]);
+
   // Guard: sesi belum dibayar / kedaluwarsa tidak boleh masuk sesi foto.
   // Tunggu data FRESH (jangan bertindak saat fetching) agar cache 'pending_payment'
   // lama tepat setelah bayar tidak salah me-redirect user. Backend juga menolak
@@ -46,12 +64,14 @@ export function PhotoSessionPage() {
     }
   }, [session?.status, isSessionFetching, router]);
 
-  // Timer 5 menit dengan persistence — kalau halaman di-refresh sisa waktu
-  // dihitung dari awal sesi (bukan reset ke 300 detik).
+  // Timer durasi sesi dari package — kalau halaman di-refresh sisa waktu
+  // dihitung dari awal sesi (bukan reset). Key null saat session belum load
+  // agar storage tidak ditulis dengan durasi fallback yang salah.
+  const sessionDuration = session?.durationSecs;
   const { timeLeft: sessionTimeLeft, clear: clearSessionTimer } =
     usePersistedCountdown(
-      sessionId ? `photo-session:${sessionId}` : null,
-      60 * 5,
+      sessionId && sessionDuration != null ? `photo-session:${sessionId}` : null,
+      sessionDuration ?? 300,
     );
   // Pastikan blok "session end" (broadcast + disable robot + navigate) cuma
   // fire SEKALI walaupun effect re-run akibat dep `session` (dari useGetSession)
