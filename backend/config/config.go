@@ -26,7 +26,7 @@ type Config struct {
 	MidtransEnv          string
 	StoragePath          string
 	DigiCamBaseURL       string
-	SessionExpiryHours   int
+	PaymentExpiryMins    int
 	CleanupIntervalHours int
 	FrontendURL          string
 	RobotAPIURL          string
@@ -65,7 +65,7 @@ func Load() {
 		MidtransEnv:          getEnv("MIDTRANS_ENV", "sandbox"),
 		StoragePath:          getEnv("STORAGE_PATH", "./storage"),
 		DigiCamBaseURL:       getEnv("DIGICAM_BASE_URL", "http://localhost:5513/api"),
-		SessionExpiryHours:   getEnvInt("SESSION_EXPIRY_HOURS", 72),
+		PaymentExpiryMins:    getEnvInt("PAYMENT_EXPIRY_MINS", 2),
 		CleanupIntervalHours: getEnvInt("CLEANUP_INTERVAL_HOURS", 24),
 		FrontendURL:          getEnv("FRONTEND_URL", "http://localhost:3000"),
 		RobotAPIURL:          getEnv("ROBOT_API_URL", ""),

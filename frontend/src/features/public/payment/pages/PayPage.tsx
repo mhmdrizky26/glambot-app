@@ -20,7 +20,7 @@ export default function PayPage() {
   if (!sessionId) return null;
 
   const handleSuccess = (sid: string) => {
-    router.push(`/instruction?sessionId=${sid}`);
+    router.push(`/photo-session?sessionId=${sid}`);
   };
 
   return (

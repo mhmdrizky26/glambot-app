@@ -89,7 +89,7 @@ func CreateSession(w http.ResponseWriter, r *http.Request) {
 
 	sessionID := uuid.New().String()
 	now := time.Now()
-	expiresAt := now.Add(time.Duration(config.App.SessionExpiryHours) * time.Hour)
+	expiresAt := now.Add(time.Duration(config.App.PaymentExpiryMins) * time.Minute)
 
 	_, err = database.DB.Exec(`
 		INSERT INTO sessions

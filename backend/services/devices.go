@@ -155,12 +155,31 @@ func probePrinterWindows() PrinterProbeResult {
 		return PrinterProbeResult{Found: false}
 	}
 
-	// Pilih printer default; kalau tak ada yang default, ambil pertama.
-	chosen := physical[0]
-	for _, p := range physical {
+	// Pilih printer TERBAIK, bukan sekadar yang di-set "default" oleh OS.
+	// Printer default Windows belum tentu printer foto yang aktif: sering ada
+	// printer lain yang diset default tapi sedang OFFLINE (mis. EPSON PM-520
+	// offline) sementara printer foto yang tersambung (mis. EPSON SL-D500)
+	// justru siap mencetak. Maka kita beri skor: siap-cetak > online > default
+	// sebagai pemecah seri. Dengan begitu printer yang benar-benar siap selalu
+	// dipilih lebih dulu daripada default yang offline.
+	score := func(p rawWinPrinter) int {
+		s := 0
+		if _, ready := winStatusText(p.PrinterStatus); ready && !p.WorkOffline {
+			s += 4 // siap mencetak sekarang
+		}
+		if !p.WorkOffline {
+			s += 2 // minimal online
+		}
 		if p.Default {
-			chosen = p
-			break
+			s += 1 // pemecah seri saja
+		}
+		return s
+	}
+	chosen := physical[0]
+	best := score(chosen)
+	for _, p := range physical[1:] {
+		if sc := score(p); sc > best {
+			chosen, best = p, sc
 		}
 	}
 
