@@ -62,7 +62,7 @@ export function PackageStatCards({
           />
         </svg>
       ),
-      subtitle: `${active} Packages`,
+      subtitle: `${active} packages currently active`,
       bgColor: 'bg-[#8A38F5]/20',
     },
     {
@@ -110,7 +110,7 @@ export function PackageStatCards({
           />
         </svg>
       ),
-      subtitle: 'Sold Today',
+      subtitle: 'Packages sold today',
       bgColor: 'bg-[#007DFC]/20',
     },
     {
@@ -161,14 +161,14 @@ export function PackageStatCards({
           />
         </svg>
       ),
-      subtitle: 'Today Revenue',
+      subtitle: "Today's revenue",
       bgColor: 'bg-[#12C964]/20',
     },
     {
       title: 'Inactive Package',
       value: inactive,
       icon: <CirclePause className="size-7.5 text-[#FFCD29]" />,
-      subtitle: `${inactive} Packages`,
+      subtitle: `${inactive} packages inactive`,
       bgColor: 'bg-[#FFCD29]/20',
     },
   ];

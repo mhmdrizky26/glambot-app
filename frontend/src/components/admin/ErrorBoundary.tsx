@@ -27,13 +27,13 @@ export class ErrorBoundary extends React.Component<
       return (
         <div className="flex flex-1 flex-col items-center justify-center gap-4 p-6">
           <div className="text-center">
-            <p className="font-medium">Terjadi kesalahan</p>
+            <p className="font-medium">An error occurred</p>
             <p className="text-muted-foreground mt-1 text-sm">
-              Silakan coba lagi atau hubungi tim support.
+              Please try again or contact the support team.
             </p>
           </div>
           <Button variant="outline" onClick={this.handleRetry}>
-            Coba Lagi
+            Try Again
           </Button>
         </div>
       );

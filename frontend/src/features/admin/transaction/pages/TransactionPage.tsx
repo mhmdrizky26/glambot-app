@@ -2,18 +2,27 @@
 
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Upload } from 'lucide-react';
+import { FileDown, FileText, Sheet, ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/admin/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/admin/ui/dropdown-menu';
 import { DataPagination } from '@/components/admin/shared/DataPagination';
 import { TransactionFilters } from '../components/TransactionFilters';
 import { TransactionStatCards } from '../components/TransactionStatCards';
 import { TransactionTable } from '../components/TransactionTable';
 import { TransactionDetailPanel } from '../components/TransactionDetailPanel';
 import { type Transaction, type TransactionStatus } from '../api/types';
-import { useGetTransactions } from '../api/getTransactions';
+import { getTransactions, useGetTransactions } from '../api/getTransactions';
 import { useGetTransactionStats } from '../api/getTransactionStats';
-import { useExportTransactions } from '../api/exportTransactions';
+import { exportTransactionsToPDF } from '../utils/exportToPDF';
+import { exportTransactionsToExcel } from '../utils/exportToExcel';
 
 export function TransactionPage() {
   const router = useRouter();
@@ -30,6 +39,7 @@ export function TransactionPage() {
   const [selectedTransactionId, setSelectedTransactionId] = React.useState<
     string | null
   >(null);
+  const [isExporting, setIsExporting] = React.useState(false);
 
   const updateParam = (key: string, value: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -53,7 +63,6 @@ export function TransactionPage() {
       },
     });
   const { data: stats, isLoading: isLoadingStats } = useGetTransactionStats();
-  const exportMutation = useExportTransactions();
 
   const transactions = transactionsResponse?.data ?? [];
   const meta = transactionsResponse?.meta;
@@ -68,28 +77,42 @@ export function TransactionPage() {
     setSelectedTransactionId((prev) => (prev === trx.id ? null : trx.id));
   };
 
-  const handleExport = async () => {
+  const fetchAllForExport = async (): Promise<Transaction[]> => {
+    const result = await getTransactions({
+      limit: 5000,
+      search: search || undefined,
+      status,
+      month: month === 'all' ? 'all' : Number(month),
+    });
+    return result.data;
+  };
+
+  const handleExportPDF = async () => {
+    setIsExporting(true);
     try {
-      const blob = await exportMutation.mutateAsync({
+      const all = await fetchAllForExport();
+      exportTransactionsToPDF(all, {
+        status: status !== 'all' ? status : undefined,
         search: search || undefined,
-        status: status === 'all' ? undefined : status,
-        month: month === 'all' ? undefined : Number(month),
       });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `transactions-${Date.now()}.csv`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-      toast.success('Transaksi berhasil diekspor');
-    } catch (error) {
-      const message =
-        error instanceof Error
-          ? error.message
-          : 'Terjadi kesalahan saat mengekspor transaksi';
-      toast.error(message);
+      toast.success(`PDF generated successfully (${all.length} transactions)`);
+    } catch {
+      toast.error('Failed to generate PDF');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    setIsExporting(true);
+    try {
+      const all = await fetchAllForExport();
+      exportTransactionsToExcel(all);
+      toast.success(`Excel generated successfully (${all.length} transactions)`);
+    } catch {
+      toast.error('Failed to generate Excel');
+    } finally {
+      setIsExporting(false);
     }
   };
 
@@ -105,14 +128,36 @@ export function TransactionPage() {
             Manage all glambot photo <br /> transaction.
           </p>
         </div>
-        <Button
-          onClick={handleExport}
-          disabled={exportMutation.isPending}
-          className="gap-2 rounded-[8px] text-[16px] leading-6"
-        >
-          <Upload className="size-4" />
-          {exportMutation.isPending ? 'Exporting...' : 'Export'}
-        </Button>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              disabled={isExporting}
+              className="gap-2 rounded-[8px] text-[16px] leading-6"
+            >
+              {isExporting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <FileDown className="size-4" />
+              )}
+              {isExporting ? 'Processing…' : 'Export'}
+              {!isExporting && <ChevronDown className="size-3.5 opacity-70" />}
+            </Button>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent align="end" className="w-48">
+            <DropdownMenuLabel>Select Export Format</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={handleExportPDF} className="cursor-pointer">
+              <FileText className="size-4 text-red-500" />
+              Export PDF
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={handleExportExcel} className="cursor-pointer">
+              <Sheet className="size-4 text-green-600" />
+              Export Excel
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       <TransactionStatCards stats={stats} isLoading={isLoadingStats} />

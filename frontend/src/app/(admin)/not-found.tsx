@@ -8,9 +8,9 @@ export default function AdminNotFound() {
 
   return (
     <NotFoundState
-      title="Halaman tidak ditemukan"
-      description="URL yang Anda buka tidak tersedia, atau halaman ini sudah dipindahkan."
-      backLabel="Kembali ke Dashboard"
+      title="Page not found"
+      description="The URL you opened is unavailable, or this page has been moved."
+      backLabel="Back to Dashboard"
       onBack={() => router.push('/dashboard')}
     />
   );

@@ -32,15 +32,15 @@ export function PrinterSettingsCard() {
           <Printer className="size-5 text-[#007DFC]" />
         </div>
         <div>
-          <h3 className="text-base font-semibold">Printer Photo</h3>
-          <p className="text-muted-foreground text-xs">Manage printer photo</p>
+          <h3 className="text-base font-semibold">Photo Printer</h3>
+          <p className="text-muted-foreground text-xs">Manage photo printer</p>
         </div>
       </div>
 
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Status Printer</span>
+            <span className="text-sm font-medium">Printer Status</span>
             {isLoading ? (
               <Loader2 className="text-muted-foreground size-4 animate-spin" />
             ) : (
@@ -66,7 +66,7 @@ export function PrinterSettingsCard() {
             id="printer-name"
             value={printerName}
             onChange={(e) => setPrinterName(e.target.value)}
-            placeholder="Belum ada printer terdeteksi"
+            placeholder="No printer detected yet"
             className="h-9 rounded-[8px] text-sm"
           />
         </div>

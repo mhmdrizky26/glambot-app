@@ -113,13 +113,13 @@ func buildKpis() []kpiCard {
 
 	return []kpiCard{
 		{Key: "revenue", Title: "Total Revenue", Value: "Rp" + formatRupiah(int(revThis)),
-			ChangePct: pctChange(revThis, revLast), ChangeLabel: "vs bulan lalu", Trend: revenueTrend},
+			ChangePct: pctChange(revThis, revLast), ChangeLabel: "vs last month", Trend: revenueTrend},
 		{Key: "customers", Title: "Customers", Value: strconv.Itoa(int(custThis)),
-			ChangePct: pctChange(custThis, custLast), ChangeLabel: "vs bulan lalu", Trend: customerTrend},
+			ChangePct: pctChange(custThis, custLast), ChangeLabel: "vs last month", Trend: customerTrend},
 		{Key: "voucher", Title: "Voucher Used", Value: strconv.Itoa(int(voucherUsed)),
 			ChangePct: 0, ChangeLabel: "total", Trend: []kpiPoint{}},
 		{Key: "frames", Title: "Active Frames", Value: strconv.Itoa(int(framesActive)),
-			ChangePct: 0, ChangeLabel: "aktif", Trend: []kpiPoint{}},
+			ChangePct: 0, ChangeLabel: "active", Trend: []kpiPoint{}},
 	}
 }
 

@@ -83,7 +83,7 @@ export function FrameForm({
       !selectedFile.type.includes('png') &&
       !selectedFile.type.includes('svg')
     ) {
-      setFileError('File harus berformat PNG atau SVG');
+      setFileError('File must be in PNG or SVG format');
       return;
     }
 
@@ -106,7 +106,7 @@ export function FrameForm({
     // masuk Step 2. Error Step 1 (kalau ada) dimunculkan saat submit.
     const hasFile = mode === 'edit' || file || previewUrl;
     if (!hasFile) {
-      setFileError('File frame wajib diupload');
+      setFileError('Frame file is required');
       return;
     }
     setFileError('');
@@ -271,8 +271,8 @@ export function FrameForm({
                   <div className="space-y-3">
                     <Label className="text-sm font-semibold">Canvas Size</Label>
                     <p className="text-muted-foreground text-xs">
-                      Rasio terkunci 2:3 (mis. 464×696, 400×600) — ubah salah satu,
-                      yang lain menyesuaikan otomatis.
+                      Ratio locked to 2:3 (e.g. 464×696, 400×600) — change one,
+                      the other adjusts automatically.
                     </p>
                     <div className="grid grid-cols-2 gap-2">
                       <div>

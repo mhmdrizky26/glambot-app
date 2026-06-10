@@ -159,8 +159,8 @@ export function VoucherForm({
                             )}
                           </div>
                           <p className="mt-1 text-xs text-gray-500">
-                            Kode voucher harus unik dan tidak dapat diubah
-                            setelah dibuat
+                            Voucher code must be unique and cannot be changed
+                            after creation
                           </p>
                           {fieldState.invalid && (
                             <p className="text-destructive mt-1 flex items-center gap-1 text-xs">
@@ -222,7 +222,7 @@ export function VoucherForm({
                               </SelectContent>
                             </Select>
                             <p className="mt-1 text-xs text-gray-500">
-                              Pilih tipe voucher yang akan dibuat
+                              Select the type of voucher to create
                             </p>
                           </div>
                         )}
@@ -265,7 +265,7 @@ export function VoucherForm({
                               </span>
                             </div>
                             <p className="mt-1 text-xs text-gray-500">
-                              Masukkan nilai diskon
+                              Enter the discount value
                             </p>
                             {fieldState.invalid && (
                               <p className="text-destructive mt-1 flex items-center gap-1 text-xs">
@@ -317,7 +317,7 @@ export function VoucherForm({
                             </span>
                           </div>
                           <p className="mt-1 text-xs text-gray-500">
-                            Minimum transaksi agar voucher dapat digunakan
+                            Minimum transaction for the voucher to be usable
                           </p>
                         </div>
                       )}
@@ -350,7 +350,7 @@ export function VoucherForm({
                             }
                           />
                           <p className="mt-1 text-xs text-gray-500">
-                            Total berapa kali voucher dapat digunakan
+                            Total number of times the voucher can be used
                           </p>
                           {fieldState.invalid && (
                             <p className="text-destructive mt-1 flex items-center gap-1 text-xs">
@@ -430,7 +430,7 @@ export function VoucherForm({
                               </PopoverContent>
                             </Popover>
                             <p className="mt-1 text-xs text-gray-500">
-                              Pilih tanggal kadaluarsa voucher
+                              Select the voucher expiry date
                             </p>
                             {fieldState.invalid && (
                               <p className="text-destructive mt-1 flex items-center gap-1 text-xs">
@@ -468,7 +468,7 @@ export function VoucherForm({
                             <div>
                               <div className="font-medium">Active</div>
                               <div className="text-xs text-gray-500">
-                                Voucher dapat digunakan
+                                Voucher can be used
                               </div>
                             </div>
                           </label>
@@ -489,7 +489,7 @@ export function VoucherForm({
                             <div>
                               <div className="font-medium">Inactive</div>
                               <div className="text-xs text-gray-500">
-                                Voucher dinonaktifkan
+                                Voucher is deactivated
                               </div>
                             </div>
                           </label>
@@ -607,9 +607,9 @@ export function VoucherForm({
                 <h3 className="font-semibold text-blue-900">Tips</h3>
               </div>
               <ul className="space-y-1 text-xs leading-relaxed text-blue-800">
-                <li>• Pastikan kode voucher unik</li>
-                <li>• Voucher yang sudah dibuat tidak dapat diubah kodenya</li>
-                <li>• Nonaktifkan voucher yang sudah tidak berlaku</li>
+                <li>• Make sure the voucher code is unique</li>
+                <li>• A voucher's code cannot be changed after it is created</li>
+                <li>• Deactivate vouchers that are no longer valid</li>
               </ul>
             </CardContent>
           </Card>

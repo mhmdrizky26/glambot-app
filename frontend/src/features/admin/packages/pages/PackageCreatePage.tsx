@@ -15,13 +15,13 @@ export function PackageCreatePage() {
   const handleSubmit = async (data: CreatePackageInput & { image?: File }) => {
     try {
       await createMutation.mutateAsync(data);
-      toast.success('Package berhasil dibuat');
+      toast.success('Package created successfully');
       router.push('/packages');
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : 'Terjadi kesalahan saat membuat package';
+          : 'An error occurred while creating the package';
       toast.error(message);
     }
   };

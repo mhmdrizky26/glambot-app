@@ -54,16 +54,16 @@ export function DevicesPage() {
           </div>
           <span className="text-muted-foreground text-xs">
             {lastUpdated
-              ? `Terakhir diperbarui ${formatTimestamp(lastUpdated)}`
-              : 'Belum pernah diperbarui'}
+              ? `Last updated ${formatTimestamp(lastUpdated)}`
+              : 'Never updated'}
           </span>
         </div>
       </div>
 
       {isError ? (
         <div className="bg-card text-destructive rounded-xl border p-6 text-sm">
-          Gagal memuat status device. Pastikan backend berjalan lalu coba
-          Refresh.
+          Failed to load device status. Make sure the backend is running, then
+          click Refresh.
         </div>
       ) : isLoading || !data ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">

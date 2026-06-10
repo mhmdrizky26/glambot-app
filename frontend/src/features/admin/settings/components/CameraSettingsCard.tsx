@@ -36,7 +36,7 @@ export function CameraSettingsCard() {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">Status Camera</span>
+            <span className="text-sm font-medium">Camera Status</span>
             {isLoading ? (
               <Loader2 className="text-muted-foreground size-4 animate-spin" />
             ) : (

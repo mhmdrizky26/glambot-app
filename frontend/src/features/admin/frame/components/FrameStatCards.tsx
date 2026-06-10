@@ -49,21 +49,21 @@ export function FrameStatCards({ stats, isLoading }: FrameStatCardsProps) {
           />
         </svg>
       ),
-      subtitle: 'Frame',
+      subtitle: 'Total frames available',
       bgColor: 'bg-primary/10',
     },
     {
       title: 'Active Frame',
       value: active,
       icon: <ShieldCheck className="size-7.5 text-green-500" />,
-      subtitle: `${total ? Math.round((active / total) * 100) : 0}% dari total`,
+      subtitle: `${total ? Math.round((active / total) * 100) : 0}% of total — frames currently active`,
       bgColor: 'bg-[#12C964]/10',
     },
     {
       title: 'Inactive Frame',
       value: inactive,
       icon: <ShieldX className="size-7.5 text-red-500" />,
-      subtitle: `${total ? Math.round((inactive / total) * 100) : 0}% dari total`,
+      subtitle: `${total ? Math.round((inactive / total) * 100) : 0}% of total — frames inactive`,
       bgColor: 'bg-red-500/10',
     },
     {
@@ -107,7 +107,7 @@ export function FrameStatCards({ stats, isLoading }: FrameStatCardsProps) {
           />
         </svg>
       ),
-      subtitle: 'Total penggunaan',
+      subtitle: 'Photo sessions using a frame today',
       bgColor: 'bg-blue-500/10',
     },
   ];

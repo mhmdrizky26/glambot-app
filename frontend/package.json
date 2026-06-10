@@ -19,6 +19,8 @@
     "clsx": "^2.1.1",
     "date-fns": "^4.3.0",
     "fabric": "^5.5.2",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lottie-react": "^2.4.1",
     "lucide-react": "^1.8.0",
     "next": "^16.2.4",
@@ -32,6 +34,7 @@
     "recharts": "^3.8.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {

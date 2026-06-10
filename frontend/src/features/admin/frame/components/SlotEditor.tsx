@@ -290,15 +290,15 @@ export function SlotEditor({
       <Card className="border-blue-200 bg-blue-50">
         <CardContent className="p-4 space-y-2">
           <p className="text-sm text-blue-900">
-            <strong>Tips:</strong> Klik dan tarik untuk membuat slot. Tarik
-            slot untuk memindahkan posisinya, atau tarik bagian sudut untuk
-            mengubah ukuran.
+            <strong>Tips:</strong> Click and drag to create a slot. Drag a
+            slot to move its position, or drag a corner to
+            resize it.
           </p>
           <p className="text-xs text-blue-900/80">
-            Definisikan slot mengikuti urutan baca: kiri atas → kanan atas →
-            kiri tengah → kanan tengah → kiri bawah → kanan bawah, dan
-            seterusnya. Urutan ini menentukan posisi foto di setiap slot saat
-            frame digunakan.
+            Define slots in reading order: top-left → top-right →
+            middle-left → middle-right → bottom-left → bottom-right, and
+            so on. This order determines the photo position in each slot when
+            the frame is used.
           </p>
         </CardContent>
       </Card>

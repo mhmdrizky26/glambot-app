@@ -82,7 +82,7 @@ export function GestureDetectionPanel({
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <p className="text-white/30 text-xs">Stream tidak tersedia</p>
+            <p className="text-white/30 text-xs">Stream not available</p>
           </div>
         )}
 

@@ -40,7 +40,7 @@ export function PrinterCard({ data }: PrinterCardProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <PrinterIcon className="size-5 text-purple-500" />
-          <span className="text-base font-semibold">Printer Photo</span>
+          <span className="text-base font-semibold">Photo Printer</span>
         </div>
         <span
           className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
@@ -58,7 +58,7 @@ export function PrinterCard({ data }: PrinterCardProps) {
         </span>
       </div>
 
-      {/* Status Koneksi — disamakan dengan kartu Kamera & Robot */}
+      {/* Connection Status — matched with the Camera & Robot cards */}
       <div
         className={`flex items-center gap-3 rounded-lg border p-3 ${
           data.isOnline
@@ -78,13 +78,13 @@ export function PrinterCard({ data }: PrinterCardProps) {
           )}
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-medium">Status Koneksi</span>
+          <span className="text-sm font-medium">Connection Status</span>
           <span
             className={`text-xs ${
               data.isOnline ? 'text-emerald-700' : 'text-rose-700'
             }`}
           >
-            {data.isOnline ? 'Terhubung dengan baik' : 'Tidak terhubung'}
+            {data.isOnline ? 'Connected' : 'Not connected'}
           </span>
         </div>
       </div>
@@ -93,7 +93,7 @@ export function PrinterCard({ data }: PrinterCardProps) {
       <div className="flex flex-col gap-3 text-sm">
         <div className="text-base font-semibold">Information</div>
         <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">ID Printer</span>
+          <span className="text-muted-foreground">Printer ID</span>
           <span className="text-right font-medium">{data.id}</span>
         </div>
         <div className="flex justify-between border-b pb-2">

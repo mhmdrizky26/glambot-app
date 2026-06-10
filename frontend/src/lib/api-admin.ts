@@ -77,7 +77,7 @@ axiosInstance.interceptors.response.use(
     const message =
       (error.response?.data as { message?: string })?.message ??
       error.message ??
-      'Terjadi kesalahan. Silakan coba lagi.';
+      'An error occurred. Please try again.';
     const apiError = new Error(message);
     Object.assign(apiError, {
       response: error.response,

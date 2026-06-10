@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { ArrowDownCircle } from 'lucide-react';
+import { ArrowDownCircle, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/admin/ui/button';
 import { Skeleton } from '@/components/admin/ui/skeleton';
@@ -10,13 +10,26 @@ import { SalesReport } from '../components/SalesReport';
 import { RecentOrderTable } from '../components/RecentOrderTable';
 import { TopList } from '../components/TopList';
 import { useGetDashboardSummary } from '../api/getDashboardSummary';
+import { exportDashboardToPDF } from '../utils/exportToPDF';
 
 export function DashboardPage() {
   const { data: summary, isLoading, isError } = useGetDashboardSummary();
+  const [isDownloading, setIsDownloading] = React.useState(false);
 
-  const handleDownload = () => {
-    // Placeholder — wire up actual report download when API is ready.
-    toast.info('Download report belum tersedia');
+  const handleDownload = async () => {
+    if (!summary) {
+      toast.error('Dashboard data is not available yet');
+      return;
+    }
+    setIsDownloading(true);
+    try {
+      exportDashboardToPDF(summary);
+      toast.success('PDF report downloaded successfully');
+    } catch {
+      toast.error('Failed to generate PDF report');
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   return (
@@ -27,22 +40,27 @@ export function DashboardPage() {
           <h1 className="text-foreground text-xl leading-7 md:text-2xl">
             Welcome back, Admin
           </h1>
-          <p className="text-muted-foreground 1 text-sm">
+          <p className="text-muted-foreground mt-1 text-sm">
             Here is what going on in your <br /> store
           </p>
         </div>
         <Button
           onClick={handleDownload}
+          disabled={isDownloading || isLoading || !summary}
           className="gap-2 rounded-[8px] text-[16px] leading-6"
         >
-          Download Report
-          <ArrowDownCircle className="size-4" />
+          {isDownloading ? (
+            <Loader2 className="size-4 animate-spin" />
+          ) : (
+            <ArrowDownCircle className="size-4" />
+          )}
+          {isDownloading ? 'Generating PDF…' : 'Download Report'}
         </Button>
       </div>
 
       {isError ? (
         <div className="bg-card text-destructive rounded-xl border p-6 text-sm">
-          Gagal memuat ringkasan dashboard. Coba muat ulang halaman.
+          Failed to load dashboard summary. Try reloading the page.
         </div>
       ) : isLoading || !summary ? (
         <DashboardSkeleton />

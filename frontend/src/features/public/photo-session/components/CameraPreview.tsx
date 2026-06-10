@@ -275,14 +275,14 @@ export function CameraPreview({
       {showError || !hasContent ? (
         <div className="w-full h-full flex flex-col items-center justify-center gap-3">
           <p className="text-white/40 text-sm">
-            {errorMessage ?? 'Stream tidak tersedia'}
+            {errorMessage ?? 'Stream not available'}
           </p>
           {onRetry && (
             <button
               onClick={onRetry}
               className="text-xs text-primary/60 underline hover:text-primary"
             >
-              Coba lagi
+              Try again
             </button>
           )}
         </div>

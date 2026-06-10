@@ -15,13 +15,13 @@ export function VoucherCreatePage() {
   const handleSubmit = async (data: VoucherFormData) => {
     try {
       await createMutation.mutateAsync(data);
-      toast.success('Voucher berhasil dibuat');
+      toast.success('Voucher created successfully');
       router.push('/voucher');
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : 'Terjadi kesalahan saat membuat voucher';
+          : 'An error occurred while creating the voucher';
       toast.error(message);
     }
   };

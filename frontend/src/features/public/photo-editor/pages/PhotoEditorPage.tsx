@@ -142,7 +142,7 @@ export default function PhotoEditorPage() {
           navigateToSessionEnd();
           return;
         }
-        alert(`Pilih 3 foto dulu (sekarang ${photoIds.length}/3).`);
+        alert(`Please select 3 photos first (currently ${photoIds.length}/3).`);
         return;
       }
 

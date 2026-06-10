@@ -111,11 +111,11 @@ export function FrameTable({
   const { mutate: deleteFrame, isPending: isDeleting } = useDeleteFrame({
     mutationConfig: {
       onSuccess: () => {
-        toast.success('Frame berhasil dihapus');
+        toast.success('Frame deleted successfully');
         setDeleteTarget(null);
       },
       onError: (error: Error) => {
-        toast.error(error.message || 'Gagal menghapus frame');
+        toast.error(error.message || 'Failed to delete frame');
       },
     },
   });

@@ -126,11 +126,11 @@ export function PackageTable({
   const { mutate: deletePackage, isPending: isDeleting } = useDeletePackage({
     mutationConfig: {
       onSuccess: () => {
-        toast.success('Package berhasil dihapus');
+        toast.success('Package deleted successfully');
         setDeleteTarget(null);
       },
       onError: (error: Error) => {
-        toast.error(error.message || 'Gagal menghapus package');
+        toast.error(error.message || 'Failed to delete package');
       },
     },
   });
@@ -143,8 +143,8 @@ export function PackageTable({
       { id: pkg.id, status },
       {
         onSuccess: () =>
-          toast.success(`Status berhasil diperbarui menjadi ${status}`),
-        onError: () => toast.error('Gagal memperbarui status'),
+          toast.success(`Status updated to ${status} successfully`),
+        onError: () => toast.error('Failed to update status'),
       },
     );
   };

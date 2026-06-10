@@ -24,16 +24,18 @@ function TrendText({ value, suffix }: { value: number; suffix: string }) {
   const isUp = value >= 0;
   const Icon = isUp ? ArrowUpIcon : ArrowDownIcon;
   return (
-    <span className="text-muted-foreground mt-px flex items-center gap-1 text-xs">
-      <Icon
-        className={`size-3 ${isUp ? 'text-emerald-600' : 'text-rose-600'}`}
-      />
+    <span className="mt-px flex items-center gap-2 text-xs">
       <span
-        className={`font-medium ${isUp ? 'text-emerald-600' : 'text-rose-600'}`}
+        className={`inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 font-medium ${
+          isUp
+            ? 'bg-emerald-100 text-emerald-700'
+            : 'bg-rose-100 text-rose-700'
+        }`}
       >
-        {Math.abs(value)}%
+        <Icon className="size-3" />
+        {Math.round(Math.abs(value))}%
       </span>
-      <span>{suffix}</span>
+      <span className="text-muted-foreground">{suffix}</span>
     </span>
   );
 }
@@ -47,7 +49,7 @@ export function TransactionStatCards({
       title: 'Total Transaction',
       value: stats ? String(stats.total) : '0',
       changePct: stats?.totalChangePct ?? 0,
-      changeLabel: 'dari kemarin',
+      changeLabel: 'from yesterday',
       icon: (
         <svg
           width="30"
@@ -94,7 +96,7 @@ export function TransactionStatCards({
       title: 'Revenue',
       value: stats ? formatCurrency(stats.revenue) : formatCurrency(0),
       changePct: stats?.revenueChangePct ?? 0,
-      changeLabel: 'dari kemarin',
+      changeLabel: 'from yesterday',
       icon: (
         <svg
           width="30"
@@ -146,7 +148,7 @@ export function TransactionStatCards({
       title: 'Successful',
       value: stats ? String(stats.successful) : '0',
       changePct: stats?.successfulChangePct ?? 0,
-      changeLabel: 'keseluruhan',
+      changeLabel: 'overall',
       icon: (
         <svg
           width="30"
@@ -199,7 +201,7 @@ export function TransactionStatCards({
       title: 'Failed',
       value: stats ? String(stats.failed) : '0',
       changePct: stats?.failedChangePct ?? 0,
-      changeLabel: 'keseluruhan',
+      changeLabel: 'overall',
       icon: (
         <svg
           width="30"
