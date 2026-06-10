@@ -135,7 +135,7 @@ export function GetPhotosScreen({
             <h2 className="text-white text-xl font-bold">Scan to download</h2>
             <p className="text-white/60 text-xs text-center">
               {isPreparing
-                ? 'Menyiapkan link Google Drive...'
+                ? 'Preparing Google Drive link...'
                 : "Point your phone's camera at this QR code."}
             </p>
             <div className="rounded-xl p-3 bg-white">
@@ -145,7 +145,7 @@ export function GetPhotosScreen({
                   size={240}
                   level="M"
                   marginSize={2}
-                  aria-label={`QR Code untuk ${qrValue}`}
+                  aria-label={`QR Code for ${qrValue}`}
                 />
               ) : (
                 <div className="w-60 h-60 bg-white/10 rounded animate-pulse" />
@@ -158,7 +158,7 @@ export function GetPhotosScreen({
             href={`/download-photos/${sessionId}`}
             className="text-primary underline text-sm font-medium hover:text-primary/70 transition-colors"
           >
-            Buka Halaman Download
+            Open Download Page
           </Link>
         </div>
       </div>

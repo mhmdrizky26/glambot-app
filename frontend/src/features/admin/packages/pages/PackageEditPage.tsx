@@ -25,13 +25,13 @@ export function PackageEditPage({ id }: PackageEditPageProps) {
   const handleSubmit = async (data: UpdatePackageInput & { image?: File }) => {
     try {
       await updateMutation.mutateAsync({ id, data });
-      toast.success('Package berhasil diperbarui');
+      toast.success('Package updated successfully');
       router.push('/packages');
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : 'Terjadi kesalahan saat memperbarui package';
+          : 'An error occurred while updating the package';
       toast.error(message);
     }
   };
@@ -48,8 +48,8 @@ export function PackageEditPage({ id }: PackageEditPageProps) {
   if (isError || !pkg) {
     return (
       <NotFoundState
-        title="Package tidak ditemukan"
-        backLabel="Kembali ke Package"
+        title="Package not found"
+        backLabel="Back to Packages"
         onBack={() => router.push('/packages')}
       />
     );

@@ -60,13 +60,13 @@ export function RobotCard({ data }: RobotCardProps) {
           )}
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-medium">Status Koneksi</span>
+          <span className="text-sm font-medium">Connection Status</span>
           <span
             className={`text-xs ${
               data.isOnline ? 'text-emerald-700' : 'text-rose-700'
             }`}
           >
-            {data.isOnline ? 'Terhubung dengan baik' : 'Tidak terhubung'}
+            {data.isOnline ? 'Connected' : 'Not connected'}
           </span>
         </div>
       </div>
@@ -75,7 +75,7 @@ export function RobotCard({ data }: RobotCardProps) {
       <div className="flex flex-col gap-3 text-sm">
         <div className="text-base font-semibold">Information</div>
         <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">ID Robot</span>
+          <span className="text-muted-foreground">Robot ID</span>
           <span className="text-right font-medium">{data.id}</span>
         </div>
         <div className="flex justify-between border-b pb-2">

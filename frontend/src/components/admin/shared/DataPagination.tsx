@@ -127,7 +127,7 @@ export function DataPagination({
           <SelectContent>
             {pageSizeOptions.map((n) => (
               <SelectItem key={n} value={String(n)} className="text-sm">
-                {n}/Halaman
+                {n}/Page
               </SelectItem>
             ))}
           </SelectContent>

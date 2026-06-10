@@ -120,12 +120,12 @@ export function VoucherPage() {
               </div>
               <ul className="list-disc space-y-1 pl-4 text-xs leading-relaxed text-blue-800">
                 <li>
-                  Pastikan voucher khusus untuk event tertentu, agar lebih
-                  terukur.
+                  Make a voucher specific to a certain event so it is easier to
+                  track.
                 </li>
                 <li>
-                  Nonaktifkan voucher yang sudah tidak berlaku agar tidak
-                  membuat pengguna bingung.
+                  Deactivate vouchers that are no longer valid so users do not
+                  get confused.
                 </li>
               </ul>
             </CardContent>

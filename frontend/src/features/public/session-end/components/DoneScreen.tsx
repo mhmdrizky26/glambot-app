@@ -62,7 +62,7 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
           {/* Text */}
           <div className="flex flex-col">
             <p className="text-primary text-2xl font-medium leading-relaxed">
-              Your photo is on its way to WhatsApp.
+              Your photos are ready on Google Drive.
             </p>
             <p className="text-primary text-2xl font-medium leading-relaxed">
               See you in the next session!
@@ -85,7 +85,7 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
         <div className="flex  gap-2 bg-primary/8 border border-primary/15 px-4 py-2 rounded-full">
           <CloudDownload size={14} className="text-primary/50" />
           <span className="text-[12px] text-primary/60 font-medium">
-            Website valid for 7 days
+            Drive link valid for 3 days
           </span>
         </div>
       </div>

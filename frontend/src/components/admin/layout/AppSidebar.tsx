@@ -140,7 +140,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               !isMobile && state === 'collapsed' && toggleSidebar()
             }
             title={
-              !isMobile && state === 'collapsed' ? 'Buka Sidebar' : undefined
+              !isMobile && state === 'collapsed' ? 'Open Sidebar' : undefined
             }
           >
             <Image

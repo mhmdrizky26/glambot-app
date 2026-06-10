@@ -29,7 +29,7 @@ export const useLoginForm = () => {
       const message =
         error instanceof Error
           ? error.message
-          : 'Login gagal. Periksa email dan password.';
+          : 'Login failed. Check your email and password.';
       toast.error(message);
     }
   };

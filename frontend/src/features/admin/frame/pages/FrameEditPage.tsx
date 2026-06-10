@@ -23,13 +23,13 @@ export function FrameEditPage({ id }: FrameEditPageProps) {
   const handleSubmit = async (data: UpdateFrameInput) => {
     try {
       await updateMutation.mutateAsync({ id, data });
-      toast.success('Frame berhasil diperbarui');
+      toast.success('Frame updated successfully');
       router.push('/frame');
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : 'Terjadi kesalahan saat memperbarui frame';
+          : 'An error occurred while updating the frame';
       toast.error(message);
     }
   };
@@ -46,8 +46,8 @@ export function FrameEditPage({ id }: FrameEditPageProps) {
   if (isError || !frame) {
     return (
       <NotFoundState
-        title="Frame tidak ditemukan"
-        backLabel="Kembali ke Frame"
+        title="Frame not found"
+        backLabel="Back to Frames"
         onBack={() => router.push('/frame')}
       />
     );

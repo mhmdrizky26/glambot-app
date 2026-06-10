@@ -26,7 +26,7 @@ interface NotFoundStateProps {
  */
 export function NotFoundState({
   title,
-  description = 'Data yang Anda cari mungkin sudah dihapus atau ID tidak valid.',
+  description = 'The data you are looking for may have been deleted or the ID is invalid.',
   backLabel,
   onBack,
 }: NotFoundStateProps) {

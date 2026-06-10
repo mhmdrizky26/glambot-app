@@ -47,7 +47,7 @@ export function GIFPreview({
         <div className="absolute inset-0 flex items-center justify-center">
           <div
             role="status"
-            aria-label="Memuat GIF"
+            aria-label="Loading GIF"
             className="w-8 h-8 rounded-full border-2 border-primary/20 border-t-primary animate-spin"
           />
         </div>
@@ -56,10 +56,10 @@ export function GIFPreview({
       {status === 'error' && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3 text-center">
           <p className="text-white/70 text-xs font-medium">
-            Preview belum tersedia
+            Preview not available yet
           </p>
           <p className="text-white/40 text-[10px]">
-            Coba refresh halaman dalam beberapa detik.
+            Try refreshing the page in a few seconds.
           </p>
         </div>
       )}

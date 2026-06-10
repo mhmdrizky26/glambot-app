@@ -16,10 +16,10 @@ export function FrameAddPage() {
   const handleSubmit = async (data: UpdateFrameInput) => {
     try {
       await createMutation.mutateAsync(data as Parameters<typeof createMutation.mutateAsync>[0]);
-      toast.success('Frame berhasil dibuat');
+      toast.success('Frame created successfully');
       router.push('/frame');
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Terjadi kesalahan saat membuat frame';
+      const message = error instanceof Error ? error.message : 'An error occurred while creating the frame';
       toast.error(message);
     }
   };

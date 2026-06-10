@@ -53,7 +53,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           className="flex flex-col items-center text-center px-6 py-8 gap-4 max-w-sm"
         >
           <p className="text-white font-semibold text-base">
-            Session ID tidak valid.
+            Invalid session ID.
           </p>
         </GlassCard>
       </main>
@@ -68,10 +68,10 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
       <main className="flex flex-col items-center justify-center min-h-full px-4 gap-4">
         <div
           role="status"
-          aria-label="Memuat foto"
+          aria-label="Loading photos"
           className="w-14 h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin"
         />
-        <p className="text-primary font-semibold text-base">Memuat foto...</p>
+        <p className="text-primary font-semibold text-base">Loading photos...</p>
       </main>
     );
   }
@@ -101,7 +101,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           className="flex flex-col items-center text-center px-6 py-8 gap-4 max-w-sm"
         >
           <p className="text-white font-semibold text-base">
-            Tidak ada foto ditemukan untuk sesi ini.
+            No photos found for this session.
           </p>
         </GlassCard>
       </main>
@@ -116,8 +116,8 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           Download Your Photos
         </h1>
         <p className="text-primary/60 text-xs sm:text-sm">
-          {framed.length > 0 && `${framed.length} hasil strip · `}
-          {raw.length} foto mentah
+          {framed.length > 0 && `${framed.length} strip results · `}
+          {raw.length} raw photos
         </p>
       </header>
 
@@ -125,7 +125,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
       {framed.length > 0 && (
         <section className="w-full max-w-2xl flex flex-col gap-2 sm:gap-3">
           <h2 className="text-primary/80 text-xs sm:text-sm font-semibold uppercase tracking-wider px-1">
-            Hasil Strip
+            Strip Results
           </h2>
           <GlassCard
             variant="default"
@@ -177,11 +177,11 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
             <div className="flex-1 flex flex-col gap-3 justify-between">
               <div className="flex flex-col gap-1 text-center sm:text-left">
                 <p className="text-white font-semibold text-sm sm:text-base">
-                  Slideshow Foto
+                  Photo Slideshow
                 </p>
                 <p className="text-white/60 text-xs sm:text-sm">
-                  Foto terpilih di-loop satu per satu — pas buat story / status
-                  WhatsApp.
+                  Selected photos looped one by one — perfect for your story /
+                  WhatsApp status.
                 </p>
               </div>
               <Button
@@ -193,11 +193,11 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
                 className="w-full sm:w-auto sm:self-start whitespace-nowrap"
               >
                 {gifState === 'downloading'
-                  ? 'Menyiapkan...'
+                  ? 'Preparing...'
                   : gifState === 'done'
-                    ? 'Tersimpan ✓'
+                    ? 'Saved ✓'
                     : gifState === 'error'
-                      ? 'Gagal, coba lagi'
+                      ? 'Failed, try again'
                       : 'Download GIF'}
               </Button>
             </div>
@@ -227,8 +227,8 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
                     Live Strip
                   </p>
                   <p className="text-white/60 text-xs sm:text-sm">
-                    Strip-mu dengan tiap slot bergerak (3 detik momen sebelum
-                    jepret), lalu settle ke foto final.
+                    Your strip with each slot in motion (the 3 seconds before
+                    the shot), then settling into the final photo.
                   </p>
                 </div>
                 <Button
@@ -240,11 +240,11 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
                   className="w-full sm:w-auto sm:self-start whitespace-nowrap"
                 >
                   {gifLiveState === 'downloading'
-                    ? 'Menyiapkan...'
+                    ? 'Preparing...'
                     : gifLiveState === 'done'
-                      ? 'Tersimpan ✓'
+                      ? 'Saved ✓'
                       : gifLiveState === 'error'
-                        ? 'Belum tersedia'
+                        ? 'Not available yet'
                         : 'Download Live Strip'}
                 </Button>
               </div>
@@ -257,7 +257,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
       {raw.length > 0 && (
         <section className="w-full max-w-2xl flex flex-col gap-2 sm:gap-3">
           <h2 className="text-primary/80 text-xs sm:text-sm font-semibold uppercase tracking-wider px-1">
-            Foto Mentah
+            Raw Photos
           </h2>
           <GlassCard
             variant="default"
@@ -280,9 +280,9 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           size="default"
           className="w-full shadow-2xl"
           onClick={() => downloadAll(allPhotos)}
-          aria-label="Download semua foto"
+          aria-label="Download all photos"
         >
-          Download Semua ({allPhotos.length})
+          Download All ({allPhotos.length})
         </Button>
       </div>
     </main>

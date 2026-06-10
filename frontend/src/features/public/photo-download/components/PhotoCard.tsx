@@ -35,7 +35,7 @@ export function PhotoCard({
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={photo.url}
-          alt={`Foto ${index + 1}`}
+          alt={`Photo ${index + 1}`}
           className="absolute inset-0 w-full h-full object-cover"
           loading="lazy"
         />
@@ -45,7 +45,7 @@ export function PhotoCard({
           {downloadState === 'idle' && (
             <button
               onClick={() => onDownload(photo)}
-              aria-label={`Download Foto ${index + 1}`}
+              aria-label={`Download Photo ${index + 1}`}
               className="min-w-11 min-h-11 flex items-center justify-center rounded-full bg-white/15 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
             >
               <Download className="w-5 h-5" aria-hidden="true" />
@@ -55,7 +55,7 @@ export function PhotoCard({
           {downloadState === 'downloading' && (
             <div
               role="status"
-              aria-label="Sedang mengunduh"
+              aria-label="Downloading"
               className="min-w-11 min-h-11 flex items-center justify-center rounded-full bg-white/15 backdrop-blur-sm border border-white/30"
             >
               <Loader2
@@ -68,7 +68,7 @@ export function PhotoCard({
           {downloadState === 'done' && (
             <div
               role="status"
-              aria-label="Unduhan selesai"
+              aria-label="Download complete"
               className="min-w-11 min-h-11 flex items-center justify-center rounded-full bg-green-500/30 backdrop-blur-sm border border-green-400/50"
             >
               <CheckCircle
@@ -81,7 +81,7 @@ export function PhotoCard({
           {downloadState === 'error' && (
             <button
               onClick={() => onDownload(photo)}
-              aria-label={`Gagal mengunduh Foto ${index + 1}, klik untuk coba lagi`}
+              aria-label={`Failed to download Photo ${index + 1}, click to try again`}
               className="min-w-11 min-h-11 flex items-center justify-center rounded-full bg-red-500/20 backdrop-blur-sm border border-red-400/50 text-red-400 hover:bg-red-500/30 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/60"
             >
               <AlertCircle className="w-5 h-5" aria-hidden="true" />

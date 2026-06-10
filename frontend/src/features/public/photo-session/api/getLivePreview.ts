@@ -18,7 +18,7 @@ export const useLiveStream = () => {
   }, [hasError, retryCount, baseUrl]);
 
   const handleStreamError = useCallback(() => {
-    console.error('Gagal memuat live preview.');
+    console.error('Failed to load live preview.');
     setHasError(true);
   }, []);
 
@@ -27,7 +27,7 @@ export const useLiveStream = () => {
     setRetryCount((prev) => prev + 1);
   }, []);
 
-  const errorMessage = hasError ? 'Stream tidak tersedia' : null;
+  const errorMessage = hasError ? 'Stream not available' : null;
 
   return {
     frameUrl,

@@ -105,8 +105,8 @@ export function TransactionDetailPanel({
               {transaction.midtransOrderId}
             </span>
           </Row>
-          <Row label="Jumlah">{formatCurrency(transaction.amount)}</Row>
-          <Row label="Biaya Admin">{formatCurrency(adminFee)}</Row>
+          <Row label="Amount">{formatCurrency(transaction.amount)}</Row>
+          <Row label="Admin Fee">{formatCurrency(adminFee)}</Row>
           <Separator />
           <Row label="Total">
             <span className="text-base font-semibold">

@@ -24,7 +24,7 @@ export function CameraCard({ data }: CameraCardProps) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <CameraIcon className="size-5 text-blue-500" />
-          <span className="text-base font-semibold">Kamera</span>
+          <span className="text-base font-semibold">Camera</span>
         </div>
         <span
           className={`flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium ${
@@ -62,13 +62,13 @@ export function CameraCard({ data }: CameraCardProps) {
           )}
         </div>
         <div className="flex flex-col">
-          <span className="text-sm font-medium">Status Koneksi</span>
+          <span className="text-sm font-medium">Connection Status</span>
           <span
             className={`text-xs ${
               data.isOnline ? 'text-emerald-700' : 'text-rose-700'
             }`}
           >
-            {data.isOnline ? 'Terhubung dengan baik' : 'Tidak terhubung'}
+            {data.isOnline ? 'Connected' : 'Not connected'}
           </span>
         </div>
       </div>

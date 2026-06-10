@@ -20,8 +20,8 @@ function QrisPreview({ src }: { src: string }) {
     return (
       <div className="w-70 h-70 rounded-lg bg-slate-100 flex items-center justify-center px-6 text-center">
         <p className="text-slate-600 text-sm leading-6">
-          QR image gagal dimuat. Tunggu beberapa detik lalu refresh atau buat
-          ulang payment.
+          Failed to load QR image. Wait a few seconds then refresh or create a
+          new payment.
         </p>
       </div>
     );
@@ -138,7 +138,7 @@ export default function PaymentStatus({
           ) : (
             <div className="rounded-2xl border border-white/15 bg-white/5 px-6 py-8 text-center">
               <p className="text-sm text-white">
-                QRIS belum siap. Payment masih diproses, silakan tunggu.
+                QRIS is not ready yet. Payment is still processing, please wait.
               </p>
             </div>
           )}

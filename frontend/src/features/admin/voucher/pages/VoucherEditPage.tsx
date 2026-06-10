@@ -27,13 +27,13 @@ export function VoucherEditPage() {
     setIsSubmitting(true);
     try {
       await updateMutation.mutateAsync({ id: voucherCode, data });
-      toast.success('Voucher berhasil diperbarui');
+      toast.success('Voucher updated successfully');
       router.push('/voucher');
     } catch (error) {
       const message =
         error instanceof Error
           ? error.message
-          : 'Terjadi kesalahan saat memperbarui voucher';
+          : 'An error occurred while updating the voucher';
       toast.error(message);
     } finally {
       setIsSubmitting(false);
@@ -52,8 +52,8 @@ export function VoucherEditPage() {
   if (isError || !voucher) {
     return (
       <NotFoundState
-        title="Voucher tidak ditemukan"
-        backLabel="Kembali ke Voucher"
+        title="Voucher not found"
+        backLabel="Back to Vouchers"
         onBack={() => router.push('/voucher')}
       />
     );

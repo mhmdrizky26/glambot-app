@@ -16,21 +16,21 @@ export function VoucherStatCards({ stats, isLoading }: VoucherStatCardsProps) {
       title: 'Total Vouchers',
       value: stats?.total ?? 0,
       icon: <Ticket className="size-7.5 text-[#8A38F5]" />,
-      subtitle: 'Vouchers',
+      subtitle: 'Total registered vouchers',
       bgColor: 'bg-[#8A38F5]/20',
     },
     {
       title: 'Active',
       value: stats?.active ?? 0,
       icon: <CircleCheck className="size-7.5 text-[#12C964]" />,
-      subtitle: `${stats?.active} Vouchers`,
+      subtitle: `${stats?.active ?? 0} vouchers currently active`,
       bgColor: 'bg-[#12C964]/10',
     },
     {
       title: 'Inactive',
       value: stats?.inactive ?? 0,
       icon: <CirclePause className="size-7.5 text-[#FFCD29]" />,
-      subtitle: `${stats?.inactive} Vouchers`,
+      subtitle: `${stats?.inactive ?? 0} vouchers inactive`,
       bgColor: 'bg-[#FFCD29]/20',
     },
     {
@@ -67,7 +67,7 @@ export function VoucherStatCards({ stats, isLoading }: VoucherStatCardsProps) {
           />
         </svg>
       ),
-      subtitle: 'Times Used',
+      subtitle: 'Total voucher usage',
       bgColor: 'bg-[#007DFC]/20',
     },
   ];

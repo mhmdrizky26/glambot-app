@@ -101,11 +101,11 @@ export function VoucherTable({ data, isLoading }: VoucherTableProps) {
   const { mutate: deleteVoucher, isPending: isDeleting } = useDeleteVoucher({
     mutationConfig: {
       onSuccess: () => {
-        toast.success('Voucher berhasil dihapus');
+        toast.success('Voucher deleted successfully');
         setDeleteTarget(null);
       },
       onError: (error: Error) => {
-        toast.error(error.message || 'Gagal menghapus voucher');
+        toast.error(error.message || 'Failed to delete voucher');
       },
     },
   });

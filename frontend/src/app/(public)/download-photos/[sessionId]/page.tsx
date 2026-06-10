@@ -6,8 +6,8 @@ interface PageProps {
 }
 
 export const metadata: Metadata = {
-  title: 'Download Foto',
-  description: 'Lihat dan unduh foto hasil sesi foto Anda.',
+  title: 'Download Photos',
+  description: 'View and download the photos from your photo session.',
 };
 
 export default async function Page({ params }: PageProps) {

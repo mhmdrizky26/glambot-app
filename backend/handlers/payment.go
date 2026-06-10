@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"photobooth/config"
 	"photobooth/database"
 	"photobooth/models"
 	"photobooth/services"
@@ -365,8 +366,12 @@ func markTransactionPaid(orderID string) (string, error) {
 		return "", err
 	}
 
+	// Perpanjang masa berlaku sesi saat lunas: dari payment window (beberapa
+	// menit) menjadi retensi penuh (SESSION_EXPIRY_HOURS) supaya foto & link
+	// download tidak ikut ke-cleanup tak lama setelah bayar.
+	sessionExpiresAt := now.Add(time.Duration(config.App.SessionExpiryHours) * time.Hour)
 	if _, err := tx.Exec(`
-		UPDATE sessions SET status = 'paid' WHERE id = ?`, sessionID,
+		UPDATE sessions SET status = 'paid', expires_at = ? WHERE id = ?`, sessionExpiresAt, sessionID,
 	); err != nil {
 		return "", err
 	}
@@ -462,7 +467,10 @@ func createOrGetFreePaidTransaction(session *models.Session) (*models.Transactio
 		}
 	}
 
-	if _, err := tx.Exec(`UPDATE sessions SET status = 'paid', final_price = 0 WHERE id = ?`, session.ID); err != nil {
+	// Perpanjang masa berlaku sesi ke retensi penuh saat lunas (lihat catatan
+	// di markPaid) supaya hasil sesi tidak ke-cleanup tak lama setelah bayar.
+	sessionExpiresAt := time.Now().UTC().Add(time.Duration(config.App.SessionExpiryHours) * time.Hour)
+	if _, err := tx.Exec(`UPDATE sessions SET status = 'paid', final_price = 0, expires_at = ? WHERE id = ?`, sessionExpiresAt, session.ID); err != nil {
 		return nil, err
 	}
 

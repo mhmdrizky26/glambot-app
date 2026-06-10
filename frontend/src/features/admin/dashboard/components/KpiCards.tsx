@@ -106,7 +106,7 @@ export function KpiCards({ data }: KpiCardsProps) {
                 }`}
               >
                 <Icon className="size-3" />
-                {Math.abs(card.changePct)}%
+                {Math.round(Math.abs(card.changePct))}%
               </span>
               <span className="text-muted-foreground">{card.changeLabel}</span>
             </div>
