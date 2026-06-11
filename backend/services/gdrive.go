@@ -246,6 +246,41 @@ func doDriveJSON(client *http.Client, req *http.Request, out interface{}) error 
 	return json.Unmarshal(data, out)
 }
 
+// DeleteDriveFolder menghapus folder sesi (beserta isinya) dari Drive. Dipakai
+// saat cleanup sesi expired supaya storage Drive tidak menumpuk. Folder yang
+// sudah tidak ada (404) dianggap sukses — idempoten terhadap cleanup berulang.
+func DeleteDriveFolder(ctx context.Context, folderID string) error {
+	if !IsDriveEnabled() {
+		return fmt.Errorf("google drive belum dikonfigurasi")
+	}
+	if folderID == "" {
+		return fmt.Errorf("folder ID kosong")
+	}
+
+	client := driveClient(ctx)
+	url := fmt.Sprintf("%s/files/%s?supportsAllDrives=true", driveAPIBase, folderID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, url, nil)
+	if err != nil {
+		return err
+	}
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// 404: folder sudah tidak ada → anggap sukses agar idempoten.
+	if resp.StatusCode == http.StatusNotFound {
+		return nil
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		data, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+		return fmt.Errorf("drive API %s: %s", resp.Status, strings.TrimSpace(string(data)))
+	}
+	return nil
+}
+
 // DriveContext mengembalikan context dengan timeout wajar untuk operasi upload
 // (beberapa file beberapa MB).
 func DriveContext() (context.Context, context.CancelFunc) {

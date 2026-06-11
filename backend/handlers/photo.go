@@ -241,8 +241,13 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	sessionID := firstNonEmpty(r.FormValue("sessionId"), r.FormValue("session_id"))
 	frameID := firstNonEmpty(r.FormValue("frameId"), r.FormValue("frame_id"))
 	photoIDsJSON := firstNonEmpty(r.FormValue("photoIds"), r.FormValue("photo_ids"))
-	// Catatan: field "filter"/"strip_filter" sengaja diabaikan — filter sudah
-	// baked-in di canvas export dari frontend.
+	// Filter strip: untuk hasil akhir memang sudah baked-in di canvas export
+	// frontend, TAPI burst GIF live disimpan mentah → filter disimpan agar
+	// generator GIF bisa menerapkan filter yang sama (lihat ApplyStripFilter).
+	stripFilter := firstNonEmpty(r.FormValue("filter"), r.FormValue("strip_filter"))
+	if !services.StripFilters[stripFilter] {
+		stripFilter = "original"
+	}
 
 	if sessionID == "" {
 		respondError(w, http.StatusBadRequest, "session_id wajib diisi")
@@ -334,10 +339,10 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update sesi: frame_id + status completed
+	// Update sesi: frame_id + filter strip + status completed
 	if _, err := database.DB.Exec(
-		`UPDATE sessions SET frame_id = ?, status = 'completed' WHERE id = ?`,
-		frameID, sessionID,
+		`UPDATE sessions SET frame_id = ?, strip_filter = ?, status = 'completed' WHERE id = ?`,
+		frameID, stripFilter, sessionID,
 	); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal memperbarui sesi")
 		return
@@ -691,6 +696,15 @@ func collectLiveStripSources(sessionID string) (services.LiveStripOptions, error
 	}
 	if session.FrameID == "" {
 		return opts, fmt.Errorf("session belum memilih frame")
+	}
+
+	// Filter strip yang dipilih saat compose — diterapkan ke burst frame supaya
+	// animasi GIF konsisten dengan hasil akhir.
+	var stripFilter string
+	if err := database.DB.QueryRow(
+		`SELECT COALESCE(strip_filter, 'original') FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&stripFilter); err == nil {
+		opts.Filter = stripFilter
 	}
 
 	// Frame design: slot coords + canvas dim + file path

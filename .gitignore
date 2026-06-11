@@ -58,6 +58,9 @@ backend/storage/frames/*
 !backend/storage/frames/frame-165.svg
 !backend/storage/frames/frame-166.svg
 !backend/storage/frames/frame-167.svg
+# frame-165 vector murni: overlay PNG hasil render (alpha asli) dipakai GIF live
+# agar dekorasi yang menjuntai ke window (lanteran) tidak tertutup burst.
+!backend/storage/frames/frame-165.png
 backend/storage/packages/*
 !backend/storage/packages/digital.svg
 !backend/storage/packages/print.svg

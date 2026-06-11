@@ -46,6 +46,9 @@ type LiveStripSlot struct {
 	Y      float64 `json:"y"`
 	Width  float64 `json:"width"`
 	Height float64 `json:"height"`
+	// Shape: "rect" | "ellipse" | "circle". Dipakai untuk masking burst supaya
+	// tidak nyembul keluar lubang non-persegi. Default rect kalau kosong.
+	Shape string `json:"shape"`
 }
 
 // LiveStripOptions parameter generator GIF #2.
@@ -59,6 +62,10 @@ type LiveStripOptions struct {
 	CanvasHeight int // dari frames.canvas_height (mis. 696)
 	Slots        []LiveStripSlot
 	Photos       []LiveStripPhoto // urut sesuai position; len harus match Slots
+	// Filter strip yang dipilih user (mis. "warm", "mono"). Diterapkan ke tiap
+	// burst frame supaya animasi konsisten dengan hasil akhir. "" / "original"
+	// = tanpa filter.
+	Filter string
 }
 
 // ParseSlotsJSON decode slots JSONB dari frames table.
@@ -75,15 +82,20 @@ func ParseSlotsJSON(raw []byte) ([]LiveStripSlot, error) {
 
 // LiveStripOutputPath path file GIF #2.
 //
-// Filename versioned (v4) supaya cached GIF dari versi compositing lama
-// otomatis di-skip dan regenerate. v4 hybrid: kalau SVG punya embedded PNG
-// pakai PNG itu (alpha asli → dekorasi yang nempel di area foto, mis. lampion
-// di slot tops, tetap muncul di depan burst). Kalau SVG vector murni, fall
-// back ke clone-and-punch dari framed strip.
+// Filename versioned (v8) supaya cached GIF dari versi compositing lama
+// otomatis di-skip dan regenerate. v7: (a) burst dikurung ke area transparan
+// frameOverlay (lubang foto desain) sehingga tidak menimpa satu pixel pun
+// dekorasi frame — benar-benar di belakang frame; (b) SEMUA slot dijamin hidup
+// — slot tanpa burst sendiri pakai fallback pool, tidak ada slot yang diam
+// (foto beku); (c) burst diberi filter strip yang sama dengan hasil akhir
+// (warm/mono/dst) supaya warnanya konsisten. Hybrid overlay:
+// kalau SVG punya embedded PNG pakai PNG itu (alpha asli → dekorasi yang nempel
+// di area foto, mis. lampion di slot tops, tetap muncul di depan burst). Kalau
+// SVG vector murni, fall back ke clone-and-punch dari framed strip.
 func LiveStripOutputPath(sessionID string) string {
 	return filepath.Join(
 		config.App.StoragePath,
-		"sessions", sessionID, "animation-live-v4.gif",
+		"sessions", sessionID, "animation-live-v8.gif",
 	)
 }
 
@@ -135,12 +147,14 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 	scaleX := float64(outW) / float64(opts.CanvasWidth)
 	scaleY := float64(outH) / float64(opts.CanvasHeight)
 	slotRects := make([]image.Rectangle, 0, len(opts.Slots))
+	slotShapes := make([]string, 0, len(opts.Slots))
 	for _, s := range opts.Slots {
 		x0 := int(s.X * scaleX)
 		y0 := int(s.Y * scaleY)
 		x1 := int((s.X + s.Width) * scaleX)
 		y1 := int((s.Y + s.Height) * scaleY)
 		slotRects = append(slotRects, image.Rect(x0, y0, x1, y1))
+		slotShapes = append(slotShapes, strings.ToLower(strings.TrimSpace(s.Shape)))
 	}
 
 	// Frame overlay = TOP layer yang menutup burst di area dekorasi frame.
@@ -163,7 +177,7 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 		}
 	}
 	if frameOverlay == nil {
-		frameOverlay = buildFrameOverlay(framedScaled, slotRects)
+		frameOverlay = buildFrameOverlay(framedScaled, slotRects, slotShapes)
 	}
 
 	// Pre-load burst frames per photo (decode sekali, pakai berulang).
@@ -172,10 +186,16 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 	}
 	bursts := make([]loadedBurst, len(opts.Photos))
 	totalBurstFound := 0
+	applyFilter := opts.Filter != "" && opts.Filter != "original"
 	for i, ph := range opts.Photos {
 		for _, p := range ph.BurstFrames {
 			img := decodeImage(p)
 			if img != nil {
+				// Terapkan filter strip yang sama dengan hasil akhir supaya
+				// burst di animasi tidak "beda warna" dengan foto final.
+				if applyFilter {
+					img = ApplyStripFilter(img, opts.Filter)
+				}
 				bursts[i].frames = append(bursts[i].frames, img)
 			}
 		}
@@ -186,6 +206,17 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 	// (tinggal static strip). Bail out.
 	if totalBurstFound == 0 {
 		return "", fmt.Errorf("tidak ada burst frame untuk session %s — GIF live tidak tersedia", opts.SessionID)
+	}
+
+	// Pool burst yang tersedia → fallback supaya SETIAP slot ikut hidup, termasuk
+	// slot yang fotonya tidak punya burst sendiri (jumlah foto < jumlah slot, atau
+	// foto dipakai ulang di beberapa slot). Tanpa ini slot tsb akan diam (foto
+	// beku) sementara slot lain beranimasi.
+	fallbackPool := make([][]image.Image, 0, len(bursts))
+	for i := range bursts {
+		if len(bursts[i].frames) > 0 {
+			fallbackPool = append(fallbackPool, bursts[i].frames)
+		}
 	}
 
 	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
@@ -201,16 +232,27 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 		draw.Draw(canvas, canvas.Bounds(), framedScaled, image.Point{}, draw.Src)
 
 		for i, slot := range slotRects {
-			if i >= len(bursts) || len(bursts[i].frames) == 0 {
-				continue // slot ini pakai final photo (sudah ada di base)
+			// Burst milik slot sendiri kalau ada; kalau tidak, ambil dari pool
+			// supaya slot tetap HIDUP (tidak ada slot yang diam).
+			var frames []image.Image
+			if i < len(bursts) && len(bursts[i].frames) > 0 {
+				frames = bursts[i].frames
+			} else if len(fallbackPool) > 0 {
+				frames = fallbackPool[i%len(fallbackPool)]
+			}
+			if len(frames) == 0 {
+				continue // benar-benar tidak ada burst sama sekali
 			}
 			// Pilih burst frame proporsional dengan progress tick.
-			frames := bursts[i].frames
 			idx := tick * len(frames) / liveGIFAnimTicks
 			if idx >= len(frames) {
 				idx = len(frames) - 1
 			}
-			drawCover(canvas, slot, frames[idx])
+			// Burst HANYA digambar di area lubang foto (tempat frameOverlay
+			// transparan). Dengan begitu burst tidak pernah menimpa satu pixel
+			// pun dekorasi frame (border, ring, ornamen) → benar-benar di
+			// belakang frame, apa pun bentuk lubangnya.
+			drawBurstMasked(canvas, slot, frames[idx], frameOverlay)
 		}
 
 		// Pasang frame design di atas burst supaya dekorasi frame (border,
@@ -251,6 +293,31 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 	log.Printf("🎞️  Live strip GIF for session %s (%d frames, %d burst sources) → %s",
 		opts.SessionID, len(images), totalBurstFound, outPath)
 	return outPath, nil
+}
+
+// drawBurstMasked menggambar burst (cover) ke dst HANYA pada pixel di mana
+// frameOverlay transparan (alpha rendah) — yaitu lubang foto desain frame.
+// Pixel di mana overlay opaque (dekorasi: border, ring, ornamen) tidak ditimpa
+// burst sama sekali, sehingga burst dijamin berada DI BELAKANG frame dan tidak
+// memotong bagian frame mana pun, apa pun bentuk lubangnya (oval, lingkaran,
+// atau bentuk tak beraturan dari PNG frame).
+func drawBurstMasked(dst *image.RGBA, rect image.Rectangle, src image.Image, overlay *image.RGBA) {
+	if rect.Dx() <= 0 || rect.Dy() <= 0 {
+		return
+	}
+	// Render burst ke buffer sementara seukuran rect.
+	tmp := image.NewRGBA(rect)
+	drawCover(tmp, rect, src)
+
+	clip := rect.Intersect(dst.Bounds()).Intersect(overlay.Bounds())
+	for y := clip.Min.Y; y < clip.Max.Y; y++ {
+		for x := clip.Min.X; x < clip.Max.X; x++ {
+			// Overlay transparan di sini = lubang foto → boleh gambar burst.
+			if overlay.RGBAAt(x, y).A < 128 {
+				dst.SetRGBA(x, y, tmp.RGBAAt(x, y))
+			}
+		}
+	}
 }
 
 // drawCover scale src image ke dst di rect tertentu pakai "cover" semantics
@@ -305,7 +372,33 @@ func loadFrameOverlayPNG(svgPath string, canvasW, canvasH int) *image.RGBA {
 	}
 	match := frameEmbeddedPNGRe.FindSubmatch(data)
 	if match == nil {
-		// SVG tanpa embedded PNG (mis. vector murni) — caller akan fallback.
+		// Bukan SVG embed-PNG. Coba decode langsung sebagai file PNG: frame yang
+		// di-upload admin berupa .png penuh dengan alpha asli (window foto sudah
+		// transparan). Kalau berhasil, pakai langsung sebagai overlay — di-scale
+		// penuh ke canvas TANPA tiling. Hasilnya semua dekorasi (termasuk yang
+		// menjuntai ke dalam slot) tampil di depan burst. Kalau gagal (SVG vector
+		// murni / format lain) → caller fallback ke buildFrameOverlay.
+		if pngImg, derr := png.Decode(bytes.NewReader(data)); derr == nil {
+			overlay := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
+			xdraw.CatmullRom.Scale(overlay, overlay.Bounds(),
+				pngImg, pngImg.Bounds(), xdraw.Over, nil)
+			return overlay
+		}
+		// SVG vector murni (mis. frame-165): coba sibling pre-rendered PNG
+		// "<base>.png" (alpha asli hasil render SVG sekali). Ini menjaga dekorasi
+		// yang menjuntai ke dalam window foto (mis. lanteran) tetap tampil di
+		// depan burst — fallback buildFrameOverlay tak bisa karena melubangi
+		// seluruh slot. Kalau sibling tak ada → caller fallback.
+		if sib := siblingOverlayPNG(svgPath); sib != "" {
+			if raw, rerr := os.ReadFile(sib); rerr == nil {
+				if pngImg, derr := png.Decode(bytes.NewReader(raw)); derr == nil {
+					overlay := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
+					xdraw.CatmullRom.Scale(overlay, overlay.Bounds(),
+						pngImg, pngImg.Bounds(), xdraw.Over, nil)
+					return overlay
+				}
+			}
+		}
 		return nil
 	}
 	// Buang whitespace dari base64 — jaga-jaga SVG di-format multi-line.
@@ -337,6 +430,22 @@ func loadFrameOverlayPNG(svgPath string, canvasW, canvasH int) *image.RGBA {
 	return overlay
 }
 
+// siblingOverlayPNG mengembalikan path "<base>.png" di sebelah file SVG kalau
+// ada — overlay hasil render SVG vector (alpha asli) yang dipakai sebagai
+// pengganti fallback buildFrameOverlay. Return "" kalau bukan .svg atau tidak
+// ada sibling-nya. PNG ini di-generate offline sekali dari SVG (lihat README
+// frames) dan harus ikut di-deploy bersama .svg-nya.
+func siblingOverlayPNG(svgPath string) string {
+	if !strings.EqualFold(filepath.Ext(svgPath), ".svg") {
+		return ""
+	}
+	sib := svgPath[:len(svgPath)-len(filepath.Ext(svgPath))] + ".png"
+	if _, err := os.Stat(sib); err == nil {
+		return sib
+	}
+	return ""
+}
+
 // buildFrameOverlay derive frame-only overlay dari framed strip yang sudah
 // di-compose frontend. Caranya: clone framed strip, lalu set semua pixel di
 // dalam slot rect jadi transparent. Hasilnya: area di luar slot tetap berisi
@@ -347,14 +456,33 @@ func loadFrameOverlayPNG(svgPath string, canvasW, canvasH int) *image.RGBA {
 // Fallback: dipakai untuk SVG vector murni (frame-165) yang tidak bisa
 // di-extract PNG-nya. Limitasi: dekorasi frame yang nempel DI DALAM slot rect
 // (mis. lampion top) hilang — burst akan menutupi area itu.
-func buildFrameOverlay(framed *image.RGBA, slotRects []image.Rectangle) *image.RGBA {
+func buildFrameOverlay(framed *image.RGBA, slotRects []image.Rectangle, slotShapes []string) *image.RGBA {
 	overlay := image.NewRGBA(framed.Bounds())
 	draw.Draw(overlay, overlay.Bounds(), framed, image.Point{}, draw.Src)
 	transparent := color.RGBA{}
-	for _, rect := range slotRects {
+	for idx, rect := range slotRects {
+		shape := ""
+		if idx < len(slotShapes) {
+			shape = slotShapes[idx]
+		}
+		ellipse := shape == "ellipse" || shape == "circle"
+		cx := (float64(rect.Min.X) + float64(rect.Max.X)) / 2
+		cy := (float64(rect.Min.Y) + float64(rect.Max.Y)) / 2
+		rx := float64(rect.Dx()) / 2
+		ry := float64(rect.Dy()) / 2
 		clipped := rect.Intersect(overlay.Bounds())
 		for y := clipped.Min.Y; y < clipped.Max.Y; y++ {
 			for x := clipped.Min.X; x < clipped.Max.X; x++ {
+				// Untuk slot oval/lingkaran, hanya lubangi pixel DI DALAM oval
+				// supaya dekorasi di sudut (ornamen, ring) tetap ada di overlay
+				// dan tampil di depan burst.
+				if ellipse && rx > 0 && ry > 0 {
+					nx := (float64(x) + 0.5 - cx) / rx
+					ny := (float64(y) + 0.5 - cy) / ry
+					if nx*nx+ny*ny > 1.0 {
+						continue
+					}
+				}
 				overlay.SetRGBA(x, y, transparent)
 			}
 		}
