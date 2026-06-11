@@ -82,8 +82,10 @@ func printWindows(path, printer string, copies int) error {
 }
 
 // printScript mencetak frame ke kertas 4R: cari paper size 4x6 dari driver,
-// lalu scale gambar fit ke page bounds. Tidak ada synthetic bleed — gambar
-// dicetak apa adanya, disesuaikan ke ukuran 4R.
+// lalu fit gambar ke KOTAK KERTAS yang terletak di tengah surface render
+// (kertas fisik = PageBounds, lebih kecil dari VisibleClipBounds yang
+// mengandung zona overscan borderless). Centering inilah yang bikin hasil
+// pas edge-to-edge tanpa kepotong/melenceng. Tidak ada synthetic bleed.
 const printScript = `param(
   [Parameter(Mandatory=$true)][string]$ImagePath,
   [Parameter(Mandatory=$true)][string]$Printer,
@@ -102,14 +104,19 @@ try {
   $doc.DocumentName = 'Photobooth Strip'
   $doc.DefaultPageSettings.Landscape = $false
 
-  # Pilih paper size 4R/4x6 dari driver (borderless maupun biasa — tidak dibedakan).
+  # Pilih paper size 4R/4x6. Borderless DIUTAMAKAN supaya tidak ada strip putih
+  # dari hard-margin; baru fallback ke 4x6 biasa kalau borderless tak tersedia.
   $chosen = $null
+  $fallback = $null
   foreach ($ps in $doc.PrinterSettings.PaperSizes) {
     $isFourSix = ($ps.Width -eq 400 -and $ps.Height -eq 600) -or
                  ($ps.Width -eq 600 -and $ps.Height -eq 400) -or
                  ($ps.PaperName -match '4.*6|4R|10.*15|102.*152')
-    if ($isFourSix) { $chosen = $ps; break }
+    if (-not $isFourSix) { continue }
+    if ($null -eq $fallback) { $fallback = $ps }
+    if ($ps.PaperName -match 'borderless|borderfree|tanpa batas|full bleed') { $chosen = $ps; break }
   }
+  if ($null -eq $chosen) { $chosen = $fallback }
   if ($chosen) {
     $doc.DefaultPageSettings.PaperSize = $chosen
     Write-Output ("PaperSize: {0} ({1}x{2})" -f $chosen.PaperName, $chosen.Width, $chosen.Height)
@@ -127,12 +134,26 @@ try {
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $iw = $img.Width; $ih = $img.Height
 
-    # Fit gambar ke seluruh halaman (contain — tidak crop, tidak stretch).
-    $page = $e.PageBounds
-    $pw = $page.Width; $ph = $page.Height
+    # PENTING — kenapa dulu kepotong di kiri-atas + putih lebar di kanan-bawah:
+    # Pada printer foto borderless (mis. EPSON SL-D500) permukaan render yang
+    # sesungguhnya (VisibleClipBounds, mis. 421x621) LEBIH BESAR dari kertas
+    # fisik (PageBounds, 400x600) — itu zona overscan borderless. Titik (0,0)
+    # Graphics ada di pojok kiri-atas SURFACE (di dalam zona overscan, di LUAR
+    # kertas). Menggambar mulai (0,0) ke ukuran kertas bikin gambar melenceng ke
+    # kiri-atas: tepi kiri/atas keluar kertas (kepotong), kanan/bawah kurang →
+    # putih. Solusi: kertas fisik ada di TENGAH surface, jadi offset gambar
+    # sebesar setengah selisih overscan, lalu fit gambar ke kotak kertas itu.
+    $surf = $g.VisibleClipBounds
+    $sw = $surf.Width; $sh = $surf.Height
+    $pw = $e.PageBounds.Width; $ph = $e.PageBounds.Height
+    $offX = ($sw - $pw) / 2; $offY = ($sh - $ph) / 2
+
+    # Fit contain ke kotak kertas. Rasio frame 2:3 == 4R, jadi mengisi penuh
+    # kertas edge-to-edge tanpa crop & tanpa strip putih.
     $scale = [Math]::Min($pw / $iw, $ph / $ih)
     $dw = $iw * $scale; $dh = $ih * $scale
-    $dx = ($pw - $dw) / 2; $dy = ($ph - $dh) / 2
+    $dx = $offX + ($pw - $dw) / 2
+    $dy = $offY + ($ph - $dh) / 2
     $g.DrawImage($img, $dx, $dy, $dw, $dh)
 
     $e.HasMorePages = $false

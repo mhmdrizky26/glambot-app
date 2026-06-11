@@ -1,6 +1,8 @@
 package services
 
 import (
+	"context"
+	"database/sql"
 	"log"
 	"os"
 	"path/filepath"
@@ -88,10 +90,32 @@ func runCleanup() {
 }
 
 func cleanupSession(sessionID string) error {
+	// Ambil folder Drive (kalau ada) sebelum menyentuh disk/DB, supaya kita tahu
+	// folder mana yang harus dihapus dari storage Drive.
+	var driveFolderID string
+	if err := database.DB.QueryRow(
+		`SELECT drive_folder_id FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&driveFolderID); err != nil && err != sql.ErrNoRows {
+		log.Printf("⚠️ Gagal baca drive_folder_id sesi %s: %v", sessionID, err)
+	}
+
 	// Hapus semua file foto dari disk
 	sessionDir := filepath.Join(config.App.StoragePath, "sessions", sessionID)
 	if err := os.RemoveAll(sessionDir); err != nil && !os.IsNotExist(err) {
 		return err
+	}
+
+	// Hapus folder sesi di Google Drive. Kegagalan tidak membatalkan cleanup
+	// (file lokal & DB tetap dibersihkan) — hanya di-log; folder Drive yatim
+	// bisa dihapus manual bila perlu.
+	if driveFolderID != "" && IsDriveEnabled() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if err := DeleteDriveFolder(ctx, driveFolderID); err != nil {
+			log.Printf("⚠️ Gagal hapus folder Drive sesi %s (%s): %v", sessionID, driveFolderID, err)
+		} else {
+			log.Printf("🗑️  Folder Drive sesi %s dihapus (%s)", sessionID, driveFolderID)
+		}
+		cancel()
 	}
 
 	// Hapus data dari DB dalam satu transaksi

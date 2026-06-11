@@ -98,6 +98,10 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		// kosong = upload belum selesai/tidak aktif.
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS drive_url TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS drive_folder_id TEXT NOT NULL DEFAULT ''`,
+		// Filter strip yang dipilih user saat compose. Disimpan supaya GIF live
+		// bisa menerapkan filter yang sama ke burst frame (frontend bake-in filter
+		// ke hasil akhir, tapi burst mentah perlu difilter ulang server-side).
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS strip_filter TEXT NOT NULL DEFAULT 'original'`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qris_url TEXT`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qris_raw_string TEXT`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`,
