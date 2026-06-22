@@ -10,6 +10,8 @@ import PhotoSelectionPanel from '../components/PhotoSelectionPanel';
 import PreviewArea from '../components/PreviewArea';
 import FrameSelectionPanel from '../components/FrameSelectionPanel';
 import ConfirmPrintButton from '../components/ConfirmPrintButton';
+import SlotAdjustToolbar from '../components/SlotAdjustToolbar';
+import { zoomPhoto, rotatePhoto, resetPhoto } from '../lib/slotTransform';
 
 import { usePhotos } from '../api/getPhotos';
 import { useFrames } from '../api/getFrames';
@@ -39,7 +41,20 @@ export default function PhotoEditorPage() {
   const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('original');
   const [activeTab, setActiveTab] = useState<TabType>('frame');
+  // Slot foto yang sedang dipilih di canvas (dilaporkan PreviewArea) → toolbar
+  // adjust dirender di baris bawah, sejajar Confirm Print (tidak menutupi preview).
+  const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
   const fabricCanvasRef = useRef<fabric.Canvas | null>(null);
+
+  // Jalankan aksi toolbar (zoom/rotate/reset) pada foto aktif, lalu re-render.
+  const withActivePhoto = (fn: (obj: fabric.Object) => void) => {
+    const canvas = fabricCanvasRef.current;
+    const obj = canvas?.getActiveObject();
+    if (!canvas || !obj || !obj.data?.isPhoto) return;
+    fn(obj);
+    obj.setCoords();
+    canvas.requestRenderAll();
+  };
   // Dedup navigation — Timer dan saveComposition.onSuccess sama-sama push
   // ke /session-end. Tanpa flag ini, mereka bisa double-push kalau fire
   // hampir bersamaan (user klik Confirm di detik ~118, timer expire di 120).
@@ -234,6 +249,7 @@ export default function PhotoEditorPage() {
               selectedFrame={selectedFrame}
               selectedFilter={selectedFilter}
               onPhotoDropped={handlePhotoDropped}
+              onActiveSlotChange={setActiveSlotId}
               onCanvasReady={(canvas) => {
                 fabricCanvasRef.current = canvas;
               }}
@@ -254,9 +270,24 @@ export default function PhotoEditorPage() {
           </div>
         </div>
 
-        {/* Confirm Print Button — below right panel, aligned right */}
-        <div className="flex justify-end">
-          <div className="w-84.25">
+        {/* Baris bawah: toolbar adjust (tengah, sejajar kolom preview) +
+            Confirm Print (kanan). Toolbar di sini, BUKAN di atas preview,
+            supaya tidak menutupi foto. */}
+        <div className="flex items-center gap-3">
+          {/* spacer selebar panel kiri agar toolbar pas di bawah preview */}
+          <div className="w-84.25 shrink-0" />
+          <div className="flex-1 min-w-0 flex justify-center">
+            {activeSlotId && (
+              <SlotAdjustToolbar
+                onZoomIn={() => withActivePhoto((o) => zoomPhoto(o, 1))}
+                onZoomOut={() => withActivePhoto((o) => zoomPhoto(o, -1))}
+                onRotateLeft={() => withActivePhoto((o) => rotatePhoto(o, -1))}
+                onRotateRight={() => withActivePhoto((o) => rotatePhoto(o, 1))}
+                onReset={() => withActivePhoto((o) => resetPhoto(o))}
+              />
+            )}
+          </div>
+          <div className="w-84.25 shrink-0">
             <ConfirmPrintButton
               disabled={!isConfirmEnabled}
               onClick={handleConfirmPrint}

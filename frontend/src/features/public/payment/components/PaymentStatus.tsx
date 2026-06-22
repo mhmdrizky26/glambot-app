@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
-import { usePayment } from '../hooks/usePayment';
+import { usePayment, type PaymentState } from '../hooks/usePayment';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { formatRupiah } from '@/lib/formats';
 
@@ -11,6 +11,12 @@ interface PaymentStatusProps {
   sessionId: string;
   onRetry: () => void;
   onSuccess?: (sessionId: string) => void;
+  // Lapor perubahan status ke parent (PayPage) agar bisa menyembunyikan tombol
+  // Back begitu pembayaran tidak lagi 'waiting' (mencegah back setelah paid).
+  onStatusChange?: (status: PaymentState) => void;
+  // Lapor saat QRIS sudah tampil → parent menyembunyikan tombol Back (user
+  // sudah commit untuk bayar, jangan biarkan mundur ke summary).
+  onQrisReady?: () => void;
 }
 
 function QrisPreview({ src }: { src: string }) {
@@ -45,11 +51,21 @@ export default function PaymentStatus({
   sessionId,
   onRetry,
   onSuccess,
+  onStatusChange,
+  onQrisReady,
 }: PaymentStatusProps) {
   const { status, qrisUrl, totalPrice, isPending } = usePayment({
     sessionId,
     onSuccess,
   });
+
+  useEffect(() => {
+    onStatusChange?.(status);
+  }, [status, onStatusChange]);
+
+  useEffect(() => {
+    if (qrisUrl) onQrisReady?.();
+  }, [qrisUrl, onQrisReady]);
 
   // Processing state — user has paid, verifying payment
   if (status === 'processing') {

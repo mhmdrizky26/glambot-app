@@ -12,6 +12,7 @@ import {
 } from '../lib/fabricCanvas';
 import { fitPhotoToSlot } from '../lib/photoFitting';
 import { applyFilterToComposition } from '../lib/filters';
+import { clampPhotoToSlot } from '../lib/slotTransform';
 
 /** Fallback canvas dimensions bila frame tidak menyimpan ukuran (2:3, 4R). */
 const DEFAULT_CANVAS_W = 464;
@@ -22,6 +23,9 @@ interface PreviewAreaProps {
   selectedFilter: FilterType;
   onPhotoDropped?: (slotId: string, photoId: string, photoUrl: string) => void;
   onCanvasReady?: (canvas: fabric.Canvas) => void;
+  // Notifikasi slot foto yang sedang dipilih (null = tidak ada). Parent memakai
+  // ini untuk menampilkan toolbar adjust di luar area preview.
+  onActiveSlotChange?: (slotId: string | null) => void;
 }
 
 export default function PreviewArea({
@@ -29,6 +33,7 @@ export default function PreviewArea({
   selectedFilter,
   onPhotoDropped,
   onCanvasReady,
+  onActiveSlotChange,
 }: PreviewAreaProps) {
   // Render di ruang koordinat asli frame (sama dengan slot disimpan di admin).
   // Server-side GIF & print sudah canvas-aware, jadi cukup samakan di sini.
@@ -45,6 +50,16 @@ export default function PreviewArea({
   const loadedFrameIdRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  // Slot foto yang sedang dipilih user → memunculkan toolbar adjust + highlight.
+  const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
+  // Reset pilihan saat frame berganti (canvas dibersihkan, semua foto hilang).
+  // Pakai pola "set state saat render dari nilai render sebelumnya" — bukan di
+  // dalam effect — supaya tidak memicu cascading render (react-hooks rule).
+  const prevFrameIdRef = useRef<string | null>(selectedFrame?.id ?? null);
+  if ((selectedFrame?.id ?? null) !== prevFrameIdRef.current) {
+    prevFrameIdRef.current = selectedFrame?.id ?? null;
+    if (activeSlotId !== null) setActiveSlotId(null);
+  }
 
   // Notify parent when canvas is ready
   useEffect(() => {
@@ -111,6 +126,42 @@ export default function PreviewArea({
 
     applyFilterToComposition(canvas, selectedFilter);
   }, [selectedFilter, fabricCanvas, getFabricCanvas]);
+
+  // Selection + drag-clamp wiring. Pakai instance `fabricCanvas` (state) supaya
+  // listener selalu nempel ke canvas terbaru (canvas dibuat ulang saat dimensi
+  // frame berubah). Saat foto dipilih → tampilkan toolbar; saat di-drag → clamp
+  // agar foto tetap menutupi slot (tidak ada celah putih).
+  useEffect(() => {
+    const canvas = fabricCanvas;
+    if (!canvas) return;
+
+    const syncActive = () => {
+      const obj = canvas.getActiveObject();
+      setActiveSlotId(obj?.data?.isPhoto ? (obj.data.slotId as string) : null);
+    };
+    const handleMoving = (e: fabric.IEvent) => {
+      const obj = e.target;
+      if (obj?.data?.isPhoto) clampPhotoToSlot(obj);
+    };
+
+    canvas.on('selection:created', syncActive);
+    canvas.on('selection:updated', syncActive);
+    canvas.on('selection:cleared', syncActive);
+    canvas.on('object:moving', handleMoving);
+
+    return () => {
+      canvas.off('selection:created', syncActive);
+      canvas.off('selection:updated', syncActive);
+      canvas.off('selection:cleared', syncActive);
+      canvas.off('object:moving', handleMoving);
+    };
+  }, [fabricCanvas]);
+
+  // Beri tahu parent slot aktif berubah → parent render toolbar adjust di luar
+  // area preview (sejajar tombol Confirm, agar tidak menutupi foto).
+  useEffect(() => {
+    onActiveSlotChange?.(activeSlotId);
+  }, [activeSlotId, onActiveSlotChange]);
 
   // Determine which slot contains the drop coordinates
   const getSlotAtPosition = useCallback(
@@ -184,9 +235,12 @@ export default function PreviewArea({
       }
 
       fitPhotoToSlot(photoData.photoUrl, slot, canvas)
-        .then(() => {
+        .then((img) => {
           loadedSlotsRef.current.add(slot.id);
           organizeCanvasLayers(canvas);
+          // Langsung pilih foto yang baru di-drop → toolbar adjust muncul.
+          canvas.setActiveObject(img);
+          setActiveSlotId(slot.id);
           canvas.requestRenderAll();
           onPhotoDropped?.(slot.id, photoData.photoId, photoData.photoUrl);
         })
@@ -196,6 +250,26 @@ export default function PreviewArea({
     },
     [getFabricCanvas, selectedFrame, getSlotAtPosition, onPhotoDropped],
   );
+
+  // Border tipis pada slot yang sedang diedit (saat tidak sedang drag foto baru).
+  const renderActiveSlotHighlight = () => {
+    if (!selectedFrame?.slots || !activeSlotId || dragOverSlotId) return null;
+
+    const slot = selectedFrame.slots.find((s) => s.id === activeSlotId);
+    if (!slot) return null;
+
+    return (
+      <div
+        className="absolute pointer-events-none border-2 border-[#3F72AF] rounded-md"
+        style={{
+          left: slot.x * scale,
+          top: slot.y * scale,
+          width: slot.width * scale,
+          height: slot.height * scale,
+        }}
+      />
+    );
+  };
 
   // Render slot highlight overlay during drag
   const renderSlotHighlights = () => {
@@ -219,7 +293,7 @@ export default function PreviewArea({
   };
 
   return (
-    <div className="h-full w-full flex flex-col p-2">
+    <div className="relative h-full w-full flex flex-col p-2">
       <p className="gradient-text text-center text-[16px] leading-5 tracking[1.33px] mb-3">
         Preview
       </p>
@@ -264,6 +338,7 @@ export default function PreviewArea({
           >
             <canvas ref={canvasRef} />
           </div>
+          {renderActiveSlotHighlight()}
           {renderSlotHighlights()}
         </div>
       </div>

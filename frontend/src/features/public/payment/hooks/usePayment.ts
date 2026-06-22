@@ -44,6 +44,17 @@ export function usePayment({
   const processingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
   );
+  // Pastikan transisi terminal (paid/failed/expired) hanya diproses SEKALI.
+  // Tanpa ini, re-render parent (mis. onStatusChange → setState) bisa memicu
+  // effect polledStatus jalan ulang → cleanup() membunuh timeout processing→
+  // success → status nyangkut di "processing" + PATCH status berulang.
+  const settledRef = useRef(false);
+  // onSuccess via ref supaya identitasnya (yang bisa berubah tiap render parent)
+  // TIDAK perlu masuk dependency effect — menghindari re-run yang tak diinginkan.
+  const onSuccessRef = useRef(onSuccess);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
 
   const cleanup = useCallback(() => {
     setPollingEnabled(false);
@@ -72,13 +83,14 @@ export function usePayment({
         // transaction as 'paid' with no QRIS. Skip the QR flow and run the
         // same processing → success → redirect path as a paid QRIS payment.
         if (result.transaction.status === 'paid' || amount <= 0) {
+          settledRef.current = true;
           cleanup();
           setStatus('processing');
           updateSessionStatus({ sessionId, status: 'paid' });
           processingTimeoutRef.current = setTimeout(() => {
             setStatus('success');
             redirectTimeoutRef.current = setTimeout(() => {
-              onSuccess?.(sessionId);
+              onSuccessRef.current?.(sessionId);
             }, SUCCESS_REDIRECT_DELAY_MS);
           }, PROCESSING_DELAY_MS);
           return;
@@ -100,6 +112,7 @@ export function usePayment({
 
   const initPayment = useCallback(() => {
     cleanup();
+    settledRef.current = false;
     setStatus('waiting');
     setQrisUrl(null);
     setTotalPrice(null);
@@ -125,10 +138,13 @@ export function usePayment({
 
   useEffect(() => {
     if (!polledStatus) return;
+    // Sudah diproses sebelumnya → jangan ulangi (cegah loop & PATCH berulang).
+    if (settledRef.current) return;
 
     const result = polledStatus.status;
 
     if (result === 'paid') {
+      settledRef.current = true;
       cleanup();
       setStatus('processing');
 
@@ -137,17 +153,18 @@ export function usePayment({
       processingTimeoutRef.current = setTimeout(() => {
         setStatus('success');
         redirectTimeoutRef.current = setTimeout(() => {
-          onSuccess?.(sessionId);
+          onSuccessRef.current?.(sessionId);
         }, SUCCESS_REDIRECT_DELAY_MS);
       }, PROCESSING_DELAY_MS);
     } else if (result === 'failed' || result === 'expired') {
+      settledRef.current = true;
       cleanup();
       setStatus('processing');
       processingTimeoutRef.current = setTimeout(() => {
         setStatus(result === 'expired' ? 'expired' : 'failed');
       }, PROCESSING_DELAY_MS);
     }
-  }, [polledStatus, cleanup, onSuccess, sessionId, updateSessionStatus]);
+  }, [polledStatus, cleanup, sessionId, updateSessionStatus]);
 
   const retry = useCallback(() => {
     initPayment();

@@ -9,6 +9,7 @@ import type { Package } from '../api/getPackages';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { useCreateSession } from '@/shared/api/session';
 import Timer from '@/components/shared/Timer';
+import BackButton from '@/components/shared/BackButton';
 
 export default function PackagePage() {
   const { data: packages = [], isPending, isError } = usePackages();
@@ -49,6 +50,8 @@ export default function PackagePage() {
   return (
     <main className="flex flex-col items-center min-h-full">
       <Timer />
+      <BackButton onClick={() => router.push('/')} />
+
       <div className="py-3.5 text-center">
         <h1 className="font-bold text-primary text-[62px]">
           Choose Your Package
