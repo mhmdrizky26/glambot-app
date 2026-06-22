@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { TicketIcon, Timer as TimerIcon } from 'lucide-react';
 import Timer from '@/components/shared/Timer';
+import BackButton from '@/components/shared/BackButton';
 
 export default function SummaryPage() {
   const searchParams = useSearchParams();
@@ -83,6 +84,7 @@ export default function SummaryPage() {
   return (
     <main className="flex flex-col items-center justify-center min-h-full px-4">
       <Timer />
+      <BackButton onClick={() => router.push('/package')} />
       <GlassCard className="px-13.5 pb-[56.59px] pt-[54.92px] max-w-174.75">
         {/* Title */}
         <h1 className="text-[48.46px] leading-[72.7px] font-bold text-white text-center mb-10.75">

@@ -103,13 +103,24 @@ export const fitPhotoToSlot = async (
 
           // Center in slot using originX/originY: 'center'
           // This is the KEY to proper centering — no manual offset calculation!
+          const centerLeft = slot.x + slot.width / 2;
+          const centerTop = slot.y + slot.height / 2;
           img.set({
-            left: slot.x + slot.width / 2,
-            top: slot.y + slot.height / 2,
+            left: centerLeft,
+            top: centerTop,
             originX: 'center',
             originY: 'center',
-            selectable: false,
-            evented: false,
+            // Interaktif: user bisa tap untuk pilih lalu geser/zoom/rotate.
+            // Handle bawaan Fabric dimatikan (hasControls/hasBorders=false) —
+            // kontrol pakai toolbar kustom (SlotAdjustToolbar) + drag langsung.
+            selectable: true,
+            evented: true,
+            hasControls: false,
+            hasBorders: false,
+            lockScalingFlip: true,
+            centeredScaling: true,
+            centeredRotation: true,
+            hoverCursor: 'move',
             data: {
               isPhoto: true,
               slotId: slot.id,
@@ -117,6 +128,16 @@ export const fitPhotoToSlot = async (
               originalWidth: img.width,
               originalHeight: img.height,
               appliedScale: targetScale,
+              // Dipakai oleh slotTransform (zoom/rotate/reset + clamp cover).
+              baseScale: targetScale,
+              baseLeft: centerLeft,
+              baseTop: centerTop,
+              slot: {
+                x: slot.x,
+                y: slot.y,
+                width: slot.width,
+                height: slot.height,
+              },
             },
           });
 

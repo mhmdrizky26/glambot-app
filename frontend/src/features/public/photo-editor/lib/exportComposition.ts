@@ -35,6 +35,12 @@ export const exportComposition = async (
     multiplier = 3, // 3x = ~300 DPI for typical print
   } = options;
 
+  // Buang selection aktif supaya tidak ada sisa state seleksi saat render
+  // (foto adjust pakai selectable:true). Border/handle bawaan memang sudah
+  // dimatikan, tapi ini menjamin export bersih.
+  canvas.discardActiveObject();
+  canvas.renderAll();
+
   // Export to data URL
   const dataUrl = canvas.toDataURL({
     format,

@@ -2,9 +2,11 @@
 
 import { SessionHeader } from '../components/SessionHeader';
 import { CameraPreview } from '../components/CameraPreview';
+import EndSessionButton from '../components/EndSessionButton';
+import GestureGuide from '../components/GestureGuide';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useGetSession, usePatchSessionStatus } from '@/shared/api/session';
+import { useGetSession } from '@/shared/api/session';
 import { sendSessionBroadcast } from '../lib/broadcastChannel';
 import { useLiveStream } from '../api/getLivePreview';
 import { useRobotConfig } from '../api/getRobotConfig';
@@ -35,23 +37,22 @@ export function PhotoSessionPage() {
     queryConfig: { enabled: !!sessionId },
   });
 
-  const { mutate: patchStatus } = usePatchSessionStatus();
-
-  // Jika masuk langsung dari payment (skip instruction), sesi masih berstatus
-  // 'paid'. Init sekali: aktifkan robot, patch ke 'shooting', broadcast START.
-  const initFiredRef = useRef(false);
+  // Enable robot TEPAT saat masuk sesi foto (halaman kamera tampil). Fire
+  // sekali; gate pada sesi valid agar sesi pending/expired yang akan di-redirect
+  // tidak ikut menyalakan robot. Disable-nya ada di end-effect di bawah, jadi
+  // enable↔disable seimbang dan dimiliki oleh halaman yang sama.
+  const enableFiredRef = useRef(false);
   useEffect(() => {
     if (!sessionId || isSessionFetching || !session) return;
-    if (session.status !== 'paid') return;
-    if (initFiredRef.current) return;
-    initFiredRef.current = true;
+    if (session.status === 'pending_payment' || session.status === 'expired')
+      return;
+    if (enableFiredRef.current) return;
+    enableFiredRef.current = true;
 
     apiClient.post('/api/robot/enable').catch((err) => {
       console.warn('[PhotoSession] robot/enable failed:', err);
     });
-    patchStatus({ sessionId, status: 'shooting' });
-    sendSessionBroadcast({ type: 'SESSION_START', sessionId });
-  }, [sessionId, session, isSessionFetching, patchStatus]);
+  }, [sessionId, session, isSessionFetching]);
 
   // Guard: sesi belum dibayar / kedaluwarsa tidak boleh masuk sesi foto.
   // Tunggu data FRESH (jangan bertindak saat fetching) agar cache 'pending_payment'
@@ -103,11 +104,19 @@ export function PhotoSessionPage() {
   // sesi diperpanjang sementara untuk merampungkan foto.
   const [graceSeconds, setGraceSeconds] = useState(0);
 
+  // User menekan "Selesai sekarang" → percepat alur dengan men-trigger jalur
+  // akhir sesi yang sama (broadcast + disable robot + navigate), termasuk
+  // safeguard robot-busy & grace. Jadi end bisa terpicu oleh timer ATAU ini.
+  const [endRequested, setEndRequested] = useState(false);
+  // "Sedang menuju akhir sesi" — timer habis atau user minta selesai. Dipakai
+  // untuk state tombol (disabled + label "Menyelesaikan foto…").
+  const endingNow = endRequested || sessionTimeLeft === 0;
+
   // Grace tick: hanya jalan saat sessionTimeLeft sudah 0 DAN robot masih
   // busy. Mulai dari 1 supaya tampilan langsung "-00:01" tanpa nampung
   // "00:00" sesaat.
   useEffect(() => {
-    if (sessionTimeLeft !== 0 || !robotBusy) {
+    if (!endingNow || !robotBusy) {
       setGraceSeconds(0);
       return;
     }
@@ -116,15 +125,25 @@ export function PhotoSessionPage() {
       setGraceSeconds((s) => s + 1);
     }, 1000);
     return () => clearInterval(id);
-  }, [sessionTimeLeft, robotBusy]);
+  }, [endingNow, robotBusy]);
 
   const graceExpired = graceSeconds >= MAX_GRACE_SEC;
-  const inGrace = sessionTimeLeft === 0 && robotBusy && !graceExpired;
+  const inGrace = endingNow && robotBusy && !graceExpired;
   // Timer yang ditampilkan: negatif saat overtime (menunggu foto selesai).
   const displayTimeLeft = inGrace ? -graceSeconds : sessionTimeLeft;
 
+  // Visibilitas overlay bawah:
+  // - presetDetected: ada gesture aktif (robot busy) saat sesi masih berjalan.
+  //   Saat ini panduan & tombol disembunyikan supaya layar bersih ("hilang"),
+  //   lalu muncul lagi ketika gesture dilepas ("ada").
+  // - Tombol "Selesai" tetap tampil saat proses akhir sesi berjalan (endingNow)
+  //   untuk menampilkan status "Menyelesaikan foto…".
+  const presetDetected = robotBusy && !endingNow;
+  const showGuide = !presetDetected && !endingNow;
+  const showEndButton = !presetDetected;
+
   useEffect(() => {
-    if (sessionTimeLeft !== 0 || !sessionId) return;
+    if (!endingNow || !sessionId) return;
     // Tunggu first poll selesai dulu sebelum decide — kalau tidak, robotBusy
     // bisa false hanya karena query masih loading, dan kita lewatkan grace
     // check (mis. user refresh tepat saat sessionTimeLeft sudah 0).
@@ -157,7 +176,7 @@ export function PhotoSessionPage() {
 
     return () => clearTimeout(timeout);
   }, [
-    sessionTimeLeft,
+    endingNow,
     sessionId,
     session,
     router,
@@ -184,7 +203,7 @@ export function PhotoSessionPage() {
           <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0 text-left">
             Preview Camera
           </h2>
-          <div className="flex-1 min-h-0">
+          <div className="relative flex-1 min-h-0">
             <CameraPreview
               frameUrl={frameUrl}
               sessionId={sessionId}
@@ -193,6 +212,29 @@ export function PhotoSessionPage() {
               onError={handleStreamError}
               onRetry={retryStream}
             />
+
+            {/* "Selesai sekarang" — melayang di pojok kanan-atas preview, diberi
+                inset (top/right-6) supaya tidak terlihat nempel ke tepi frame.
+                Disembunyikan saat preset terdeteksi (kecuali saat proses akhir
+                sesi berjalan). */}
+            {showEndButton && (
+              <div className="absolute right-6 top-6 z-40">
+                <EndSessionButton
+                  onEnd={() => setEndRequested(true)}
+                  ending={endingNow}
+                />
+              </div>
+            )}
+
+            {/* Panduan gesture preset 1–10 — ikon melayang di dalam preview,
+                inset bottom/x-6 supaya jaraknya simetris dengan tombol atas
+                (tidak nempel ke tepi bawah). pointer-events-none agar area
+                kamera tidak terblokir. Sembunyi saat preset terdeteksi. */}
+            {showGuide && (
+              <div className="pointer-events-none absolute inset-x-6 bottom-6 z-40">
+                <GestureGuide />
+              </div>
+            )}
           </div>
         </div>
       </main>

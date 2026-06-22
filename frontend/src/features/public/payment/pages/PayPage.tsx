@@ -1,15 +1,23 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import PaymentStatus from '../components/PaymentStatus';
+import type { PaymentState } from '../hooks/usePayment';
 import Timer from '@/components/shared/Timer';
+import BackButton from '@/components/shared/BackButton';
 
 export default function PayPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
   const sessionId = searchParams.get('sessionId') ?? '';
+
+  // Tombol Back hanya boleh muncul selagi pembayaran masih 'waiting' DAN QRIS
+  // belum tampil. Begitu QRIS muncul (user commit bayar) atau status pindah ke
+  // processing/success (sesi sudah 'paid'), Back hilang — cegah mundur.
+  const [payStatus, setPayStatus] = useState<PaymentState>('waiting');
+  const [qrisReady, setQrisReady] = useState(false);
 
   useEffect(() => {
     if (!sessionId) {
@@ -20,16 +28,23 @@ export default function PayPage() {
   if (!sessionId) return null;
 
   const handleSuccess = (sid: string) => {
-    router.push(`/photo-session?sessionId=${sid}`);
+    router.push(`/instruction?sessionId=${sid}`);
   };
 
   return (
     <main className="flex flex-col items-center justify-center min-h-full px-4">
       <Timer />
+      {payStatus === 'waiting' && !qrisReady && (
+        <BackButton
+          onClick={() => router.push(`/payment/summary?sessionId=${sessionId}`)}
+        />
+      )}
       <PaymentStatus
         sessionId={sessionId}
         onRetry={() => router.back()}
         onSuccess={handleSuccess}
+        onStatusChange={setPayStatus}
+        onQrisReady={() => setQrisReady(true)}
       />
     </main>
   );

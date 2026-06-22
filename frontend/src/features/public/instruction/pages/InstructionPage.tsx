@@ -10,7 +10,6 @@ import {
 } from '../components/InstructionCards';
 import { usePatchSessionStatus, useGetSession } from '@/shared/api/session';
 import { sendSessionBroadcast } from '@/features/public/photo-session/lib/broadcastChannel';
-import { apiClient } from '@/lib/api-client';
 import { playBackendAudio } from '@/lib/audio';
 import Timer from '@/components/shared/Timer';
 
@@ -61,16 +60,14 @@ export default function InstructionPage() {
   if (!sessionId) return null;
 
   const goToPhotoSession = () => {
-    // Robot enable saat user lanjut ke photo session (manual atau timeout)
-    apiClient.post('/api/robot/enable').catch((err) => {
-      console.warn('[Instruction] robot/enable failed:', err);
-    });
-
     mutate({ sessionId, status: 'shooting' });
 
     // Broadcast SESSION_START ke Monitor 2 yang sudah standby
     sendSessionBroadcast({ type: 'SESSION_START', sessionId });
 
+    // Robot di-enable di PhotoSessionPage (saat halaman kamera benar-benar
+    // tampil), bukan di sini — supaya robot tidak bergerak selagi user masih
+    // di layar instruksi.
     router.push(`/photo-session?sessionId=${sessionId}`);
   };
 
