@@ -39,6 +39,11 @@ func Setup(storagePath string) http.Handler {
 	// ─── API Routes ───────────────────────────────────────────────────────────
 	r.Route("/api", func(r chi.Router) {
 
+		// ── App config (publik) ─────────────────────────────────────────────
+		// Timer halaman user (instruction/photo-editor/get-photos/done) yang
+		// diatur admin. Dibaca frontend saat runtime.
+		r.Get("/config", handlers.GetAppConfig)
+
 		// ── Packages ────────────────────────────────────────────────────────
 		r.Get("/package", handlers.GetPackages)
 
@@ -131,6 +136,11 @@ func Setup(storagePath string) http.Handler {
 
 				// Devices (tes koneksi nyata kamera/printer/robot)
 				r.Get("/devices", handlers.AdminGetDevices)
+
+				// Settings — timer halaman user (instruction/photo-editor/
+				// get-photos/done). GET baca, PATCH ubah.
+				r.Get("/settings", handlers.AdminGetSettings)
+				r.Patch("/settings", handlers.AdminUpdateSettings)
 
 				// Packages
 				r.Get("/packages", handlers.AdminListPackages)

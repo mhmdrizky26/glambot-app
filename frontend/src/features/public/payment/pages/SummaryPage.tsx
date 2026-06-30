@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { TicketIcon, Timer as TimerIcon } from 'lucide-react';
 import Timer from '@/components/shared/Timer';
 import BackButton from '@/components/shared/BackButton';
+import { useAppConfig } from '@/shared/api/config';
 
 export default function SummaryPage() {
   const searchParams = useSearchParams();
@@ -40,6 +41,8 @@ export default function SummaryPage() {
 
   const { code, setCode, message, isValid, loading, applyVoucher } =
     useVoucher(sessionId);
+
+  const { data: appConfig } = useAppConfig();
 
   const handleProceed = () => {
     router.push(`/payment/pay?sessionId=${sessionId}`);
@@ -83,7 +86,7 @@ export default function SummaryPage() {
 
   return (
     <main className="flex flex-col items-center justify-center min-h-full px-4">
-      <Timer />
+      {appConfig && <Timer duration={appConfig.summaryTimeoutSecs} />}
       <BackButton onClick={() => router.push('/package')} />
       <GlassCard className="px-13.5 pb-[56.59px] pt-[54.92px] max-w-174.75">
         {/* Title */}

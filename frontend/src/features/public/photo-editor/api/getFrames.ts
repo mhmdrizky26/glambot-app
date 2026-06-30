@@ -17,6 +17,7 @@ export interface FrameSlot {
 export interface Frame {
   id: string;
   name: string;
+  category: string;
   imageUrl: string;
   canvasWidth: number;
   canvasHeight: number;
@@ -26,6 +27,7 @@ export interface Frame {
 interface BackendFrame {
   id: string;
   name: string;
+  category?: string;
   file_path: string;
   thumb_url: string;
   photo_slots: number;
@@ -40,6 +42,7 @@ export const getFrames = async (): Promise<Frame[]> => {
   return raw.map((f) => ({
     id: f.id,
     name: f.name,
+    category: f.category?.trim() || 'Other',
     imageUrl: toAbsoluteUrl(f.thumb_url),
     canvasWidth: f.canvas_width ?? 464,
     canvasHeight: f.canvas_height ?? 696,

@@ -77,12 +77,11 @@ const navItems: NavItem[] = [
   //   url: '/filter',
   //   iconKey: 'filter',
   // },
-  // Settings di-hide dulu dari navbar (halamannya belum dipakai).
-  // {
-  //   title: 'Settings',
-  //   url: '/settings',
-  //   iconKey: 'setting',
-  // },
+  {
+    title: 'Settings',
+    url: '/settings',
+    iconKey: 'setting',
+  },
 ];
 
 function renderSidebarIcon(item: NavItem, isActive: boolean) {

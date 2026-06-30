@@ -118,7 +118,17 @@ func cleanupSession(sessionID string) error {
 		cancel()
 	}
 
-	// Hapus data dari DB dalam satu transaksi
+	// Bersihkan data DB dalam satu transaksi.
+	//
+	// PENTING (akuntansi): baris `transactions` SENGAJA TIDAK dihapus — itu
+	// catatan keuangan (nominal, status bayar, paid_at) yang harus tetap akurat
+	// & tersimpan untuk laporan/rekonsiliasi. Sesi juga tidak di-DELETE (hanya
+	// ditandai 'expired'), jadi snapshot keuangan di baris sessions (price,
+	// discount, final_price, print_unit_price) + FK transaksi tetap utuh.
+	// Yang dibersihkan: baris `photos` (file fisik sudah dihapus di atas) dan
+	// `voucher_usage` — keduanya tidak memengaruhi nilai keuangan (nominal
+	// diskon sudah tersimpan di kolom sessions). voucher_usage dihapus juga agar
+	// voucher yang pernah dipakai tetap bisa di-hapus admin (FK ke vouchers).
 	tx, err := database.DB.Begin()
 	if err != nil {
 		return err
@@ -129,10 +139,6 @@ func cleanupSession(sessionID string) error {
 		return err
 	}
 	if _, err := tx.Exec(`DELETE FROM photos WHERE session_id = ?`, sessionID); err != nil {
-		tx.Rollback()
-		return err
-	}
-	if _, err := tx.Exec(`DELETE FROM transactions WHERE session_id = ?`, sessionID); err != nil {
 		tx.Rollback()
 		return err
 	}

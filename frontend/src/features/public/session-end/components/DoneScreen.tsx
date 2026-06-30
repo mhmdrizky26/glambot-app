@@ -5,6 +5,7 @@ import { CloudDownload, Sparkles } from 'lucide-react';
 import Lottie from 'lottie-react';
 import loadingAnimation from '@/assets/loading.json';
 import { useEffect, useState } from 'react';
+import { useAppConfig } from '@/shared/api/config';
 
 interface DoneScreenProps {
   onSessionEnd: () => void;
@@ -12,6 +13,7 @@ interface DoneScreenProps {
 }
 export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const { data: appConfig } = useAppConfig();
 
   useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 3000);
@@ -31,11 +33,13 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
 
   return (
     <div className="min-h-full w-full flex flex-col items-center justify-center relative overflow-hidden">
-      <Timer
-        duration={30}
-        onTimeUp={onSessionEnd}
-        storageKey={`done-screen:${sessionId}`}
-      />
+      {appConfig && (
+        <Timer
+          duration={appConfig.doneScreenTimeoutSecs}
+          onTimeUp={onSessionEnd}
+          storageKey={`done-screen:${sessionId}`}
+        />
+      )}
 
       {/* Robot Icon */}
       <div className="mb-4">

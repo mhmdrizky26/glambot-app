@@ -8,6 +8,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import loadingAnimation from '@/assets/loading.json';
 import Timer from '@/components/shared/Timer';
 import { useDriveLink } from '@/features/public/photo-download/api/getDriveLink';
+import { useAppConfig } from '@/shared/api/config';
 
 interface GetPhotosScreenProps {
   onComplete: () => void;
@@ -19,6 +20,7 @@ export function GetPhotosScreen({
   sessionId,
 }: GetPhotosScreenProps) {
   const [downloadUrl, setDownloadUrl] = useState('');
+  const { data: appConfig } = useAppConfig();
 
   // Splash minimum supaya loading tidak berkedip sekejap.
   const [minSplashDone, setMinSplashDone] = useState(false);
@@ -82,11 +84,13 @@ export function GetPhotosScreen({
 
   return (
     <div className="min-h-full w-full flex flex-col items-center relative overflow-hidden">
-      <Timer
-        duration={30}
-        onTimeUp={onComplete}
-        storageKey={`get-photos:${sessionId}`}
-      />
+      {appConfig && (
+        <Timer
+          duration={appConfig.getPhotosTimeoutSecs}
+          onTimeUp={onComplete}
+          storageKey={`get-photos:${sessionId}`}
+        />
+      )}
       {/* Header */}
       <div className="w-full flex items-center justify-center pt-10 pb-2 relative px-10">
         <div className="text-center">

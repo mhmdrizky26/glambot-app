@@ -21,6 +21,7 @@ import { useSaveComposition } from '../api/saveComposition';
 import { printComposition } from '../api/printComposition';
 import { usePhotoComposition } from '../hooks/usePhotoComposition';
 import type { FilterType } from '../lib/filters';
+import { useAppConfig } from '@/shared/api/config';
 
 // FilterType didefinisikan kanonik di lib/filters; di-re-export di sini supaya
 // import lama `from '../pages/PhotoEditorPage'` tetap berfungsi tanpa drift.
@@ -84,6 +85,10 @@ export default function PhotoEditorPage() {
 
   const { data: frames = [], isLoading: framesLoading } = useFrames();
 
+  // Timer config (durasi edit diatur admin). Tunggu termuat sebelum render
+  // Timer agar countdown persisted tidak ke-reset (lihat catatan di useAppConfig).
+  const { data: appConfig } = useAppConfig();
+
   // Save composition mutation
   const { mutate: saveComposition, isPending: isSaving } = useSaveComposition();
 
@@ -91,7 +96,7 @@ export default function PhotoEditorPage() {
   // menampilkan spinner sembari router.replace('/package') jalan, BUKAN
   // return null lebih awal yang akan melanggar Rules of Hooks (hooks di
   // atas sudah dipanggil, conditional early return akan skip render saja).
-  if (!sessionId || photosLoading || framesLoading) {
+  if (!sessionId || photosLoading || framesLoading || !appConfig) {
     return (
       <div className="flex items-center justify-center min-h-full">
         <StatusAnimation status="waiting" className="w-24 h-24" />
@@ -142,22 +147,27 @@ export default function PhotoEditorPage() {
         .filter((slot) => slot.photoId !== null)
         .map((slot) => slot.photoId as string);
 
-      // Backend `/api/photo/compose` (lewat strip generator) berasumsi 3 slot
-      // terisi — kalau kurang, GIF + framed strip jadi tidak konsisten. Block
-      // di sini supaya user dapat alert yang jelas, bukan error 400 dari
-      // server. Saat timer-triggered (silent), tetap navigate ke session-end
-      // tanpa save: user sudah kehabisan waktu.
-      if (photoIds.length < 3) {
+      // Jumlah foto yang dibutuhkan mengikuti jumlah slot pada frame terpilih
+      // (mis. 2, 4, 6, 8). Backend strip generator memakai slot frame secara
+      // dinamis, jadi cukup pastikan SEMUA slot terisi sebelum compose — kalau
+      // kurang, GIF + framed strip jadi tidak konsisten. Block di sini supaya
+      // user dapat alert yang jelas, bukan error 400 dari server. Saat
+      // timer-triggered (silent), tetap navigate ke session-end tanpa save:
+      // user sudah kehabisan waktu.
+      const requiredCount = selectedFrame!.slots.length;
+      if (photoIds.length < requiredCount) {
         if (silent) {
           console.warn(
             '[PhotoEditorPage] Timer expired with',
             photoIds.length,
-            'photo(s) selected — skipping save, navigating anyway',
+            `of ${requiredCount} photo(s) selected — skipping save, navigating anyway`,
           );
           navigateToSessionEnd();
           return;
         }
-        alert(`Please select 3 photos first (currently ${photoIds.length}/3).`);
+        alert(
+          `Please select ${requiredCount} photos first (currently ${photoIds.length}/${requiredCount}).`,
+        );
         return;
       }
 
@@ -222,7 +232,7 @@ export default function PhotoEditorPage() {
     <div className="h-full w-full flex flex-col overflow-hidden">
       {/* 2 menit untuk pilih frame + foto, lalu auto ke session-end */}
       <Timer
-        duration={120}
+        duration={appConfig.photoEditorTimeoutSecs}
         onTimeUp={handleTimeUp}
         storageKey={sessionId ? `photo-editor:${sessionId}` : null}
       />

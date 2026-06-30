@@ -9,23 +9,21 @@ import {
   XAxis,
   YAxis,
 } from 'recharts';
-import { ArrowUpIcon } from 'lucide-react';
+import { ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
 import { ChartContainer } from '@/components/admin/shared/ChartContainer';
+import { formatRupiah } from '@/lib/formats';
 import { type SalesReport as SalesReportData } from '../api/types';
 
 interface SalesReportProps {
   data: SalesReportData;
 }
 
-const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 2,
-  }).format(n);
-
+// Format ringkas untuk sumbu-Y nilai Rupiah (rb=ribu, jt=juta, M=miliar).
 const formatCompact = (n: number) => {
-  if (n >= 1000) return `${(n / 1000).toFixed(0)}k`;
+  if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}M`;
+  if (n >= 1_000_000)
+    return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}jt`;
+  if (n >= 1_000) return `${Math.round(n / 1_000)}rb`;
   return String(n);
 };
 
@@ -54,8 +52,8 @@ function Chart({ points }: { points: SalesReportData['data'] }) {
           <YAxis
             tickLine={false}
             axisLine={false}
-            domain={[0, 14000]}
-            ticks={[0, 2000, 4000, 6000, 8000, 10000, 12000, 14000]}
+            domain={[0, 'auto']}
+            width={48}
             tickFormatter={(v) => formatCompact(Number(v))}
             tick={{ fontSize: 12, fill: '#6B7280' }}
           />
@@ -77,6 +75,9 @@ function Chart({ points }: { points: SalesReportData['data'] }) {
 }
 
 export function SalesReport({ data }: SalesReportProps) {
+  const deltaUp = data.delta >= 0;
+  const DeltaIcon = deltaUp ? ArrowUpIcon : ArrowDownIcon;
+
   return (
     <div className="bg-card flex min-w-0 flex-col gap-4 rounded-xl p-6">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -84,11 +85,15 @@ export function SalesReport({ data }: SalesReportProps) {
           <h3 className="text-base font-semibold">Sales Report</h3>
           <div className="mt-2 flex flex-wrap items-baseline gap-3">
             <span className="text-2xl font-semibold">
-              {formatCurrency(data.total)}
+              Rp {formatRupiah(data.total)}
             </span>
-            <span className="inline-flex items-center gap-1 text-sm font-medium text-emerald-600">
-              <ArrowUpIcon className="size-3.5" />
-              {formatCurrency(data.delta)}
+            <span
+              className={`inline-flex items-center gap-1 text-sm font-medium ${
+                deltaUp ? 'text-emerald-600' : 'text-rose-600'
+              }`}
+            >
+              <DeltaIcon className="size-3.5" />
+              {`${deltaUp ? '+' : ''}${data.delta.toFixed(1)}%`}
             </span>
           </div>
         </div>

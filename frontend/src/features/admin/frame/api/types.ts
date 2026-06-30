@@ -2,7 +2,10 @@ import { toStorageUrl } from '@/lib/storage-url';
 
 export type FrameStatus = 'active' | 'inactive';
 export type SlotShape = 'rect' | 'circle' | 'ellipse';
-export type FrameCategory = 'Standard' | 'Premium' | 'Special' | 'Event';
+// Kategori frame berbasis kapasitas orang: 'Personal' (1-4 orang) & 'Group'
+// (banyak orang). Filter admin/publik tetap data-driven, jadi tipe ini hanya
+// memandu opsi form & nilai default.
+export type FrameCategory = 'Personal' | 'Group';
 
 export interface FrameSlot {
   id: string;

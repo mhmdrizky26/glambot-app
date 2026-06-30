@@ -456,10 +456,12 @@ export function FrameForm({
                           <SelectValue placeholder="Select category" />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="Event">Event</SelectItem>
-                          <SelectItem value="Fun">Fun</SelectItem>
-                          <SelectItem value="Premium">Premium</SelectItem>
-                          <SelectItem value="Standard">Standard</SelectItem>
+                          <SelectItem value="Personal">
+                            Personal — 1–4 orang
+                          </SelectItem>
+                          <SelectItem value="Group">
+                            Group — banyak orang
+                          </SelectItem>
                         </SelectContent>
                       </Select>
                       {fieldState.invalid && (

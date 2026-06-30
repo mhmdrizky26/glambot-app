@@ -121,6 +121,7 @@ type Voucher struct {
 type Frame struct {
 	ID           string          `json:"id"`
 	Name         string          `json:"name"`
+	Category     string          `json:"category"`
 	FilePath     string          `json:"file_path"`
 	ThumbURL     string          `json:"thumb_url"`
 	PhotoSlots   int             `json:"photo_slots"`

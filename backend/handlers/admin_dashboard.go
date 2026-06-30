@@ -87,12 +87,14 @@ func buildKpis() []kpiCard {
 	_ = database.DB.QueryRow(`SELECT COALESCE(SUM(amount),0) FROM transactions
 		WHERE status = 'paid' AND date_trunc('month', paid_at) = date_trunc('month', NOW() - INTERVAL '1 month')`).Scan(&revLast)
 
-	// Customers (sesi) bulan ini vs lalu
+	// Customers = pelanggan BERBAYAR (sesi yang punya transaksi 'paid'), bukan
+	// semua sesi — supaya tidak terinflasi oleh sesi batal/belum bayar. Dihitung
+	// per bulan berdasarkan paid_at, konsisten dengan Total Revenue.
 	var custThis, custLast float64
-	_ = database.DB.QueryRow(`SELECT COUNT(*) FROM sessions
-		WHERE date_trunc('month', created_at) = date_trunc('month', NOW())`).Scan(&custThis)
-	_ = database.DB.QueryRow(`SELECT COUNT(*) FROM sessions
-		WHERE date_trunc('month', created_at) = date_trunc('month', NOW() - INTERVAL '1 month')`).Scan(&custLast)
+	_ = database.DB.QueryRow(`SELECT COUNT(DISTINCT session_id) FROM transactions
+		WHERE status = 'paid' AND date_trunc('month', paid_at) = date_trunc('month', NOW())`).Scan(&custThis)
+	_ = database.DB.QueryRow(`SELECT COUNT(DISTINCT session_id) FROM transactions
+		WHERE status = 'paid' AND date_trunc('month', paid_at) = date_trunc('month', NOW() - INTERVAL '1 month')`).Scan(&custLast)
 
 	// Voucher dipakai (total)
 	var voucherUsed float64
@@ -106,9 +108,9 @@ func buildKpis() []kpiCard {
 		FROM transactions
 		WHERE status='paid' AND paid_at::date >= (NOW() - INTERVAL '6 days')::date
 		GROUP BY d`)
-	customerTrend := dailyTrend(`SELECT created_at::date AS d, COUNT(*)
-		FROM sessions
-		WHERE created_at::date >= (NOW() - INTERVAL '6 days')::date
+	customerTrend := dailyTrend(`SELECT paid_at::date AS d, COUNT(DISTINCT session_id)
+		FROM transactions
+		WHERE status='paid' AND paid_at::date >= (NOW() - INTERVAL '6 days')::date
 		GROUP BY d`)
 
 	return []kpiCard{
@@ -234,18 +236,23 @@ func buildRecentOrders() []recentOrder {
 	return orders
 }
 
+// "by Sales" → hanya hitung sesi yang BERBAYAR (punya transaksi 'paid'). Pakai
+// LEFT JOIN supaya sesi yang frame/paketnya sudah dihapus tetap ikut terhitung
+// (fallback nama via COALESCE), bukan hilang seperti pada INNER JOIN.
 func buildTopFrames() []topListItem {
 	return topList(`SELECT COALESCE(f.name, s.frame_id), COUNT(*) AS used
 		FROM sessions s
-		JOIN frames f ON f.id = s.frame_id
+		LEFT JOIN frames f ON f.id = s.frame_id
 		WHERE s.frame_id IS NOT NULL AND s.frame_id <> ''
+		  AND EXISTS (SELECT 1 FROM transactions t WHERE t.session_id = s.id AND t.status = 'paid')
 		GROUP BY f.name, s.frame_id ORDER BY used DESC LIMIT 5`)
 }
 
 func buildTopProducts() []topListItem {
-	return topList(`SELECT p.name, COUNT(*) AS used
+	return topList(`SELECT COALESCE(p.name, 'Unknown'), COUNT(*) AS used
 		FROM sessions s
-		JOIN packages p ON p.id = s.package_id
+		LEFT JOIN packages p ON p.id = s.package_id
+		WHERE EXISTS (SELECT 1 FROM transactions t WHERE t.session_id = s.id AND t.status = 'paid')
 		GROUP BY p.name ORDER BY used DESC LIMIT 5`)
 }
 
