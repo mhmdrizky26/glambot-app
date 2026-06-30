@@ -26,10 +26,10 @@ interface SlotEditorProps {
 }
 
 const TARGET_SLOT_OPTIONS = [
+  { value: 2, label: '2 slots (2×1)' },
   { value: 4, label: '4 slots (2×2)' },
   { value: 6, label: '6 slots (3×2)' },
   { value: 8, label: '8 slots (4×2)' },
-  { value: 9, label: '9 slots (3×3)' },
 ];
 
 export function SlotEditor({

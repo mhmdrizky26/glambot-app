@@ -130,8 +130,26 @@ func buildTxFilter(r *http.Request) (string, []any) {
 		args = append(args, like, like, like)
 	}
 	if st := queryParam(r, "status"); st != "" {
-		where = append(where, "t.status = ?")
-		args = append(args, txStatusToDB(st))
+		// Filter pakai status EFEKTIF yang sama dengan yang ditampilkan: transaksi
+		// 'pending' pada sesi yang sudah lewat expires_at tampil sebagai 'expired'
+		// (lihat scanTransaction). Maka filter & count juga harus mengikutinya,
+		// supaya filter "Expired"/"Pending", angka total, list, dan badge konsisten.
+		// (Butuh LEFT JOIN sessions s — list/export & count sudah join.)
+		switch txStatusToDB(st) {
+		case "paid":
+			where = append(where, "t.status = 'paid'")
+		case "failed":
+			where = append(where, "t.status = 'failed'")
+		case "cancelled":
+			where = append(where, "t.status = 'cancelled'")
+		case "expired":
+			where = append(where, "(t.status = 'expired' OR (t.status = 'pending' AND s.expires_at IS NOT NULL AND s.expires_at < NOW()))")
+		case "pending":
+			where = append(where, "(t.status = 'pending' AND (s.expires_at IS NULL OR s.expires_at >= NOW()))")
+		default:
+			where = append(where, "t.status = ?")
+			args = append(args, txStatusToDB(st))
+		}
 	}
 	if m := queryParam(r, "month"); m != "" {
 		where = append(where, "EXTRACT(MONTH FROM t.created_at) = ?")
@@ -157,7 +175,8 @@ func AdminListTransactions(w http.ResponseWriter, r *http.Request) {
 
 	var total int
 	if err := database.DB.QueryRow(
-		`SELECT COUNT(*) FROM transactions t WHERE `+whereSQL, args...,
+		`SELECT COUNT(*) FROM transactions t
+		 LEFT JOIN sessions s ON s.id = t.session_id WHERE `+whereSQL, args...,
 	).Scan(&total); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal menghitung transaksi")
 		return

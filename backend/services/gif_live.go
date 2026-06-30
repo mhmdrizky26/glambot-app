@@ -82,8 +82,14 @@ func ParseSlotsJSON(raw []byte) ([]LiveStripSlot, error) {
 
 // LiveStripOutputPath path file GIF #2.
 //
-// Filename versioned (v8) supaya cached GIF dari versi compositing lama
-// otomatis di-skip dan regenerate. v7: (a) burst dikurung ke area transparan
+// Filename versioned (v10) supaya cached GIF dari versi compositing lama
+// otomatis di-skip dan regenerate. v10: burst kini juga dimasking ke BENTUK
+// slot (elips/lingkaran), bukan cuma transparansi frame overlay — memperbaiki
+// burst yang nyembul ke sudut rect saat lubang foto dibentuk lewat clipping
+// frontend (frame PNG transparan di sudut). v9: frame overlay dari SVG embed-PNG
+// kini di-MIRROR di separuh kiri (replikasi transform matrix(-1 0 0 1 …) di
+// SVG) supaya lubang & dekorasi align persis dengan render browser — burst
+// tidak lagi bocor keluar frame. v7: (a) burst dikurung ke area transparan
 // frameOverlay (lubang foto desain) sehingga tidak menimpa satu pixel pun
 // dekorasi frame — benar-benar di belakang frame; (b) SEMUA slot dijamin hidup
 // — slot tanpa burst sendiri pakai fallback pool, tidak ada slot yang diam
@@ -95,7 +101,7 @@ func ParseSlotsJSON(raw []byte) ([]LiveStripSlot, error) {
 func LiveStripOutputPath(sessionID string) string {
 	return filepath.Join(
 		config.App.StoragePath,
-		"sessions", sessionID, "animation-live-v8.gif",
+		"sessions", sessionID, "animation-live-v11.gif",
 	)
 }
 
@@ -249,10 +255,15 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 				idx = len(frames) - 1
 			}
 			// Burst HANYA digambar di area lubang foto (tempat frameOverlay
-			// transparan). Dengan begitu burst tidak pernah menimpa satu pixel
-			// pun dekorasi frame (border, ring, ornamen) → benar-benar di
-			// belakang frame, apa pun bentuk lubangnya.
-			drawBurstMasked(canvas, slot, frames[idx], frameOverlay)
+			// transparan) DAN di dalam bentuk slot (oval/lingkaran). Dua masker
+			// ini bersama menjaga burst: (a) tidak menimpa dekorasi frame, dan
+			// (b) tidak nyembul ke sudut rect saat lubang foto dibentuk lewat
+			// clipping frontend (frame PNG transparan di sudut slot).
+			shape := ""
+			if i < len(slotShapes) {
+				shape = slotShapes[i]
+			}
+			drawBurstMasked(canvas, slot, shape, frames[idx], frameOverlay)
 		}
 
 		// Pasang frame design di atas burst supaya dekorasi frame (border,
@@ -301,7 +312,7 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 // burst sama sekali, sehingga burst dijamin berada DI BELAKANG frame dan tidak
 // memotong bagian frame mana pun, apa pun bentuk lubangnya (oval, lingkaran,
 // atau bentuk tak beraturan dari PNG frame).
-func drawBurstMasked(dst *image.RGBA, rect image.Rectangle, src image.Image, overlay *image.RGBA) {
+func drawBurstMasked(dst *image.RGBA, rect image.Rectangle, shape string, src image.Image, overlay *image.RGBA) {
 	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return
 	}
@@ -309,9 +320,25 @@ func drawBurstMasked(dst *image.RGBA, rect image.Rectangle, src image.Image, ove
 	tmp := image.NewRGBA(rect)
 	drawCover(tmp, rect, src)
 
+	// Slot oval/lingkaran → burst dibatasi ke dalam elips (pakai persamaan
+	// elips ternormalisasi), supaya tidak nyembul ke sudut rect.
+	ellipse := shape == "ellipse" || shape == "circle"
+	cx := (float64(rect.Min.X) + float64(rect.Max.X)) / 2
+	cy := (float64(rect.Min.Y) + float64(rect.Max.Y)) / 2
+	rx := float64(rect.Dx()) / 2
+	ry := float64(rect.Dy()) / 2
+
 	clip := rect.Intersect(dst.Bounds()).Intersect(overlay.Bounds())
 	for y := clip.Min.Y; y < clip.Max.Y; y++ {
 		for x := clip.Min.X; x < clip.Max.X; x++ {
+			// Di luar elips slot → lewati (jaga sudut rect tetap kosong).
+			if ellipse && rx > 0 && ry > 0 {
+				nx := (float64(x) + 0.5 - cx) / rx
+				ny := (float64(y) + 0.5 - cy) / ry
+				if nx*nx+ny*ny > 1.0 {
+					continue
+				}
+			}
 			// Overlay transparan di sini = lubang foto → boleh gambar burst.
 			if overlay.RGBAAt(x, y).A < 128 {
 				dst.SetRGBA(x, y, tmp.RGBAAt(x, y))
@@ -419,14 +446,29 @@ func loadFrameOverlayPNG(svgPath string, canvasW, canvasH int) *image.RGBA {
 		return nil
 	}
 
-	// SVG asli tile PNG dua kali (kiri-half + kanan-half, ref. <rect> di SVG).
-	// Replikasi disini supaya overlay match dengan rendering frontend.
+	// SVG asli memasang PNG di dua <rect> setengah-kanvas:
+	//   - rect KANAN  : pattern apa adanya          (orientasi normal)
+	//   - rect KIRI   : transform="matrix(-1 0 0 1 …)" → PNG DI-MIRROR horizontal
+	// Jadi frame simetris cermin kiri-kanan. Browser render SVG ini native
+	// sehingga strip biasa pas; backend WAJIB meniru mirror-nya, kalau tidak
+	// sisi kiri terbalik → lubang & dekorasi geser → burst bocor keluar frame.
 	overlay := image.NewRGBA(image.Rect(0, 0, canvasW, canvasH))
 	halfW := canvasW / 2
-	xdraw.CatmullRom.Scale(overlay, image.Rect(0, 0, halfW, canvasH),
-		pngImg, pngImg.Bounds(), xdraw.Over, nil)
+
+	// Kanan: PNG apa adanya.
 	xdraw.CatmullRom.Scale(overlay, image.Rect(halfW, 0, canvasW, canvasH),
 		pngImg, pngImg.Bounds(), xdraw.Over, nil)
+
+	// Kiri: render PNG ke buffer setengah-lebar, lalu salin ter-mirror
+	// horizontal ke separuh kiri overlay (replikasi matrix(-1 0 0 1 …)).
+	left := image.NewRGBA(image.Rect(0, 0, halfW, canvasH))
+	xdraw.CatmullRom.Scale(left, left.Bounds(),
+		pngImg, pngImg.Bounds(), xdraw.Over, nil)
+	for y := 0; y < canvasH; y++ {
+		for x := 0; x < halfW; x++ {
+			overlay.SetRGBA(halfW-1-x, y, left.RGBAAt(x, y))
+		}
+	}
 	return overlay
 }
 

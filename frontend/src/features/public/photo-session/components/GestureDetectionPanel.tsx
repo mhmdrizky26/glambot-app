@@ -86,11 +86,6 @@ export function GestureDetectionPanel({
           </div>
         )}
 
-        {/* Detection box overlay */}
-        <div className="absolute inset-0 flex items-center justify-start pl-8 pointer-events-none">
-          <div className="w-36 h-44 border border-dashed border-[#00d084]/60 rounded-xl" />
-        </div>
-
         {/* Progress bar */}
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
           <div

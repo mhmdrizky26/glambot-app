@@ -1,5 +1,6 @@
 'use client';
 
+import { useMemo, useState } from 'react';
 import GlassCard from '@/components/shared/GlassCard';
 import type { Frame } from '../api/getFrames';
 import type { FilterType } from '../pages/PhotoEditorPage';
@@ -77,6 +78,20 @@ export default function FrameSelectionPanel({
   onFilterSelect,
   onTabChange,
 }: FrameSelectionPanelProps) {
+  // Filter kategori frame. 'All' = tampilkan semua. Daftar kategori diturunkan
+  // dari frame yang ada (unik, terurut). Filter hanya tampil bila ada >1 kategori.
+  const [category, setCategory] = useState('All');
+
+  const categories = useMemo(() => {
+    const unique = Array.from(new Set(frames.map((f) => f.category))).sort();
+    return ['All', ...unique];
+  }, [frames]);
+
+  const visibleFrames = useMemo(
+    () => (category === 'All' ? frames : frames.filter((f) => f.category === category)),
+    [frames, category],
+  );
+
   return (
     <div className="flex flex-col h-full w-full gap-4">
       {/* Tab header */}
@@ -110,13 +125,42 @@ export default function FrameSelectionPanel({
               Frame Style
             </p>
 
+            {/* Filter kategori — baris chip ramping (scroll horizontal).
+                Tampil hanya bila ada lebih dari satu kategori. */}
+            {categories.length > 2 && (
+              <div className="flex gap-2 overflow-x-auto scrollbar-none mb-4 pb-1">
+                {categories.map((cat) => {
+                  const isActive = category === cat;
+                  return (
+                    <button
+                      key={cat}
+                      type="button"
+                      onClick={() => setCategory(cat)}
+                      className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+                        isActive
+                          ? 'bg-[#3F72AF] text-white'
+                          : 'bg-[#F9F7F7]/5 text-[#F9F7F7]/55 hover:bg-[#F9F7F7]/10'
+                      }`}
+                      aria-pressed={isActive}
+                    >
+                      {cat}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {frames.length === 0 ? (
               <p className="text-sm text-white/60 text-center py-8">
                 No frames available
               </p>
+            ) : visibleFrames.length === 0 ? (
+              <p className="text-sm text-white/60 text-center py-8">
+                No frames in this category
+              </p>
             ) : (
               <div className="grid grid-cols-2 gap-3">
-                {frames.map((frame) => (
+                {visibleFrames.map((frame) => (
                   <FrameItem
                     key={frame.id}
                     frame={frame}

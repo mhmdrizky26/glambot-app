@@ -184,7 +184,7 @@ func GetSessionPhotos(w http.ResponseWriter, r *http.Request) {
 // List semua frame aktif dari DB (dengan slot data)
 func GetFrames(w http.ResponseWriter, r *http.Request) {
 	rows, err := database.DB.Query(`
-		SELECT id, name, file_path, thumb_url, photo_slots, canvas_width, canvas_height, slots
+		SELECT id, name, COALESCE(category, ''), file_path, thumb_url, photo_slots, canvas_width, canvas_height, slots
 		FROM frames
 		WHERE is_active = 1
 		ORDER BY sort_order ASC, id ASC`)
@@ -199,7 +199,7 @@ func GetFrames(w http.ResponseWriter, r *http.Request) {
 		var f models.Frame
 		var slotsBytes []byte
 		if err := rows.Scan(
-			&f.ID, &f.Name, &f.FilePath, &f.ThumbURL,
+			&f.ID, &f.Name, &f.Category, &f.FilePath, &f.ThumbURL,
 			&f.PhotoSlots, &f.CanvasWidth, &f.CanvasHeight, &slotsBytes,
 		); err != nil {
 			respondError(w, http.StatusInternalServerError, "Failed to read frames")
@@ -773,6 +773,16 @@ func collectLiveStripSources(sessionID string) (services.LiveStripOptions, error
 // di dalam folder storage (defense-in-depth terhadap path traversal kalau
 // file_path di DB ternyata mengandung "..").
 func safeStoragePath(relPath string) (string, bool) {
+	// Normalisasi: file_path di DB tidak konsisten. Frame seed memakai relatif
+	// "frames/frame-166.svg", sedangkan frame upload admin menyimpan dengan
+	// prefix URL "/storage/frames/uuid.png". Tanpa di-strip, Join("./storage",
+	// "/storage/frames/..") menghasilkan "storage/storage/frames/.." yang tidak
+	// ada di disk → loadFrameOverlayPNG gagal → fallback overlay yang melubangi
+	// slot rect mentah → burst bocor keluar frame. Samakan semuanya ke path
+	// relatif terhadap StoragePath.
+	relPath = strings.TrimPrefix(relPath, "/")
+	relPath = strings.TrimPrefix(relPath, "storage/")
+
 	absStorage, err := filepath.Abs(config.App.StoragePath)
 	if err != nil {
 		return "", false

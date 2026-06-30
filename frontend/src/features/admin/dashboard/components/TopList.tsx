@@ -1,7 +1,6 @@
 'use client';
 
 import React from 'react';
-import { ArrowUpIcon, ArrowDownIcon } from 'lucide-react';
 import { type TopListItem } from '../api/types';
 
 interface TopListProps {
@@ -15,34 +14,31 @@ export function TopList({ title, items }: TopListProps) {
       <h3 className="text-base font-semibold">{title}</h3>
 
       <div className="flex flex-col gap-3">
-        {items.map((item) => {
-          const isUp = item.trend === 'up';
-          const Icon = isUp ? ArrowUpIcon : ArrowDownIcon;
-          return (
+        {items.length === 0 ? (
+          <p className="text-muted-foreground py-6 text-center text-sm">
+            Belum ada data
+          </p>
+        ) : (
+          items.map((item, i) => (
             <div
-              key={item.name}
-              className="flex items-center justify-between rounded-lg border p-3"
+              key={`${item.name}-${i}`}
+              className="flex items-center gap-3 rounded-lg border p-3"
             >
-              <div className="flex flex-col">
-                <span className="text-sm font-medium">{item.name}</span>
+              {/* Badge peringkat (#1–#5) — info nyata, bukan indikator tren palsu */}
+              <span className="bg-[#007DFC]/10 text-[#007DFC] flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-bold">
+                {i + 1}
+              </span>
+              <div className="flex min-w-0 flex-col">
+                <span className="truncate text-sm font-medium">
+                  {item.name}
+                </span>
                 <span className="text-muted-foreground text-xs">
                   {item.used} Used
                 </span>
               </div>
-              <div
-                className={`flex size-8 items-center justify-center rounded-full ${
-                  isUp ? 'bg-emerald-100' : 'bg-rose-100'
-                }`}
-              >
-                <Icon
-                  className={`size-4 ${
-                    isUp ? 'text-emerald-600' : 'text-rose-600'
-                  }`}
-                />
-              </div>
             </div>
-          );
-        })}
+          ))
+        )}
       </div>
     </div>
   );

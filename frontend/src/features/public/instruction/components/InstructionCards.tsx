@@ -220,12 +220,16 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
                         : 'border-transparent',
                     )}
                   >
-                    <div className="mb-2.5 flex items-center justify-center">
+                    <span className="mb-3 text-base font-semibold text-white">
+                      Preset {i + 1}
+                    </span>
+
+                    <div className="flex items-center justify-center">
                       {gesture.icon ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
                         <img
                           src={gesture.icon}
-                          alt={gesture.name}
+                          alt={`Preset ${i + 1}`}
                           width={55}
                           height={55}
                           className="object-contain"
@@ -234,13 +238,6 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
                         <span className="inline-block h-14 w-14" />
                       )}
                     </div>
-
-                    <h4 className="mb-1 text-md font-semibold leading-5.5 text-white">
-                      {gesture.name}
-                    </h4>
-                    <p className="px-1 text-[10px] leading-4 text-white/35">
-                      {gesture.fingers}
-                    </p>
                   </GlassCard>
                 );
               })}

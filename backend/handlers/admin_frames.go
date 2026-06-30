@@ -247,7 +247,7 @@ func AdminCreateFrame(w http.ResponseWriter, r *http.Request) {
 	}
 	category := strings.TrimSpace(r.FormValue("category"))
 	if category == "" {
-		category = "Standard"
+		category = "Personal"
 	}
 	status := r.FormValue("status")
 	canvasW, _ := strconv.Atoi(r.FormValue("canvas_width"))

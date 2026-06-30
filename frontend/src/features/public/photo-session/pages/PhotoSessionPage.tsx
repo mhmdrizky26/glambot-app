@@ -3,7 +3,8 @@
 import { SessionHeader } from '../components/SessionHeader';
 import { CameraPreview } from '../components/CameraPreview';
 import EndSessionButton from '../components/EndSessionButton';
-import GestureGuide from '../components/GestureGuide';
+import { GestureDetectionPanel } from '../components/GestureDetectionPanel';
+import { instructionSteps } from '@/features/public/instruction/data/steps';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useGetSession } from '@/shared/api/session';
@@ -13,10 +14,17 @@ import { useRobotConfig } from '../api/getRobotConfig';
 import { apiClient } from '@/lib/api-client';
 import { playBackendAudio } from '@/lib/audio';
 import { usePersistedCountdown } from '@/lib/usePersistedCountdown';
+import { cn } from '@/lib/utils';
 
 // Hard cap untuk grace period setelah timer 0: kalau robot stuck atau webhook
 // /done tidak fire, paksa end sesi setelah ini supaya kiosk tidak hang.
 const MAX_GRACE_SEC = 30;
+
+// Daftar gesture preset 1–10 — pakai sumber yang SAMA dengan halaman Instruction
+// supaya nomor preset konsisten di kedua halaman (dan urutannya cocok dengan
+// layout kartu pada desain).
+const PRESET_GESTURES =
+  instructionSteps.find((s) => s.type === 'gesture-controls')?.gestures ?? [];
 
 export function PhotoSessionPage() {
   const searchParams = useSearchParams();
@@ -132,15 +140,35 @@ export function PhotoSessionPage() {
   // Timer yang ditampilkan: negatif saat overtime (menunggu foto selesai).
   const displayTimeLeft = inGrace ? -graceSeconds : sessionTimeLeft;
 
-  // Visibilitas overlay bawah:
-  // - presetDetected: ada gesture aktif (robot busy) saat sesi masih berjalan.
-  //   Saat ini panduan & tombol disembunyikan supaya layar bersih ("hilang"),
-  //   lalu muncul lagi ketika gesture dilepas ("ada").
-  // - Tombol "Selesai" tetap tampil saat proses akhir sesi berjalan (endingNow)
-  //   untuk menampilkan status "Menyelesaikan foto…".
-  const presetDetected = robotBusy && !endingNow;
-  const showGuide = !presetDetected && !endingNow;
-  const showEndButton = !presetDetected;
+  // Visibilitas panel kanan (2 kartu + tombol "Selesai" yang kini ada di kartu
+  // ke-2): SEMBUNYIKAN selama robot sibuk (gesture aktif / sedang menjepret)
+  // supaya preview kamera bersih saat foto difreeze. TAMPILKAN saat robot idle —
+  // termasuk saat proses akhir sesi (endingNow) agar tombol bisa menampilkan
+  // status "Menyelesaikan foto…".
+  const showGuide = !robotBusy;
+
+  // Animasi popup untuk panel kanan dengan masuk/keluar yang berbeda:
+  // - KELUAR (robot mulai sibuk): langsung mainkan slide-ke-kanan + fade.
+  // - MASUK (robot idle lagi): ditunda sejenak supaya kartu baru muncul SETELAH
+  //   freeze foto selesai & preview settle — menghindari kartu menyembul saat
+  //   layar masih sibuk (terasa "belibet").
+  // `guideMounted` = apakah ada di DOM, `guideVisible` = state transisi.
+  const [guideMounted, setGuideMounted] = useState(showGuide);
+  const [guideVisible, setGuideVisible] = useState(showGuide);
+  useEffect(() => {
+    if (showGuide) {
+      const enterDelay = setTimeout(() => {
+        setGuideMounted(true);
+        // Frame berikutnya supaya kelas "masuk" ter-transisi dari state awal.
+        requestAnimationFrame(() => setGuideVisible(true));
+      }, 450);
+      return () => clearTimeout(enterDelay);
+    }
+    setGuideVisible(false);
+    // Tunggu durasi transisi sebelum benar-benar unmount (hentikan polling).
+    const id = setTimeout(() => setGuideMounted(false), 300);
+    return () => clearTimeout(id);
+  }, [showGuide]);
 
   useEffect(() => {
     if (!endingNow || !sessionId) return;
@@ -198,8 +226,9 @@ export function PhotoSessionPage() {
         <SessionHeader sessionTimeLeft={displayTimeLeft} />
       </div>
 
-      <main className="flex flex-1 min-h-0 px-10 pb-6 pt-3">
-        <div className="flex-1 flex flex-col gap-3 min-h-0">
+      <main className="flex flex-1 min-h-0 gap-6 px-10 pb-6 pt-3">
+        {/* Kiri — Preview Camera */}
+        <div className="flex flex-1 flex-col gap-3 min-h-0 min-w-0">
           <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0 text-left">
             Preview Camera
           </h2>
@@ -212,31 +241,81 @@ export function PhotoSessionPage() {
               onError={handleStreamError}
               onRetry={retryStream}
             />
+          </div>
+        </div>
 
-            {/* "Selesai sekarang" — melayang di pojok kanan-atas preview, diberi
-                inset (top/right-6) supaya tidak terlihat nempel ke tepi frame.
-                Disembunyikan saat preset terdeteksi (kecuali saat proses akhir
-                sesi berjalan). */}
-            {showEndButton && (
-              <div className="absolute right-6 top-6 z-40">
+        {/* Kanan — 2 card: Gesture Detection + Gesture Controls. Keduanya
+            disembunyikan saat preset terdeteksi (fitur "hide" yang sudah ada),
+            dengan animasi popup: muncul slide dari kanan, hilang slide ke kanan. */}
+        {guideMounted && (
+          <div
+            className={cn(
+              'flex w-[26rem] shrink-0 flex-col gap-4 min-h-0',
+              'transition-all duration-300 ease-out will-change-transform',
+              guideVisible
+                ? 'translate-x-0 scale-100 opacity-100'
+                : 'translate-x-8 scale-95 opacity-0',
+            )}
+          >
+            {/* Gesture Detection */}
+            <div className="flex shrink-0 flex-col gap-3">
+              <h2 className="text-primary font-medium text-2xl tracking-[0.47px]">
+                Gesture Detection
+              </h2>
+              <div className="h-64">
+                <GestureDetectionPanel streamUrl={frameUrl} />
+              </div>
+            </div>
+
+            {/* Gesture Controls */}
+            <div className="flex min-h-0 flex-1 flex-col gap-3">
+              <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0">
+                Gesture Controls
+              </h2>
+              <div className="flex min-h-0 flex-1 flex-col gap-5 rounded-2xl border border-white/10 bg-primary/75 p-5 shadow-lg">
+                {/* Grid preset mengisi ruang sisa & rownya di-tengah-kan secara
+                    vertikal (content-center) → tidak ada celah kosong yang
+                    nyangkut di satu sisi; jarak atas-bawah simetris. */}
+                <div className="grid flex-1 grid-cols-5 content-center gap-2.5">
+                  {PRESET_GESTURES.map((g, i) => (
+                    <div
+                      key={`${g.name}-${i}`}
+                      className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 p-2 text-center"
+                    >
+                      <span className="text-[11px] font-semibold text-white">
+                        Preset {i + 1}
+                      </span>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={g.icon ?? ''}
+                        alt={`Preset ${i + 1}`}
+                        className="h-8 w-8 object-contain"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Aturan keselamatan + tombol — dikelompokkan di bawah dengan
+                    jarak konsisten. */}
+                <div className="space-y-1.5 border-t border-white/10 pt-4 text-[11px] leading-relaxed text-white/40">
+                  <p className="text-amber-300/70">
+                    ⚠ Stay at least 3 meters away from robot arm
+                  </p>
+                  <p>Keep gestures within detection area</p>
+                  <p>Avoid sudden movement near robot arm</p>
+                </div>
+
+                {/* Tombol "Selesai sekarang" — dipindah ke pojok kanan-bawah
+                    kartu ini supaya preview kamera bersih tanpa tombol melayang. */}
                 <EndSessionButton
                   onEnd={() => setEndRequested(true)}
                   ending={endingNow}
+                  className="w-full justify-center"
                 />
               </div>
-            )}
-
-            {/* Panduan gesture preset 1–10 — ikon melayang di dalam preview,
-                inset bottom/x-6 supaya jaraknya simetris dengan tombol atas
-                (tidak nempel ke tepi bawah). pointer-events-none agar area
-                kamera tidak terblokir. Sembunyi saat preset terdeteksi. */}
-            {showGuide && (
-              <div className="pointer-events-none absolute inset-x-6 bottom-6 z-40">
-                <GestureGuide />
-              </div>
-            )}
+            </div>
           </div>
-        </div>
+        )}
       </main>
     </div>
   );

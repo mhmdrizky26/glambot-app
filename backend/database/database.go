@@ -134,6 +134,14 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS file_size TEXT NOT NULL DEFAULT ''`,
 		`UPDATE frames SET frame_code = id WHERE frame_code = ''`,
 
+		// Frames: kategori kini berbasis kapasitas orang — 'Personal' (1-4 orang)
+		// & 'Group' (banyak orang). Default kolom dipindah ke 'Personal', dan
+		// semua frame lama (Event/Fun/Premium/Standard/dll) dimigrasikan ke
+		// 'Personal'. WHERE membatasi ke kategori di luar dua nilai baru →
+		// idempoten & tidak menimpa pilihan admin pada boot berikutnya.
+		`ALTER TABLE frames ALTER COLUMN category SET DEFAULT 'Personal'`,
+		`UPDATE frames SET category = 'Personal' WHERE category NOT IN ('Personal', 'Group')`,
+
 		// Admin accounts untuk login dashboard.
 		`CREATE TABLE IF NOT EXISTS admins (
 			id BIGSERIAL PRIMARY KEY,
@@ -141,6 +149,15 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 			password_hash TEXT NOT NULL,
 			name TEXT NOT NULL DEFAULT 'Admin',
 			created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+		)`,
+
+		// App settings key-value — dipakai admin untuk mengatur timer halaman
+		// user (instruction/photo-editor/get-photos/done). Nilai disimpan sebagai
+		// TEXT; handler config.go yang parse + isi default kalau key belum ada.
+		`CREATE TABLE IF NOT EXISTS app_settings (
+			key TEXT PRIMARY KEY,
+			value TEXT NOT NULL,
+			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 
 		// ─── Cegah transaksi pending duplikat per sesi ───────────────────────

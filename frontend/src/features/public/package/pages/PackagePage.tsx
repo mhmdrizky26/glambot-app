@@ -10,9 +10,11 @@ import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { useCreateSession } from '@/shared/api/session';
 import Timer from '@/components/shared/Timer';
 import BackButton from '@/components/shared/BackButton';
+import { useAppConfig } from '@/shared/api/config';
 
 export default function PackagePage() {
   const { data: packages = [], isPending, isError } = usePackages();
+  const { data: appConfig } = useAppConfig();
   const [selectedPrintPkg, setSelectedPrintPkg] = useState<Package | null>(
     null,
   );
@@ -49,7 +51,7 @@ export default function PackagePage() {
 
   return (
     <main className="flex flex-col items-center min-h-full">
-      <Timer />
+      {appConfig && <Timer duration={appConfig.packageTimeoutSecs} />}
       <BackButton onClick={() => router.push('/')} />
 
       <div className="py-3.5 text-center">

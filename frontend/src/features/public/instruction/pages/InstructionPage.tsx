@@ -12,6 +12,7 @@ import { usePatchSessionStatus, useGetSession } from '@/shared/api/session';
 import { sendSessionBroadcast } from '@/features/public/photo-session/lib/broadcastChannel';
 import { playBackendAudio } from '@/lib/audio';
 import Timer from '@/components/shared/Timer';
+import { useAppConfig } from '@/shared/api/config';
 
 export default function InstructionPage() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -24,6 +25,7 @@ export default function InstructionPage() {
   const isLast = currentStep === instructionSteps.length - 1;
 
   const { mutate } = usePatchSessionStatus();
+  const { data: appConfig } = useAppConfig();
   const { data: session, isFetching: isSessionFetching } = useGetSession({
     sessionId,
     queryConfig: { enabled: !!sessionId },
@@ -101,8 +103,14 @@ export default function InstructionPage() {
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
     >
-      {/* 1 menit auto-advance ke photo session */}
-      <Timer duration={60} onTimeUp={goToPhotoSession} />
+      {/* Auto-advance ke photo session (durasi diatur admin; default 60s).
+          Dirender setelah config termuat agar durasi pasti benar. */}
+      {appConfig && (
+        <Timer
+          duration={appConfig.instructionTimeoutSecs}
+          onTimeUp={goToPhotoSession}
+        />
+      )}
 
       <div className="text-center py-3.5">
         <h1 className="font-bold text-primary text-[62px]">
