@@ -32,7 +32,13 @@ Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis
 
 ## Update Terbaru
 
-Ringkasan perubahan terbaru (per Juni 2026):
+Ringkasan perubahan terbaru (per Juli 2026):
+
+### Narasi suara penuh di sepanjang alur kiosk (baru)
+- Voice-over Bahasa Indonesia kini menemani **tiap halaman** — dari sapaan di Home sampai "terima kasih" di akhir sesi (lihat [Audio Cues](#audio-cues) untuk daftar lengkap).
+- [`lib/audio.ts`](frontend/src/lib/audio.ts) dapat helper baru: `preloadBackendAudio` (buffer semua clip saat boot → tanpa jeda), `playBackendAudioAfterCurrent` & `whenVoiceIdle` (koordinasi lintas halaman supaya dua narasi tidak bertabrakan), plus callback `onEnded` di `playBackendAudio`.
+- **Gating interaksi**: kartu paket & tombol "Next" di instruction baru aktif setelah narasinya selesai, supaya user mendengarkan panduan dulu.
+- Jarak aman ke robot arm di instruction diturunkan **3m → 2m**.
 
 ### Data default kini permanen & editable (penting)
 - Seed `packages`, `frames`, `vouchers` di [`init.sql`](backend/migrations/init.sql) diubah dari `ON CONFLICT … DO UPDATE` → **`DO NOTHING`** (insert-only).
@@ -465,7 +471,7 @@ glambot-app/
 │   │   ├── midtrans.go            # Midtrans QRIS integration
 │   │   └── robot.go               # HTTP client to external robot API
 │   ├── storage/
-│   │   ├── audio/                 # tiga, dua, satu, inisiasi, preset, presetTerkonfirmasi, etc.
+│   │   ├── audio/                 # narasi voice-over per halaman (selamatDatang, pilihJumlahCetak, pembayaran*, intro, keselamatan, preset, inisiasi, countdown tiga/dua/satu, pilihFoto, prosesFoto, scanQrAmbilFoto, terimaKasih, etc.)
 │   │   ├── frames/                # Frame SVG assets (embedded base64 PNG → frame overlay)
 │   │   ├── packages/              # Package thumbnails (digital.svg, print.svg)
 │   │   └── sessions/{id}/         # Per-session output:
@@ -519,7 +525,7 @@ glambot-app/
 │   │   │       └── session-end/   # QR display + done screen
 │   │   ├── lib/
 │   │   │   ├── api-client.ts      # axios instance + resolveBaseUrl + toAbsoluteUrl
-│   │   │   ├── audio.ts           # playBackendAudio helper
+│   │   │   ├── audio.ts           # voice-over: play/preload + cross-page coordination (whenVoiceIdle, playAfterCurrent)
 │   │   │   ├── formats.ts         # formatRupiah, formatPriceToK
 │   │   │   ├── formatTime.ts      # formatTimeMMSS — shared MM:SS + negative grace timer format
 │   │   │   ├── usePersistedCountdown.ts # Countdown yang persist via sessionStorage (survive refresh)
@@ -792,18 +798,38 @@ Backend `flipJPEGHorizontal` mirror JPEG liveview sebelum kirim ke frontend, jad
 
 ## Audio Cues
 
-Semua file MP3 di `backend/storage/audio/`. Frontend serve via `${API_URL}/storage/audio/<file>.mp3`.
+Narasi suara (voice-over Bahasa Indonesia) menemani **seluruh alur kiosk** — tiap halaman punya panduan suara yang dipicu saat masuk / interaksi kunci. Semua file MP3 di `backend/storage/audio/`, di-serve via `${API_URL}/storage/audio/<file>.mp3`.
 
 | File | Trigger | Lokasi kode |
 |---|---|---|
-| `preset.mp3` | Masuk step gesture-controls di instruction | `InstructionPage.tsx` useEffect |
-| `inisiasi.mp3` | Masuk `/photo-session` page | `PhotoSessionPage.tsx` useEffect |
-| `presetTerkonfirmasi.mp3` | Robot move ke preset baru (current_preset changes) | `CameraPreview.tsx` polling tick |
-| `tiga.mp3` | Countdown detik 3 | `CameraPreview.tsx` audioRefs[3] |
-| `dua.mp3` | Countdown detik 2 | `CameraPreview.tsx` audioRefs[2] |
-| `satu.mp3` | Countdown detik 1 | `CameraPreview.tsx` audioRefs[1] |
+| `selamatDatang.mp3` | Tap "Tap to Start" di Home (sekaligus meng-unlock autoplay browser) | `HomePage.tsx` |
+| `pilihJumlahCetak.mp3` | Buka modal jumlah cetak (paket Print) | `PrintQuantityModal.tsx` |
+| `pembayaranDiproses.mp3` | Status pembayaran → `processing` | `PaymentStatus.tsx` |
+| `pembayaranBerhasil.mp3` | Status pembayaran → `success` | `PaymentStatus.tsx` |
+| `pembayaranGagal.mp3` | Status `failed`/`expired`, atau timer bayar habis | `PaymentStatus.tsx` / `PayPage.tsx` |
+| `intro.mp3` | Masuk step get-ready di instruction | `InstructionPage.tsx` |
+| `keselamatan.mp3` | Masuk step safety di instruction | `InstructionPage.tsx` |
+| `preset.mp3` | Masuk step gesture-controls di instruction | `InstructionPage.tsx` |
+| `inisiasi.mp3` | Masuk `/photo-session` page | `PhotoSessionPage.tsx` |
+| `presetTerkonfirmasi.mp3` | Robot move ke preset baru (`current_preset` berubah) | `CameraPreview.tsx` |
+| `tiga.mp3` / `dua.mp3` / `satu.mp3` | Countdown detik 3 / 2 / 1 | `CameraPreview.tsx` |
+| `pilihFoto.mp3` | Editor siap (foto + frame termuat) | `PhotoEditorPage.tsx` |
+| `prosesFoto.mp3` | Layar get-photos muncul (fase loading) | `GetPhotosScreen.tsx` |
+| `scanQrAmbilFoto.mp3` | QR download tampil | `GetPhotosScreen.tsx` |
+| `terimaKasih.mp3` | Done screen tampil | `DoneScreen.tsx` |
 
-Helper: [`lib/audio.ts:playBackendAudio(filename)`](frontend/src/lib/audio.ts) — caches Audio instances, silent on autoplay block.
+### Helper ([`lib/audio.ts`](frontend/src/lib/audio.ts))
+
+- `playBackendAudio(filename, onEnded?)` — putar clip, cache Audio instance, silent saat autoplay block / file hilang. `onEnded` dipanggil saat clip selesai (dengan pengaman timeout kalau event `ended` tak fire).
+- `preloadBackendAudio()` — dipanggil sekali saat kiosk boot ([`providers.tsx`](frontend/src/app/providers.tsx)); download + buffer semua clip supaya play pertama tiap halaman tanpa jeda.
+- `playBackendAudioAfterCurrent(filename, onEnded?)` — putar SETELAH narasi yang sedang berbunyi selesai; mencegah dua narasi bertabrakan saat pindah halaman cepat (mis. "pembayaranBerhasil" → "intro").
+- `whenVoiceIdle(cb)` — jalankan `cb` saat narasi yang sedang berbunyi selesai (atau langsung kalau senyap). Karena `currentVoice` adalah state modul yang bertahan lintas navigasi SPA, dipakai untuk **gating interaksi**: mis. kartu paket baru bisa diklik setelah "selamatDatang" selesai.
+
+### Gating interaksi berbasis suara
+
+Beberapa halaman menahan interaksi/tombol sampai narasinya selesai agar user mendengarkan dulu:
+- **Package** — kartu paket redup & non-clickable selama "selamatDatang" masih berbunyi (`whenVoiceIdle`).
+- **Instruction** — tombol "Next" di step get-ready & safety baru muncul setelah narasinya selesai (`playBackendAudio` `onEnded` → `buttonReady`).
 
 ---
 

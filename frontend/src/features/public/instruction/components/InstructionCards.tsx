@@ -9,10 +9,18 @@ interface CardProps {
   step: InstructionStep;
   onNext: () => void;
   buttonLabel: string;
+  // Tombol baru boleh diklik/terlihat saat narasi suara step ini selesai.
+  // Default true supaya kartu tanpa gating audio tetap menampilkan tombol.
+  buttonReady?: boolean;
 }
 
 /** "Get Ready" step — session duration + numbered activity list. */
-export function GetReadyCard({ step, onNext, buttonLabel }: CardProps) {
+export function GetReadyCard({
+  step,
+  onNext,
+  buttonLabel,
+  buttonReady = true,
+}: CardProps) {
   return (
     <GlassCard maxWidth="max-w-[724px]" className="p-9.5 ">
       <div className="flex flex-col items-center">
@@ -44,7 +52,14 @@ export function GetReadyCard({ step, onNext, buttonLabel }: CardProps) {
           ))}
         </div>
 
-        <Button variant="outline" onClick={onNext}>
+        <Button
+          variant="outline"
+          onClick={onNext}
+          className={cn(
+            'transition-opacity duration-300',
+            !buttonReady && 'opacity-0 pointer-events-none',
+          )}
+        >
           {buttonLabel}
         </Button>
       </div>
@@ -53,7 +68,12 @@ export function GetReadyCard({ step, onNext, buttonLabel }: CardProps) {
 }
 
 /** "Safety & Rules" step — Do / Don't columns. */
-export function SafetyRulesCard({ step, onNext, buttonLabel }: CardProps) {
+export function SafetyRulesCard({
+  step,
+  onNext,
+  buttonLabel,
+  buttonReady = true,
+}: CardProps) {
   return (
     <GlassCard maxWidth="max-w-[820px]" className="p-9 overflow-hidden">
       <div className="flex flex-col items-center">
@@ -104,7 +124,14 @@ export function SafetyRulesCard({ step, onNext, buttonLabel }: CardProps) {
           </GlassCard>
         </div>
 
-        <Button variant="outline" className="mt-6" onClick={onNext}>
+        <Button
+          variant="outline"
+          onClick={onNext}
+          className={cn(
+            'mt-6 transition-opacity duration-300',
+            !buttonReady && 'opacity-0 pointer-events-none',
+          )}
+        >
           {buttonLabel}
         </Button>
       </div>

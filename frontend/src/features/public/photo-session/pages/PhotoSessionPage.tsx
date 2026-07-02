@@ -299,7 +299,7 @@ export function PhotoSessionPage() {
                     jarak konsisten. */}
                 <div className="space-y-1.5 border-t border-white/10 pt-4 text-[11px] leading-relaxed text-white/40">
                   <p className="text-amber-300/70">
-                    ⚠ Stay at least 3 meters away from robot arm
+                    ⚠ Stay at least 2 meters away from robot arm
                   </p>
                   <p>Keep gestures within detection area</p>
                   <p>Avoid sudden movement near robot arm</p>
