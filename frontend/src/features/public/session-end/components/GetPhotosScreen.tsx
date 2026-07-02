@@ -8,6 +8,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import loadingAnimation from '@/assets/loading.json';
 import Timer from '@/components/shared/Timer';
 import { useDriveLink } from '@/features/public/photo-download/api/getDriveLink';
+import { useLiveGifAvailability } from '@/features/public/photo-download/api/getGifAvailability';
+import { GIFPreview } from '@/features/public/photo-download/components/GIFPreview';
+import { useFramedPhotos } from '@/features/public/photo-editor/api/getPhotos';
 import { useAppConfig } from '@/shared/api/config';
 
 interface GetPhotosScreenProps {
@@ -44,6 +47,14 @@ export function GetPhotosScreen({
   const { data: drive } = useDriveLink({ sessionId });
   const driveActive = drive?.enabled === true;
   const driveReady = drive?.ready === true;
+
+  // Strip preview: pakai hasil sesi yang sebenarnya, bukan gambar statis.
+  // Prioritas: Live Strip GIF (animasi, paling menarik) → strip framed final →
+  // fallback ke ilustrasi statis kalau keduanya belum ada.
+  const { data: framedPhotos } = useFramedPhotos({ sessionId });
+  const { data: liveGifAvailability } = useLiveGifAvailability({ sessionId });
+  const framedStrip = framedPhotos?.[0];
+  const isLiveStripAvailable = liveGifAvailability?.available ?? false;
 
   // Batas aman: kalau link Drive belum siap setelah 45 detik (mis. upload gagal
   // / sangat lambat), jangan biarkan loading menggantung — lanjut ke QR dengan
@@ -123,13 +134,25 @@ export function GetPhotosScreen({
             strokeWidth={1.5}
             fill="currentColor"
           />
-          {/* Photo strip */}
-          <div className="flex gap-3 -rotate-3">
-            <img
-              src="/Frame 158.svg"
-              alt="Photo strip"
-              className="h-130 drop-shadow-xl"
-            />
+          {/* Photo strip — hasil sesi nyata (live strip / framed), bukan statis */}
+          <div className="w-90 -rotate-3 drop-shadow-xl">
+            {isLiveStripAvailable ? (
+              <GIFPreview
+                endpoint={`/api/photo/session/${sessionId}/gif-live`}
+                alt="Your live photo strip"
+                aspectClass="aspect-[464/696]"
+              />
+            ) : framedStrip ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={framedStrip.url}
+                alt="Your photo strip"
+                className="w-full rounded-xl"
+              />
+            ) : (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img src="/Frame 158.svg" alt="Photo strip" className="w-full" />
+            )}
           </div>
         </div>
 

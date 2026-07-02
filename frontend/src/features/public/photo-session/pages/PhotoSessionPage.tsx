@@ -250,7 +250,7 @@ export function PhotoSessionPage() {
         {guideMounted && (
           <div
             className={cn(
-              'flex w-[26rem] shrink-0 flex-col gap-4 min-h-0',
+              'flex w-[26rem] 2xl:w-[30rem] shrink-0 flex-col gap-4 min-h-0',
               'transition-all duration-300 ease-out will-change-transform',
               guideVisible
                 ? 'translate-x-0 scale-100 opacity-100'
@@ -276,21 +276,21 @@ export function PhotoSessionPage() {
                 {/* Grid preset mengisi ruang sisa & rownya di-tengah-kan secara
                     vertikal (content-center) → tidak ada celah kosong yang
                     nyangkut di satu sisi; jarak atas-bawah simetris. */}
-                <div className="grid flex-1 grid-cols-5 content-center gap-2.5">
+                <div className="grid flex-1 grid-cols-5 2xl:grid-cols-4 content-center gap-2.5 2xl:gap-3">
                   {PRESET_GESTURES.map((g, i) => (
                     <div
                       key={`${g.name}-${i}`}
-                      className="flex aspect-square flex-col items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 p-2 text-center"
+                      className="flex aspect-square flex-col items-center justify-center gap-1.5 2xl:gap-2 rounded-xl border border-white/10 bg-white/5 p-2 text-center"
                     >
-                      <span className="text-[11px] font-semibold text-white">
-                        Preset {i + 1}
-                      </span>
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
                         src={g.icon ?? ''}
                         alt={`Preset ${i + 1}`}
-                        className="h-8 w-8 object-contain"
+                        className="h-8 w-8 2xl:h-12 2xl:w-12 object-contain"
                       />
+                      <span className="text-[11px] 2xl:text-sm font-semibold text-white">
+                        Preset {i + 1}
+                      </span>
                     </div>
                   ))}
                 </div>

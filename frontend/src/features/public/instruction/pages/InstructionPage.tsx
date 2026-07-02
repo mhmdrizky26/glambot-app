@@ -121,7 +121,7 @@ export default function InstructionPage() {
       {/* Animate step transition on key change */}
       <div
         key={currentStep}
-        className="flex justify-center w-full py-[73.6px] animate-[slideUp_300ms_ease-out]"
+        className="flex justify-center w-full pt-[clamp(40px,9vh,160px)] pb-[clamp(40px,6vh,96px)] animate-[slideUp_300ms_ease-out]"
       >
         {step.type === 'get-ready' ? (
           <GetReadyCard step={step} onNext={handleNext} buttonLabel="Next →" />
