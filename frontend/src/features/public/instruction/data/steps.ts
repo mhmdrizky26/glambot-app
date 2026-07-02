@@ -32,8 +32,8 @@ export const instructionSteps: InstructionStep[] = [
     subheading: 'Your session lasts',
     sessionDuration: 5,
     activities: [
-      { label: 'Strike a pose' },
       { label: 'Use gestures' },
+      { label: 'Strike a pose' },
       { label: 'Camera moves' },
     ],
   },

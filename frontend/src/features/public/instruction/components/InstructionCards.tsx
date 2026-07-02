@@ -131,32 +131,35 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
     return () => clearInterval(interval);
   }, [step.gestures]);
 
-  // Get current gesture animation class
-  const getAnimationClass = () => {
-    if (!step.gestures) return '';
-    const gesture = step.gestures[activeIndex];
-
-    switch (gesture.name) {
-      case 'Move Up':
-        return 'animate-[moveUp_2.2s_ease-in-out]';
-      case 'Move Down':
-        return 'animate-[moveDown_2.2s_ease-in-out]';
-      case 'Move Left':
-        return 'animate-[moveLeft_2.2s_ease-in-out]';
-      case 'Move Right':
-        return 'animate-[moveRight_2.2s_ease-in-out]';
-      case 'Move Forward':
-        return 'animate-[zoomIn_2.2s_ease-in-out]';
-      case 'Move Backward':
-        return 'animate-[zoomOut_2.2s_ease-in-out]';
-      case 'Rotate CW':
-        return 'animate-[rotateCW_2.2s_ease-in-out]';
-      case 'Rotate CCW':
-        return 'animate-[rotateCCW_2.2s_ease-in-out]';
-      case 'Stop':
-        return ''; // No animation for stop
+  // Posisi kamera per preset — mencerminkan pose ABSOLUT robot asli (lihat
+  // GambarPresetDobot), bukan gerakan relatif. Tiap preset = kombinasi
+  // translate (kiri/kanan + atas/bawah), scale (maju=besar/mundur=kecil), dan
+  // rotate (POV nunduk/nengadah). Indeks 0 = Preset 1, dst. Ikon beranimasi
+  // halus dari pose sebelumnya ke pose berikutnya via transition-transform.
+  const getPresetTransform = () => {
+    switch (activeIndex) {
+      case 0: // Preset 1 — Netral, di tengah, hadap lurus
+        return 'translate(0px, 0px) scale(1) rotate(0deg)';
+      case 1: // Preset 2 — Tinggi ke atas, hadap lurus (paling tinggi)
+        return 'translate(0px, -62px) scale(1) rotate(0deg)';
+      case 2: // Preset 3 — Kiri atas, hadap lurus
+        return 'translate(-120px, -40px) scale(1) rotate(0deg)';
+      case 3: // Preset 4 — Kanan atas, hadap lurus
+        return 'translate(120px, -40px) scale(1) rotate(0deg)';
+      case 4: // Preset 5 — Tengah agak atas, agak maju, POV ke bawah
+        return 'translate(0px, -34px) scale(1.15) rotate(12deg)';
+      case 5: // Preset 6 — Tengah agak bawah, agak maju, POV ke atas
+        return 'translate(0px, 22px) scale(1.15) rotate(-12deg)';
+      case 6: // Preset 7 — Kanan bawah, hadap lurus
+        return 'translate(120px, 40px) scale(1) rotate(0deg)';
+      case 7: // Preset 8 — Kiri bawah, hadap lurus
+        return 'translate(-120px, 40px) scale(1) rotate(0deg)';
+      case 8: // Preset 9 — Tengah agak atas, agak mundur, POV ke bawah
+        return 'translate(0px, -46px) scale(0.85) rotate(12deg)';
+      case 9: // Preset 10 — Netral di tengah, ke depan, hadap agak ke bawah
+        return 'translate(0px, 4px) scale(1.18) rotate(8deg)';
       default:
-        return '';
+        return 'translate(0px, 0px) scale(1) rotate(0deg)';
     }
   };
 
@@ -181,11 +184,8 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
             <div className="w-full flex justify-center items-center flex-1 relative min-h-35">
               <div className="absolute w-full h-px bg-white/20" />
               <div
-                key={activeIndex}
-                className={cn(
-                  'relative z-10 w-16 h-12 bg-blue-100 rounded-xl flex items-center justify-center shadow-lg',
-                  getAnimationClass(),
-                )}
+                className="relative z-10 w-16 h-12 bg-blue-100 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-[1200ms] ease-in-out"
+                style={{ transform: getPresetTransform() }}
               >
                 <Camera className="text-primary" size={24} />
                 <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white" />
@@ -220,10 +220,6 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
                         : 'border-transparent',
                     )}
                   >
-                    <span className="mb-3 text-base font-semibold text-white">
-                      Preset {i + 1}
-                    </span>
-
                     <div className="flex items-center justify-center">
                       {gesture.icon ? (
                         /* eslint-disable-next-line @next/next/no-img-element */
@@ -238,6 +234,10 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
                         <span className="inline-block h-14 w-14" />
                       )}
                     </div>
+
+                    <span className="mt-3 text-base font-semibold text-white">
+                      Preset {i + 1}
+                    </span>
                   </GlassCard>
                 );
               })}

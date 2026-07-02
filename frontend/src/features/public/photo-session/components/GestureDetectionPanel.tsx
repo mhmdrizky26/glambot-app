@@ -131,7 +131,12 @@ export function GestureDetectionPanel({
 
       {/* Hint */}
       <div className="px-4 pb-4 -mt-1 shrink-0 flex items-center gap-2">
-        <span className="text-base">🤚</span>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src="/finger/STOP.svg"
+          alt="Open palm"
+          className="h-5 w-5 object-contain"
+        />
         <p className="text-sm text-[#00d084]/80">
           {isLocked
             ? 'Keep position until lock timer finishes'
