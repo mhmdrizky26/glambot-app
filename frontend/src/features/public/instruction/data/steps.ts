@@ -42,7 +42,7 @@ export const instructionSteps: InstructionStep[] = [
     type: 'safety',
     heading: 'Safety & Rules',
     doRules: [
-      { text: 'Stay 3m away from the robot' },
+      { text: 'Stay 2m away from the robot' },
       { text: 'Stay in detection area' },
       { text: 'Use clear hand gestures' },
       { text: 'Have fun and be creative!' },

@@ -6,6 +6,7 @@ import PaymentStatus from '../components/PaymentStatus';
 import type { PaymentState } from '../hooks/usePayment';
 import Timer from '@/components/shared/Timer';
 import BackButton from '@/components/shared/BackButton';
+import { playBackendAudio } from '@/lib/audio';
 
 export default function PayPage() {
   const searchParams = useSearchParams();
@@ -31,9 +32,16 @@ export default function PayPage() {
     router.push(`/instruction?sessionId=${sid}`);
   };
 
+  // Waktu bayar habis → beri tahu user pembayaran gagal (audio tetap lanjut
+  // saat pindah ke Home karena di-cache di module scope), lalu kembali ke Home.
+  const handleTimeUp = () => {
+    playBackendAudio('pembayaranGagal.mp3');
+    router.push('/');
+  };
+
   return (
     <main className="flex flex-col items-center justify-center min-h-full px-4">
-      <Timer />
+      <Timer onTimeUp={handleTimeUp} />
       {payStatus === 'waiting' && !qrisReady && (
         <BackButton
           onClick={() => router.push(`/payment/summary?sessionId=${sessionId}`)}

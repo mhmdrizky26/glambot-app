@@ -22,6 +22,7 @@ import { printComposition } from '../api/printComposition';
 import { usePhotoComposition } from '../hooks/usePhotoComposition';
 import type { FilterType } from '../lib/filters';
 import { useAppConfig } from '@/shared/api/config';
+import { playBackendAudio } from '@/lib/audio';
 
 // FilterType didefinisikan kanonik di lib/filters; di-re-export di sini supaya
 // import lama `from '../pages/PhotoEditorPage'` tetap berfungsi tanpa drift.
@@ -91,6 +92,16 @@ export default function PhotoEditorPage() {
 
   // Save composition mutation
   const { mutate: saveComposition, isPending: isSaving } = useSaveComposition();
+
+  // Panduan suara "pilih foto & frame" — main sekali saat editor siap. Effect
+  // dideklarasikan sebelum early-return loading (patuh Rules of Hooks).
+  const introAudioFiredRef = useRef(false);
+  useEffect(() => {
+    if (introAudioFiredRef.current) return;
+    if (!sessionId || photosLoading || framesLoading || !appConfig) return;
+    introAudioFiredRef.current = true;
+    playBackendAudio('pilihFoto.mp3');
+  }, [sessionId, photosLoading, framesLoading, appConfig]);
 
   // Loading state — juga handle case sessionId kosong, supaya halaman
   // menampilkan spinner sembari router.replace('/package') jalan, BUKAN

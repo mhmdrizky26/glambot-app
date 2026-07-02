@@ -10,7 +10,7 @@ import {
 } from '../components/InstructionCards';
 import { usePatchSessionStatus, useGetSession } from '@/shared/api/session';
 import { sendSessionBroadcast } from '@/features/public/photo-session/lib/broadcastChannel';
-import { playBackendAudio } from '@/lib/audio';
+import { playBackendAudio, playBackendAudioAfterCurrent } from '@/lib/audio';
 import Timer from '@/components/shared/Timer';
 import { useAppConfig } from '@/shared/api/config';
 
@@ -52,11 +52,33 @@ export default function InstructionPage() {
     }
   }, [session?.status, isSessionFetching, router]);
 
-  // Play preset.mp3 saat masuk step gesture-controls
+  // Tombol "Next" (get-ready & safety) baru muncul setelah narasi step selesai,
+  // supaya user mendengarkan dulu. Direset tiap ganti step.
+  const [audioDone, setAudioDone] = useState(false);
+
+  // Panduan suara per step — diputar sekali saat masuk step (keyed step.type).
   useEffect(() => {
-    if (step?.type === 'gesture-controls') {
-      playBackendAudio('preset.mp3');
+    setAudioDone(false);
+    let cancelled = false;
+    const markDone = () => {
+      if (!cancelled) setAudioDone(true);
+    };
+    switch (step?.type) {
+      case 'get-ready':
+        // Tunggu "pembayaranBerhasil" (dari payment) selesai dulu.
+        playBackendAudioAfterCurrent('intro.mp3', markDone);
+        break;
+      case 'safety':
+        playBackendAudio('keselamatan.mp3', markDone);
+        break;
+      case 'gesture-controls':
+        // Kartu gesture punya gating sendiri, tombol tak ditahan audio di sini.
+        playBackendAudio('preset.mp3');
+        break;
     }
+    return () => {
+      cancelled = true;
+    };
   }, [step?.type]);
 
   if (!sessionId) return null;
@@ -124,12 +146,18 @@ export default function InstructionPage() {
         className="flex justify-center w-full pt-[clamp(40px,9vh,160px)] pb-[clamp(40px,6vh,96px)] animate-[slideUp_300ms_ease-out]"
       >
         {step.type === 'get-ready' ? (
-          <GetReadyCard step={step} onNext={handleNext} buttonLabel="Next →" />
+          <GetReadyCard
+            step={step}
+            onNext={handleNext}
+            buttonLabel="Next →"
+            buttonReady={audioDone}
+          />
         ) : step.type === 'safety' ? (
           <SafetyRulesCard
             step={step}
             onNext={handleNext}
             buttonLabel="Next →"
+            buttonReady={audioDone}
           />
         ) : (
           <GestureControlsCard
