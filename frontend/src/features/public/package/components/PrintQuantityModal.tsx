@@ -5,6 +5,7 @@ import { formatRupiah, formatPriceToK } from '@/lib/formats';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import { PrinterIcon, X } from 'lucide-react';
+import { playBackendAudio } from '@/lib/audio';
 
 interface PrintQuantityModalProps {
   isOpen: boolean;
@@ -26,8 +27,12 @@ export default function PrintQuantityModal({
   const [quantity, setQuantity] = useState(1);
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (isOpen) setQuantity(1);
+    if (isOpen) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setQuantity(1);
+      // Modal dibuka lewat tap kartu paket (interaksi user) → autoplay aman.
+      playBackendAudio('pilihJumlahCetak.mp3');
+    }
   }, [isOpen]);
 
   const totalDisplay = basePrice + quantity * pricePerPrint;

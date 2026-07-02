@@ -1,7 +1,7 @@
 'use client';
 
 import { Sparkles } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Lottie from 'lottie-react';
 import Link from 'next/link';
 import { QRCodeSVG } from 'qrcode.react';
@@ -12,6 +12,7 @@ import { useLiveGifAvailability } from '@/features/public/photo-download/api/get
 import { GIFPreview } from '@/features/public/photo-download/components/GIFPreview';
 import { useFramedPhotos } from '@/features/public/photo-editor/api/getPhotos';
 import { useAppConfig } from '@/shared/api/config';
+import { playBackendAudio, playBackendAudioAfterCurrent } from '@/lib/audio';
 
 interface GetPhotosScreenProps {
   onComplete: () => void;
@@ -30,6 +31,12 @@ export function GetPhotosScreen({
   useEffect(() => {
     const t = setTimeout(() => setMinSplashDone(true), 1500);
     return () => clearTimeout(t);
+  }, []);
+
+  // Narasi "sedang memproses foto" — main sekali saat layar ini muncul (fase
+  // loading, sebelum QR siap). scanQrAmbilFoto di bawah menyusul setelah ini.
+  useEffect(() => {
+    playBackendAudio('prosesFoto.mp3');
   }, []);
 
   // Build the download URL after mount (window is undefined during SSR).
@@ -72,6 +79,17 @@ export function GetPhotosScreen({
   const driveMaybeActive = drive === undefined || drive.enabled === true;
   const waitingForDrive = driveMaybeActive && !driveReady && !driveTimedOut;
   const isLoading = !minSplashDone || waitingForDrive;
+
+  // Suara "scan QR untuk ambil foto" — main sekali saat loading selesai & QR
+  // tampil (deklarasi sebelum early-return loading, patuh Rules of Hooks).
+  const qrAudioFiredRef = useRef(false);
+  useEffect(() => {
+    if (!isLoading && !qrAudioFiredRef.current) {
+      qrAudioFiredRef.current = true;
+      // Tunggu "prosesFoto" selesai dulu supaya tidak menabrak.
+      playBackendAudioAfterCurrent('scanQrAmbilFoto.mp3');
+    }
+  }, [isLoading]);
 
   // Nilai QR: link Drive kalau aktif & siap; kalau timeout tanpa siap atau Drive
   // tidak aktif, pakai URL halaman download lokal sebagai cadangan.
@@ -125,7 +143,7 @@ export function GetPhotosScreen({
       </div>
 
       {/* Content */}
-      <div className="flex-1 flex items-center justify-center gap-40 px-10 mt-18.75 w-full max-w-5xl">
+      <div className="flex-1 flex items-center justify-center gap-40 px-10 w-full max-w-5xl">
         {/* Left — Photo strip preview */}
         <div className="relative flex items-center justify-center">
           <Sparkles

@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import { usePayment, type PaymentState } from '../hooks/usePayment';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { formatRupiah } from '@/lib/formats';
+import { playBackendAudio, playBackendAudioAfterCurrent } from '@/lib/audio';
 
 interface PaymentStatusProps {
   sessionId: string;
@@ -66,6 +67,25 @@ export default function PaymentStatus({
   useEffect(() => {
     if (qrisUrl) onQrisReady?.();
   }, [qrisUrl, onQrisReady]);
+
+  // Narasi status pembayaran — tiap status diputar sekali. 'success'/'gagal'
+  // pakai AfterCurrent agar tidak menabrak ekor "pembayaranDiproses".
+  const playedPayStatusRef = useRef<Set<PaymentState>>(new Set());
+  useEffect(() => {
+    const played = playedPayStatusRef.current;
+    if (played.has(status)) return;
+
+    if (status === 'processing') {
+      played.add(status);
+      playBackendAudio('pembayaranDiproses.mp3');
+    } else if (status === 'success') {
+      played.add(status);
+      playBackendAudioAfterCurrent('pembayaranBerhasil.mp3');
+    } else if (status === 'failed' || status === 'expired') {
+      played.add(status);
+      playBackendAudioAfterCurrent('pembayaranGagal.mp3');
+    }
+  }, [status]);
 
   // Processing state — user has paid, verifying payment
   if (status === 'processing') {

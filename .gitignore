@@ -61,6 +61,26 @@ backend/storage/frames/*
 # frame-165 vector murni: overlay PNG hasil render (alpha asli) dipakai GIF live
 # agar dekorasi yang menjuntai ke window (lanteran) tidak tertutup burst.
 !backend/storage/frames/frame-165.png
+# Frame custom hasil upload admin (dipin agar identik saat clone di device lain).
+# Metadata slot/canvas-nya ada di backend/migrations/seed_frames.sql (UPSERT).
+# Tambah frame baru → daftarkan filenya di sini + regenerate seed_frames.sql.
+!backend/storage/frames/0466cff5-0edc-4f01-af7f-e4fab0686a03.png
+!backend/storage/frames/1a7e8ae6-9485-450a-8e7d-f195819d0185.png
+!backend/storage/frames/1b691551-b1b1-43e4-babd-b616085fe96e.png
+!backend/storage/frames/2613d174-7c9f-40d8-9197-02b9f849c9e3.png
+!backend/storage/frames/29b28eeb-6294-43af-a22e-fcbd2aed939f.png
+!backend/storage/frames/3d3c91d3-4949-432c-a80b-a125ca3c4ad2.png
+!backend/storage/frames/513bf6e4-d70b-4b2e-8332-34c35b426e5f.png
+!backend/storage/frames/64b7faf6-fc00-42fa-b4b2-c77e974ece92.png
+!backend/storage/frames/8b42ae9d-9b89-4ae8-8be8-a2764029a4da.png
+!backend/storage/frames/9386ba48-4eb8-49f3-b7b9-ee19fd1f9998.png
+!backend/storage/frames/ae168b1a-fa98-4a3b-be48-e11148b3a7d4.png
+!backend/storage/frames/d26d6ea4-831b-4528-9877-5551fe5a987b.png
+!backend/storage/frames/deb23a0b-eae5-4328-a2bc-d2a6ca1aa24f.png
+!backend/storage/frames/e44d181d-f39d-48ba-bf81-c9e499929d1e.png
+!backend/storage/frames/e779fd19-713c-4bac-bdef-494bb56e334e.png
+!backend/storage/frames/ea15603f-38fb-41fc-988d-6726fc36d40b.png
+!backend/storage/frames/f1c365de-0f54-4939-acb0-54d56122eda9.png
 backend/storage/packages/*
 !backend/storage/packages/digital.svg
 !backend/storage/packages/print.svg

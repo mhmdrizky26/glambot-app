@@ -2,34 +2,25 @@
 
 import Timer from '@/components/shared/Timer';
 import { CloudDownload, Sparkles } from 'lucide-react';
-import Lottie from 'lottie-react';
-import loadingAnimation from '@/assets/loading.json';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { useAppConfig } from '@/shared/api/config';
+import { playBackendAudio } from '@/lib/audio';
 
 interface DoneScreenProps {
   onSessionEnd: () => void;
   sessionId: string;
 }
 export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
-  const [isLoading, setIsLoading] = useState(true);
   const { data: appConfig } = useAppConfig();
 
+  // Ucapan terima kasih — main sekali saat layar tampil.
+  const thanksAudioFiredRef = useRef(false);
   useEffect(() => {
-    const timer = setTimeout(() => setIsLoading(false), 3000);
-    return () => clearTimeout(timer);
+    if (!thanksAudioFiredRef.current) {
+      thanksAudioFiredRef.current = true;
+      playBackendAudio('terimaKasih.mp3');
+    }
   }, []);
-
-  // Loading state
-  if (isLoading) {
-    return (
-      <div className="min-h-full w-full flex flex-col items-center justify-center gap-4">
-        <div className="w-37.5 h-37.5">
-          <Lottie animationData={loadingAnimation} loop={true} />
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-full w-full flex flex-col items-center justify-center relative overflow-hidden">

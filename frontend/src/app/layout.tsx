@@ -36,6 +36,11 @@ export const metadata: Metadata = {
     template: '%s | Glambot',
   },
   description: 'Control the camera with your gestures',
+  icons: {
+    icon: '/robot%201.svg',
+    shortcut: '/robot%201.svg',
+    apple: '/robot%201.svg',
+  },
 };
 
 export default function RootLayout({

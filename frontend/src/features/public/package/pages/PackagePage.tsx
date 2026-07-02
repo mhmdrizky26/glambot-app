@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import PackageCard from '../components/PackageCard';
 import PrintQuantityModal from '../components/PrintQuantityModal';
@@ -11,6 +11,8 @@ import { useCreateSession } from '@/shared/api/session';
 import Timer from '@/components/shared/Timer';
 import BackButton from '@/components/shared/BackButton';
 import { useAppConfig } from '@/shared/api/config';
+import { whenVoiceIdle } from '@/lib/audio';
+import { cn } from '@/lib/utils';
 
 export default function PackagePage() {
   const { data: packages = [], isPending, isError } = usePackages();
@@ -22,6 +24,14 @@ export default function PackagePage() {
     null,
   );
   const router = useRouter();
+
+  // Kartu paket baru bisa diklik setelah narasi "selamatDatang" (dari Home)
+  // selesai, supaya narasi berikutnya tidak menabrak ekornya.
+  const [audioReady, setAudioReady] = useState(false);
+  useEffect(() => {
+    const cancel = whenVoiceIdle(() => setAudioReady(true));
+    return cancel;
+  }, []);
 
   const { mutate: createSession, isPending: isCreating } = useCreateSession({
     mutationConfig: {
@@ -35,6 +45,8 @@ export default function PackagePage() {
   });
 
   const handleCardClick = (pkg: Package) => {
+    // Tahan klik selama sapaan masih berbunyi (pengaman selain gating di UI).
+    if (!audioReady) return;
     if (pkg.type === 'print') {
       setSelectedPrintPkg(pkg);
     } else {
@@ -63,7 +75,13 @@ export default function PackagePage() {
         </p>
       </div>
 
-      <div className="flex justify-center items-center mt-18.75 gap-12.25">
+      <div
+        className={cn(
+          'flex justify-center items-center mt-18.75 gap-12.25 transition-opacity duration-300',
+          // Selama sapaan masih berbunyi: redupkan & matikan interaksi kartu.
+          !audioReady && 'opacity-40 pointer-events-none',
+        )}
+      >
         {isPending && (
           <StatusAnimation status="waiting" className="w-55 h-55" />
         )}

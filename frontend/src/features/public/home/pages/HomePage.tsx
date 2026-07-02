@@ -1,5 +1,8 @@
+'use client';
+
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { playBackendAudio } from '@/lib/audio';
 
 export default function Home() {
   return (
@@ -15,7 +18,11 @@ export default function Home() {
       </p>
 
       <Button asChild size="lg" className="mt-20 w-88.5 h-30 rounded-[60px]">
-        <Link href="/package">Tap to Start</Link>
+        {/* Sapaan diputar saat tap — interaksi user ini sekaligus meng-"unlock"
+            autoplay browser untuk suara di halaman berikutnya. */}
+        <Link href="/package" onClick={() => playBackendAudio('selamatDatang.mp3')}>
+          Tap to Start
+        </Link>
       </Button>
     </main>
   );
