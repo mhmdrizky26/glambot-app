@@ -42,6 +42,16 @@ backend/*.out
 backend/photobooth
 backend/photobooth.exe
 
+# ─── Python / dobot (robot gesture-control service) ──────────────────────────
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+dobot/venv/
+dobot/lua/
+dobot/testcamera.py
+
 # ─── Backend runtime data (per-session uploads/processing) ───────────────────
 # storage/sessions/ adalah hasil capture per session — ignore semua isinya
 # tapi keep folder tetap ada via .gitkeep

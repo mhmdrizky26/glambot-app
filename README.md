@@ -34,6 +34,13 @@ Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis
 
 Ringkasan perubahan terbaru (per Juli 2026):
 
+### Gesture Detection live + tuning robot dari admin (baru)
+- Panel **Gesture Detection** di `/photo-session` (dan Monitor 2 `/photo-session/control`) kini menampilkan **data nyata** dari service dobot: liveview kamera deteksi tangan (MJPEG `/video_feed`) + state FSM lock/unlock + progress bar, di-poll dari `GET {robot}/detection` tiap 150ms (lihat [`getRobotDetection.ts`](frontend/src/features/public/photo-session/api/getRobotDetection.ts)).
+- **Robot & Gesture Tuning** di halaman admin `/settings` — atur speed/akselerasi robot + timing gesture/safety (7 field). Disimpan di `app_settings`, diteruskan **live** ke dobot (`POST {robot}/config/runtime`) tanpa restart, plus dibaca dobot saat start via `GET /api/robot-settings`.
+- Cue suara real-time robot: `GestureTerdeteksi.mp3` (mulai unlock/preset terbaca), `unlock.mp3` (kunci terbuka), dan re-prompt `inisiasi.mp3` saat user diam. `presetBerikutnya.mp3` dihapus. `playBackendAudio` kini "satu channel" — narasi baru menghentikan yang lama supaya tidak menumpuk.
+- Env frontend baru `NEXT_PUBLIC_ROBOT_URL` (default `http://localhost:5001`) + helper `resolveRobotUrl` (auto-derive dari hostname kalau diakses via LAN).
+- Durasi sesi di kartu instruction ("Get Ready") kini ikut paket yang dipilih (`session.durationSecs`), bukan hardcode.
+
 ### Narasi suara penuh di sepanjang alur kiosk (baru)
 - Voice-over Bahasa Indonesia kini menemani **tiap halaman** — dari sapaan di Home sampai "terima kasih" di akhir sesi (lihat [Audio Cues](#audio-cues) untuk daftar lengkap).
 - [`lib/audio.ts`](frontend/src/lib/audio.ts) dapat helper baru: `preloadBackendAudio` (buffer semua clip saat boot → tanpa jeda), `playBackendAudioAfterCurrent` & `whenVoiceIdle` (koordinasi lintas halaman supaya dua narasi tidak bertabrakan), plus callback `onEnded` di `playBackendAudio`.
@@ -266,6 +273,11 @@ NEXT_PUBLIC_API_URL=http://localhost:8080
 # QR code download URL override (opsional)
 # Set kalau kiosk diakses via localhost tapi QR harus encode LAN IP
 # NEXT_PUBLIC_DOWNLOAD_PUBLIC_URL=http://192.168.1.150:3000
+
+# URL service dobot (Flask :5001) untuk panel Gesture Detection
+# - Kosongkan untuk auto-derive dari hostname halaman + :5001 (cocok kiosk & LAN)
+# - Set ke http://localhost:5001 untuk dev satu mesin
+NEXT_PUBLIC_ROBOT_URL=http://localhost:5001
 ```
 
 ---
@@ -389,7 +401,7 @@ Dashboard internal untuk kelola konten kiosk tanpa sentuh database langsung.
 | `/voucher` | CRUD voucher (percent/fixed, min price, max uses, expiry) |
 | `/transaction` | Riwayat transaksi pembayaran |
 | `/devices` | Status koneksi kamera / printer / robot (tes nyata) |
-| `/settings` | Pengaturan |
+| `/settings` | Timer tiap layar user + **Robot & Gesture Tuning** (speed/akselerasi robot, timing gesture/safety → diteruskan live ke dobot) |
 
 Semua perubahan **tersimpan permanen** dan **tidak ter-reset** saat server restart (lihat [Update Terbaru](#update-terbaru)).
 
@@ -406,6 +418,8 @@ Semua di-prefix `/api/admin` dan butuh token JWT (header `Authorization: Bearer 
 | GET | `/api/admin/transactions` | List transaksi |
 | GET | `/api/admin/devices` | Tes koneksi perangkat |
 | GET | `/api/admin/dashboard/summary` | Metrics ringkasan |
+| GET/PATCH | `/api/admin/settings` | Timer config tiap layar |
+| GET/PATCH | `/api/admin/robot-settings` | Robot & gesture tuning (validasi rentang, forward ke dobot) |
 
 ---
 
@@ -520,6 +534,7 @@ glambot-app/
 │   │   │       ├── payment/       # QRIS + voucher
 │   │   │       ├── photo-session/ # Live preview + capture (Canon) + countdown overlay + grace-period safeguard
 │   │   │       │                  # api/getRobotConfig.ts: shared useRobotConfig() hook (React Query, 250ms poll dedupe)
+│   │   │       │                  # api/getRobotDetection.ts: useRobotDetection() → poll dobot /detection + MJPEG /video_feed (150ms)
 │   │   │       ├── photo-editor/  # Select & Edit (Fabric canvas) — VIP only
 │   │   │       ├── photo-download/# Download grid (HP) — slideshow GIF + live-strip GIF preview/download cards
 │   │   │       └── session-end/   # QR display + done screen
@@ -539,6 +554,19 @@ glambot-app/
 │   ├── next.config.ts             # allowedDevOrigins, remotePatterns
 │   ├── package.json
 │   └── tsconfig.json
+│
+├── dobot/                          # Robot gesture-control service (Python + Flask + MediaPipe)
+│   ├── app/
+│   │   ├── config.py               # Loader .env → Config dataclass (semua field wajib)
+│   │   ├── core/runtime.py         # FSM + pipeline gerak + callback ke backend (/api/robot/moving,/done)
+│   │   ├── detector/               # Deteksi gesture jari (MediaPipe hand landmarker)
+│   │   ├── robot/                  # Driver Dobot Nova 5 (dashboard :29999 + move :30003)
+│   │   └── web/                    # Flask dashboard + endpoint /robot/enable|disable|stop|preset, /tracking/*
+│   ├── config/                     # Preset posisi robot (JSON): new_preset.json, presets.json
+│   ├── model/                      # Model MediaPipe hand gesture recognizer (v2, v3)
+│   ├── .env.example
+│   ├── requirements.txt
+│   └── main.py                     # Entry point (python main.py [--no-robot] [--ip] [--port])
 │
 └── README.md                       # This file
 ```
@@ -677,6 +705,8 @@ Diskon code.
 | POST | `/api/robot/done` | Robot → backend, selesai gerak (schedule auto-capture 3s) |
 | POST | `/api/robot/webhook` | Generic event from robot |
 | GET | `/api/robot/config` | Current robot/auto-capture state (di-polling frontend tiap 250ms) |
+| GET | `/api/config` | Timer config tiap layar user (dibaca frontend saat runtime) |
+| GET | `/api/robot-settings` | Robot & gesture tuning aktif (dibaca service dobot saat start) |
 
 ---
 
@@ -742,7 +772,38 @@ Tap ikon download di tiap card → fetch blob → trigger browser download via `
 
 ## Integrasi Robot
 
-Robot eksternal di-trigger oleh backend (forward dari frontend) dan callback balik via webhooks.
+Robot di-trigger oleh backend (forward dari frontend) dan callback balik via webhooks.
+
+### Robot Service — Gesture Control App (`dobot/`)
+
+Implementasi "robot" ada di folder [`dobot/`](dobot/) — service Python (**Flask + MediaPipe**) yang membaca gesture jari dari kamera lalu menggerakkan lengan **Dobot Nova 5** ke posisi preset. Service inilah yang menyediakan endpoint `/robot/*` yang dipanggil backend, sekaligus yang mengirim callback `/api/robot/moving` & `/done` balik ke backend.
+
+**Menjalankan robot service:**
+
+```powershell
+cd dobot
+python -m venv venv; venv\Scripts\activate
+pip install -r requirements.txt
+copy .env.example .env          # sesuaikan DOBOT_IP, CAMERA_INDEX, BACKEND_URL
+python main.py                  # mode penuh (kamera + robot)
+python main.py --no-robot       # mode visi saja (robot dry-run, tanpa hardware)
+```
+
+Dashboard robot: `http://localhost:5001`. Untuk koneksi langsung (backend & robot satu PC), set `ROBOT_API_URL` di [backend `.env`](#konfigurasi-environment) ke `http://localhost:5001` — **ngrok hanya perlu bila backend berada di jaringan berbeda** dari PC robot.
+
+**Konfigurasi utama (`dobot/.env`):** `DOBOT_IP` (IP robot), `CAMERA_INDEX` (`0` = webcam utama), `BACKEND_URL` (default `http://localhost:8080`), `MP_MODEL_PATH` (model gesture), preset via `DOBOT_PRESETS_JSON`. Semua field wajib terisi — loader menolak default tersembunyi.
+
+**Alur sesi (session-locked):** robot tidak aktif sampai sesi dibuka via `/robot/enable`. Setelah aktif → tahan gesture "semua jari" 2 detik untuk buka kunci → tunjukkan gesture preset → robot bergerak → jeda → terkunci lagi. Akhiri via `/robot/disable` (robot pulang ke initial pose, servo off).
+
+**Peta gesture → preset:**
+
+| Gesture | Preset | Gesture | Preset |
+|---|---|---|---|
+| Telunjuk | 1 | Jempol | 6 |
+| Telunjuk + Tengah | 2 | Jempol + Telunjuk | 7 |
+| + Jari Manis | 3 | + Tengah | 8 |
+| + Kelingking | 4 | + Jari Manis | 9 |
+| Semua jari | 5 | Kepalan (fist) | 10 |
 
 ### Backend → Robot
 
@@ -754,6 +815,9 @@ Robot eksternal di-trigger oleh backend (forward dari frontend) dan callback bal
 | `POST /api/robot/disable` | `POST {ROBOT_API_URL}/robot/disable` | (kosong) |
 | `POST /api/robot/stop` | `POST {ROBOT_API_URL}/robot/stop` | (kosong) |
 | `POST /api/robot/preset` | `POST {ROBOT_API_URL}/robot/preset` | `{"preset": N}` |
+| admin simpan tuning | `POST {ROBOT_API_URL}/config/runtime` | robotSettings (camelCase) |
+
+Selain endpoint di atas, frontend memanggil service dobot **langsung** (bukan lewat backend) untuk panel Gesture Detection: `GET {NEXT_PUBLIC_ROBOT_URL}/detection` (state FSM + gesture + progress, poll 150ms) dan `GET {NEXT_PUBLIC_ROBOT_URL}/video_feed` (stream MJPEG kamera deteksi tangan).
 
 ### Robot → Backend (callbacks)
 
@@ -810,7 +874,9 @@ Narasi suara (voice-over Bahasa Indonesia) menemani **seluruh alur kiosk** — t
 | `intro.mp3` | Masuk step get-ready di instruction | `InstructionPage.tsx` |
 | `keselamatan.mp3` | Masuk step safety di instruction | `InstructionPage.tsx` |
 | `preset.mp3` | Masuk step gesture-controls di instruction | `InstructionPage.tsx` |
-| `inisiasi.mp3` | Masuk `/photo-session` page | `PhotoSessionPage.tsx` |
+| `inisiasi.mp3` | Masuk `/photo-session` page; juga re-prompt tiap 5s saat robot LOCKED & tidak ada tangan (maks 3×) | `PhotoSessionPage.tsx` |
+| `GestureTerdeteksi.mp3` | Robot masuk fase `UNLOCKING`/`CONFIRMING` (gesture mulai terbaca) | `PhotoSessionPage.tsx` |
+| `unlock.mp3` | Robot masuk fase `UNLOCKED` (kunci terbuka, siap terima gesture preset) | `PhotoSessionPage.tsx` |
 | `presetTerkonfirmasi.mp3` | Robot move ke preset baru (`current_preset` berubah) | `CameraPreview.tsx` |
 | `tiga.mp3` / `dua.mp3` / `satu.mp3` | Countdown detik 3 / 2 / 1 | `CameraPreview.tsx` |
 | `pilihFoto.mp3` | Editor siap (foto + frame termuat) | `PhotoEditorPage.tsx` |
@@ -820,7 +886,7 @@ Narasi suara (voice-over Bahasa Indonesia) menemani **seluruh alur kiosk** — t
 
 ### Helper ([`lib/audio.ts`](frontend/src/lib/audio.ts))
 
-- `playBackendAudio(filename, onEnded?)` — putar clip, cache Audio instance, silent saat autoplay block / file hilang. `onEnded` dipanggil saat clip selesai (dengan pengaman timeout kalau event `ended` tak fire).
+- `playBackendAudio(filename, onEnded?)` — putar clip, cache Audio instance, silent saat autoplay block / file hilang. **Satu channel**: narasi baru menghentikan voice lama yang masih berbunyi (clip beda) supaya tidak menumpuk — cocok untuk cue robot real-time yang statenya cepat berganti. `onEnded` dipanggil saat clip selesai (dengan pengaman timeout kalau event `ended` tak fire).
 - `preloadBackendAudio()` — dipanggil sekali saat kiosk boot ([`providers.tsx`](frontend/src/app/providers.tsx)); download + buffer semua clip supaya play pertama tiap halaman tanpa jeda.
 - `playBackendAudioAfterCurrent(filename, onEnded?)` — putar SETELAH narasi yang sedang berbunyi selesai; mencegah dua narasi bertabrakan saat pindah halaman cepat (mis. "pembayaranBerhasil" → "intro").
 - `whenVoiceIdle(cb)` — jalankan `cb` saat narasi yang sedang berbunyi selesai (atau langsung kalau senyap). Karena `currentVoice` adalah state modul yang bertahan lintas navigasi SPA, dipakai untuk **gating interaksi**: mis. kartu paket baru bisa diklik setelah "selamatDatang" selesai.

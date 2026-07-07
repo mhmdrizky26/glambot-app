@@ -44,6 +44,9 @@ func Setup(storagePath string) http.Handler {
 		// diatur admin. Dibaca frontend saat runtime.
 		r.Get("/config", handlers.GetAppConfig)
 
+		// Robot runtime tuning (speed/timing) — dibaca service dobot saat start.
+		r.Get("/robot-settings", handlers.GetRobotSettings)
+
 		// ── Packages ────────────────────────────────────────────────────────
 		r.Get("/package", handlers.GetPackages)
 
@@ -141,6 +144,11 @@ func Setup(storagePath string) http.Handler {
 				// get-photos/done). GET baca, PATCH ubah.
 				r.Get("/settings", handlers.AdminGetSettings)
 				r.Patch("/settings", handlers.AdminUpdateSettings)
+
+				// Settings — tuning robot (speed/akselerasi + gesture/safety
+				// timing) yang diteruskan ke service dobot.
+				r.Get("/robot-settings", handlers.GetRobotSettings)
+				r.Patch("/robot-settings", handlers.AdminUpdateRobotSettings)
 
 				// Packages
 				r.Get("/packages", handlers.AdminListPackages)

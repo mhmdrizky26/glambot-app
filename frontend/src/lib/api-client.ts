@@ -41,6 +41,35 @@ export const resolveBaseUrl = (): string => {
   return 'http://localhost:8080';
 };
 
+/**
+ * Resolve URL dobot robot service (Flask, default :5001).
+ *
+ * Sama strateginya dengan resolveBaseUrl: hormati NEXT_PUBLIC_ROBOT_URL kalau
+ * di-set ke host non-lokal; kalau env-nya localhost tapi halaman dibuka dari
+ * LAN IP, derive dari hostname halaman + port 5001. Ini bikin Monitor 2 jalan
+ * baik di PC kiosk (localhost) maupun device LAN.
+ */
+export const resolveRobotUrl = (): string => {
+  const envUrl = process.env.NEXT_PUBLIC_ROBOT_URL?.trim();
+
+  if (typeof window !== 'undefined') {
+    const currentHost = window.location.hostname;
+    const onLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
+
+    if (envUrl) {
+      const envIsLocal = /localhost|127\.0\.0\.1/.test(envUrl);
+      if (envIsLocal && !onLocalhost) {
+        return `${window.location.protocol}//${currentHost}:5001`;
+      }
+      return envUrl;
+    }
+    return `${window.location.protocol}//${currentHost}:5001`;
+  }
+
+  if (envUrl) return envUrl;
+  return 'http://localhost:5001';
+};
+
 export const apiClient = axios.create({
   baseURL: resolveBaseUrl(),
   timeout: 15000,

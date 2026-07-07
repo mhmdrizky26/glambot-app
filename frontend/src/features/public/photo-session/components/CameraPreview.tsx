@@ -3,6 +3,14 @@ import { apiClient, resolveBaseUrl } from '@/lib/api-client';
 import { playBackendAudio } from '@/lib/audio';
 import { useRobotConfig } from '../api/getRobotConfig';
 
+// Countdown shutter (3-2-1) → file audio. Semua sudah dipreload global
+// (BACKEND_AUDIO_FILES) dan diputar lewat channel narasi bersama.
+const COUNTDOWN_AUDIO: Record<number, string> = {
+  3: 'tiga.mp3',
+  2: 'dua.mp3',
+  1: 'satu.mp3',
+};
+
 interface CameraPreviewProps {
   frameUrl?: string | null;
   streamUrl?: string | null;
@@ -28,15 +36,12 @@ export function CameraPreview({
   const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const frameCountRef = useRef(0);
   const pendingRef = useRef(false);
-  const audioRefs = useRef<Record<number, HTMLAudioElement>>({});
   const playedRef = useRef<Set<number>>(new Set());
   const wasActiveRef = useRef(false);
   const captureTriggeredRef = useRef(false);
   const prevPresetRef = useRef(0);
-  // Set ke false di cleanup effect. Async callbacks (showLatestCanonCapture,
-  // captureAndUpload) cek ref ini sebelum setState supaya tidak fire pada
-  // komponen yang sudah unmount (mis. timer expire → navigate sementara
-  // polling masih jalan).
+  // Set false di cleanup. Async callback (showLatestCanonCapture) cek ref ini
+  // sebelum setState supaya tidak fire di komponen yang sudah unmount.
   const isMountedRef = useRef(true);
 
   const [countdown, setCountdown] = useState<number | null>(null);
@@ -78,39 +83,9 @@ export function CameraPreview({
     };
   }, []);
 
-  // Preload countdown audio (3-2-1) from backend storage.
-  // Cleanup: pause + clear src supaya audio buffer bisa di-GC dan tidak
-  // ada handle yang menahan native resource saat komponen unmount.
-  useEffect(() => {
-    const base = resolveBaseUrl();
-    audioRefs.current = {
-      3: new Audio(`${base}/storage/audio/tiga.mp3`),
-      2: new Audio(`${base}/storage/audio/dua.mp3`),
-      1: new Audio(`${base}/storage/audio/satu.mp3`),
-    };
-    Object.values(audioRefs.current).forEach((a) => {
-      a.preload = 'auto';
-    });
-    return () => {
-      Object.values(audioRefs.current).forEach((a) => {
-        try {
-          a.pause();
-          a.src = '';
-          a.load();
-        } catch {
-          // ignore — audio element may already be disposed
-        }
-      });
-      audioRefs.current = {};
-    };
-  }, []);
-
-  // Canon path: after capture finishes, fetch most recent photo from backend
-  // and show it in the modal. Backend writes photo to DB inside a goroutine,
-  // so we may need to wait — retry with backoff until it appears.
-  // Polling-loop ini bisa berjalan ~2.2 detik; user bisa navigate ke halaman
-  // lain di tengah waktu itu (mis. sesi habis). isMountedRef.current jadi
-  // false di unmount → kita break out tanpa setState (which would warn).
+  // Canon path: setelah capture, fetch foto terbaru dari backend & tampilkan di
+  // modal. Backend nulis ke DB via goroutine, jadi retry backoff (~2.2s total)
+  // sampai muncul. isMountedRef guard: user bisa navigate di tengah loop.
   const showLatestCanonCapture = useCallback(async () => {
     if (!sessionId) return;
     const triggeredAt = Date.now();
@@ -181,7 +156,10 @@ export function CameraPreview({
         setCountdown(seconds);
         if (!playedRef.current.has(seconds)) {
           playedRef.current.add(seconds);
-          audioRefs.current[seconds]?.play().catch(() => {});
+          // Lewat channel narasi bersama (bukan Audio terpisah) supaya countdown
+          // ikut aturan "satu suara": tiap angka menghentikan yang sebelumnya
+          // dan menghentikan voice FSM yang mungkin masih menyisa.
+          playBackendAudio(COUNTDOWN_AUDIO[seconds]);
         }
       }
       wasActiveRef.current = true;

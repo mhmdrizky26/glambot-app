@@ -14,13 +14,21 @@ interface CardProps {
   buttonReady?: boolean;
 }
 
+interface GetReadyCardProps extends CardProps {
+  // Durasi sesi (menit) dari paket yang dipilih user. Kalau undefined
+  // (mis. session belum termuat) jatuh ke step.sessionDuration sebagai default.
+  sessionDurationMinutes?: number;
+}
+
 /** "Get Ready" step — session duration + numbered activity list. */
 export function GetReadyCard({
   step,
   onNext,
   buttonLabel,
   buttonReady = true,
-}: CardProps) {
+  sessionDurationMinutes,
+}: GetReadyCardProps) {
+  const minutes = sessionDurationMinutes ?? step.sessionDuration;
   return (
     <GlassCard maxWidth="max-w-[724px]" className="p-9.5 ">
       <div className="flex flex-col items-center">
@@ -31,7 +39,7 @@ export function GetReadyCard({
         <p className="text-white/40 text-[20px] leading-7.5 mb-8 ">
           {step.subheading}{' '}
           <span className="text-white font-semibold">
-            {step.sessionDuration} minutes
+            {minutes} {minutes === 1 ? 'minute' : 'minutes'}
           </span>
         </p>
 
@@ -255,7 +263,13 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
                           alt={`Preset ${i + 1}`}
                           width={55}
                           height={55}
-                          className="object-contain"
+                          className={cn(
+                            'object-contain',
+                            // Preset 6 (Move Left) — gambar diputar 100° ke
+                            // kanan supaya jempol menghadap ke atas.
+                            gesture.icon?.includes('MOVELEFT') &&
+                              'rotate-[100deg]',
+                          )}
                         />
                       ) : (
                         <span className="inline-block h-14 w-14" />
