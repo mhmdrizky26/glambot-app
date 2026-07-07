@@ -31,6 +31,14 @@ export default function InstructionPage() {
     queryConfig: { enabled: !!sessionId },
   });
 
+  // Durasi sesi (menit) mengikuti paket yang dipilih user — sama dengan durasi
+  // timer di halaman foto (session.durationSecs). Undefined saat session belum
+  // termuat sehingga kartu memakai default step.sessionDuration sementara.
+  const sessionDurationMinutes =
+    session?.durationSecs != null
+      ? Math.round(session.durationSecs / 60)
+      : undefined;
+
   // Semua hook harus dipanggil tanpa syarat (rules-of-hooks); early-return
   // untuk sessionId kosong ditangani SETELAH semua hook dideklarasikan.
   useEffect(() => {
@@ -151,6 +159,7 @@ export default function InstructionPage() {
             onNext={handleNext}
             buttonLabel="Next →"
             buttonReady={audioDone}
+            sessionDurationMinutes={sessionDurationMinutes}
           />
         ) : step.type === 'safety' ? (
           <SafetyRulesCard

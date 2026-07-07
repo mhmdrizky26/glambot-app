@@ -39,7 +39,11 @@ export function GestureControlsGrid({
                     alt={gesture.name}
                     width={33}
                     height={33}
-                    className="object-contain"
+                    className={`object-contain ${
+                      // Preset 6 (Move Left) — gambar diputar 100° ke kanan
+                      // supaya jempol menghadap ke atas.
+                      gesture.icon.includes('MOVELEFT') ? 'rotate-[100deg]' : ''
+                    }`}
                   />
                 </div>
                 <h4 className="text-[17px] leading-[19.3px] font-normal text-[#ffff]/70 text-center">

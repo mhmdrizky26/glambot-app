@@ -22,6 +22,7 @@ import {
   useUpdateTimerSettings,
   type TimerSettings,
 } from '../api/timerSettings';
+import { RobotSettingsSection } from '../components/RobotSettingsSection';
 
 // Batas aman — samakan dengan minTimerSecs/maxTimerSecs di backend (config.go).
 const MIN = 5;
@@ -220,6 +221,10 @@ export function SettingsPage() {
           ))}
         </div>
       )}
+
+      {/* Pemisah + tuning robot/gesture (diteruskan ke service dobot). */}
+      <div className="border-t" />
+      <RobotSettingsSection />
     </div>
   );
 }

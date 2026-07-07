@@ -1,96 +1,114 @@
 import { Unlock, Lock } from 'lucide-react';
-import { useEffect, useRef } from 'react';
-
-type GestureState = 'waiting' | 'locked' | 'ended';
+import { useState } from 'react';
+import { cn } from '@/lib/utils';
+import type { RobotFsmState } from '../api/getRobotDetection';
 
 interface GestureDetectionPanelProps {
+  /** URL stream MJPEG dobot (/video_feed). Null = tidak aktif. */
   streamUrl: string | null;
-  gestureState?: GestureState;
-  activeName?: string;
-  lockTimeLeft?: number;
-  maxLockTime?: number;
+  /** Robot service terjangkau (poll /detection sukses)? */
+  reachable?: boolean;
+  fsmState?: RobotFsmState;
+  /** Progress safety-unlock (tahan open palm), 0-100. */
+  armPercent?: number;
+  /** Progress pengenalan gesture preset, 0-100. */
+  presetPercent?: number;
+  /** Nama gesture yang sedang terdeteksi. */
+  gestureName?: string | null;
+  /** Preset yang sedang dituju robot (mis. "3"). */
+  activePresetName?: string | null;
+  /** Class tambahan untuk kontainer luar (mis. override border/frame). */
+  className?: string;
 }
 
 export function GestureDetectionPanel({
   streamUrl,
-  gestureState = 'waiting',
-  activeName,
-  lockTimeLeft = 0,
-  maxLockTime = 15,
+  reachable = false,
+  fsmState = 'LOCKED',
+  armPercent = 0,
+  presetPercent = 0,
+  gestureName,
+  activePresetName,
+  className,
 }: GestureDetectionPanelProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const frameCountRef = useRef(0);
-  const pendingRef = useRef(false);
+  // Bump nonce saat stream error → paksa <img> MJPEG reconnect. streamUrl ikut
+  // masuk ke key <img> supaya ganti stream otomatis remount (tanpa reset effect).
+  const [nonce, setNonce] = useState(0);
 
-  const isLocked = gestureState === 'locked';
-  const progressPercentage = isLocked ? (lockTimeLeft / maxLockTime) * 100 : 0;
+  const isLocked = fsmState === 'LOCKED' || fsmState === 'UNLOCKING';
+  const isUnlocked = fsmState === 'UNLOCKED' || fsmState === 'CONFIRMING';
+  const isMoving = fsmState === 'MOVING';
+  const isCooldown = fsmState === 'COOLDOWN';
 
-  const hasContent = !!streamUrl;
+  // Bar bawah: fase locked → progress unlock; fase unlocked → progress preset;
+  // saat robot bergerak/cooldown → penuh.
+  const progressPercentage = isLocked
+    ? armPercent
+    : isUnlocked
+      ? presetPercent
+      : 100;
 
-  // Canon mode: polling JPEG
-  useEffect(() => {
-    if (!streamUrl) {
-      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
-      return;
-    }
+  const hasStream = !!streamUrl && reachable;
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+  const statusLabel = isMoving
+    ? 'Moving'
+    : isCooldown
+      ? 'Capturing'
+      : isLocked
+        ? 'Locked'
+        : 'Unlocked';
 
-    canvas.width = 875;
-    canvas.height = 500;
-
-    const loadFrame = () => {
-      if (pendingRef.current) return;
-      pendingRef.current = true;
-
-      const baseUrl = streamUrl.split('?')[0];
-      const url = `${baseUrl}?t=${Date.now()}_${++frameCountRef.current}`;
-
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        pendingRef.current = false;
-      };
-      img.onerror = () => {
-        pendingRef.current = false;
-      };
-      img.src = url;
-    };
-
-    loadFrame();
-    frameIntervalRef.current = setInterval(loadFrame, 100);
-
-    return () => {
-      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
-    };
-  }, [streamUrl]);
+  const hint = isMoving
+    ? 'Robot is moving to position…'
+    : isCooldown
+      ? 'Hold still — capturing photo…'
+      : isLocked
+        ? 'Show open palm (all fingers) to unlock'
+        : 'Show a gesture to move the robot';
 
   return (
-    <div className="bg-primary/75 border border-white/10 rounded-2xl overflow-hidden shadow-lg flex flex-col h-full">
-      {/* Video area */}
+    <div
+      className={cn(
+        'bg-primary/75 border border-white/10 rounded-2xl overflow-hidden shadow-lg flex flex-col h-full',
+        className,
+      )}
+    >
+      {/* Video area — MJPEG liveview kamera deteksi tangan (dobot /video_feed) */}
       <div className="relative flex-1 min-h-0 bg-black/40">
-        {hasContent ? (
-          <canvas
-            ref={canvasRef}
-            className="w-full h-full bg-black"
+        {hasStream ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            key={`${streamUrl}-${nonce}`}
+            src={`${streamUrl}?k=${nonce}`}
+            alt="Robot hand-detection camera"
+            className="w-full h-full object-cover bg-black"
             style={{ display: 'block' }}
+            onError={() => {
+              window.setTimeout(() => setNonce((n) => n + 1), 1500);
+            }}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center">
-            <p className="text-white/30 text-xs">Stream not available</p>
+            <p className="text-white/30 text-xs">
+              {reachable ? 'Stream not available' : 'Robot camera offline'}
+            </p>
+          </div>
+        )}
+
+        {/* Overlay saat robot bergerak */}
+        {(isMoving || isCooldown) && (
+          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <span className="text-white text-lg font-medium tracking-wide">
+              {isMoving ? 'Moving to position…' : 'Capturing…'}
+            </span>
           </div>
         )}
 
         {/* Progress bar */}
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
           <div
-            className="h-full bg-[#00d084] transition-all duration-1000 ease-linear"
-            style={{ width: `${progressPercentage}%` }}
+            className="h-full bg-[#00d084] transition-all duration-200 ease-linear"
+            style={{ width: `${Math.max(0, Math.min(100, progressPercentage))}%` }}
           />
         </div>
       </div>
@@ -109,14 +127,14 @@ export function GestureDetectionPanel({
               isLocked ? 'text-[#d4a373]' : 'text-white/80'
             }`}
           >
-            {isLocked ? 'Locked' : 'Unlocked'}
+            {statusLabel}
           </span>
-          {isLocked && activeName && (
-            <span className="text-xs text-white/40">→ {activeName}</span>
+          {activePresetName && (isMoving || isCooldown) && (
+            <span className="text-xs text-white/40">→ Preset {activePresetName}</span>
           )}
         </div>
 
-        {/* Right: waiting indicator */}
+        {/* Right: gesture / progress indicator */}
         <div className="flex items-center gap-1.5">
           <div
             className={`w-1.5 h-1.5 rounded-full ${
@@ -124,7 +142,11 @@ export function GestureDetectionPanel({
             }`}
           />
           <span className="text-xs text-white/40">
-            {isLocked ? `${lockTimeLeft}s` : 'Waiting..'}
+            {gestureName
+              ? gestureName
+              : isLocked
+                ? 'Waiting..'
+                : `${Math.round(progressPercentage)}%`}
           </span>
         </div>
       </div>
@@ -137,11 +159,7 @@ export function GestureDetectionPanel({
           alt="Open palm"
           className="h-5 w-5 object-contain"
         />
-        <p className="text-sm text-[#00d084]/80">
-          {isLocked
-            ? 'Keep position until lock timer finishes'
-            : 'Show open palm to unlock'}
-        </p>
+        <p className="text-sm text-[#00d084]/80">{hint}</p>
       </div>
     </div>
   );

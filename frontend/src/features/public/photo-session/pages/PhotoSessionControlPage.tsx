@@ -3,32 +3,31 @@
 import { Gestures } from '../data/gestures';
 import { GestureDetectionPanel } from '../components/GestureDetectionPanel';
 import { GestureControlsGrid } from '../components/GestureControlsGrid';
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { useGetSession } from '@/shared/api/session';
 import { listenSessionBroadcast } from '../lib/broadcastChannel';
-import { useLiveStream } from '../api/getLivePreview';
+import {
+  useRobotDetection,
+  GESTURE_ID_TO_GRID_INDEX,
+} from '../api/getRobotDetection';
 
 /**
  * Monitor 2 — Gesture Controls
  *
  * Selalu terbuka di monitor kedua dalam mode standby.
- * Aktif saat menerima SESSION_START broadcast → tampilkan gesture UI.
- * Kembali standby saat menerima SESSION_END broadcast.
+ * Aktif saat menerima SESSION_START broadcast → tampilkan gesture UI yang
+ * disambungkan langsung ke dobot robot service (:5001): liveview kamera deteksi
+ * tangan (MJPEG /video_feed), gesture yang terdeteksi, dan state lock/unlock
+ * beserta progress-nya (poll /detection). Kembali standby saat SESSION_END.
  */
 export function PhotoSessionControlPage() {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isActive, setIsActive] = useState(false);
 
-  const [activeGestureIndex, setActiveGestureIndex] = useState<number | null>(
-    null,
-  );
-  const [gestureState, setGestureState] = useState<
-    'waiting' | 'locked' | 'ended'
-  >('waiting');
-  const [lockTimeLeft, setLockTimeLeft] = useState(0);
-
-  const lockTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const { frameUrl } = useLiveStream();
+  // State real-time dari dobot. Poll hanya saat sesi aktif.
+  const { detection, reachable, streamUrl } = useRobotDetection({
+    enabled: isActive,
+  });
 
   useGetSession({
     sessionId: sessionId ?? '',
@@ -46,55 +45,11 @@ export function PhotoSessionControlPage() {
         if (id !== sessionId) return;
         setIsActive(false);
         setSessionId(null);
-        setActiveGestureIndex(null);
-        setGestureState('waiting');
-        setLockTimeLeft(0);
-        if (lockTimerRef.current) {
-          clearInterval(lockTimerRef.current);
-          lockTimerRef.current = null;
-        }
       },
     });
 
     return unsubscribe;
   }, [sessionId]);
-
-  // Cleanup lock timer saat unmount
-  useEffect(() => {
-    return () => {
-      if (lockTimerRef.current) clearInterval(lockTimerRef.current);
-    };
-  }, []);
-
-  const handleTriggerGesture = (index: number) => {
-    if (lockTimerRef.current) {
-      clearInterval(lockTimerRef.current);
-      lockTimerRef.current = null;
-    }
-
-    if (index === 9) {
-      setGestureState('waiting');
-      setActiveGestureIndex(null);
-      setLockTimeLeft(0);
-    } else {
-      setGestureState('locked');
-      setActiveGestureIndex(index);
-      setLockTimeLeft(15);
-
-      lockTimerRef.current = setInterval(() => {
-        setLockTimeLeft((prev) => {
-          const next = prev <= 1 ? 0 : prev - 1;
-          if (next === 0) {
-            clearInterval(lockTimerRef.current!);
-            lockTimerRef.current = null;
-            setGestureState('waiting');
-            setActiveGestureIndex(null);
-          }
-          return next;
-        });
-      }, 1000);
-    }
-  };
 
   // ── Standby UI ──────────────────────────────────────────────────────────────
   if (!isActive) {
@@ -108,12 +63,21 @@ export function PhotoSessionControlPage() {
     );
   }
 
-  // ── Active UI ───────────────────────────────────────────────────────────────
-  const activeGestureName =
-    activeGestureIndex !== null
-      ? Gestures[activeGestureIndex]?.name
-      : undefined;
+  // ── Derive dari detection real ──────────────────────────────────────────────
+  const fsmState = detection?.fsm_state ?? 'LOCKED';
+  const armPercent = detection?.recognition_progress?.arm?.percent ?? 0;
+  const presetPercent = detection?.recognition_progress?.preset?.percent ?? 0;
 
+  const handDetected = !!detection?.hand_detected;
+  const gestureId = handDetected ? detection?.gesture_id ?? null : null;
+  const gestureName = handDetected ? detection?.gesture_name ?? null : null;
+  const activePresetName = detection?.robot_preset ?? null;
+
+  // Highlight gesture yang sedang terdeteksi di grid.
+  const activeGestureIndex =
+    gestureId != null ? GESTURE_ID_TO_GRID_INDEX[gestureId] ?? null : null;
+
+  // ── Active UI ───────────────────────────────────────────────────────────────
   return (
     <div className="min-h-full flex flex-col overflow-hidden px-[79.7px] pb-[190.19px] pt-[120.16px] gap-6">
       <div className="flex flex-row gap-6 flex-1 min-h-0">
@@ -124,16 +88,18 @@ export function PhotoSessionControlPage() {
           </h2>
           <div className="w-[875.31px] h-160.25">
             <GestureDetectionPanel
-              streamUrl={frameUrl}
-              gestureState={gestureState}
-              activeName={activeGestureName}
-              lockTimeLeft={lockTimeLeft}
-              maxLockTime={15}
+              streamUrl={streamUrl}
+              reachable={reachable}
+              fsmState={fsmState}
+              armPercent={armPercent}
+              presetPercent={presetPercent}
+              gestureName={gestureName}
+              activePresetName={activePresetName}
             />
           </div>
         </div>
 
-        {/* Right — Gesture Controls */}
+        {/* Right — Gesture Controls (read-only, refleksi gesture terdeteksi) */}
         <div className="flex flex-col gap-3 w-80 shrink-0">
           <h2 className="text-primary font-medium text-[32px] tracking-[1.13px] shrink-0">
             Gesture
@@ -142,7 +108,6 @@ export function PhotoSessionControlPage() {
             <GestureControlsGrid
               gestures={Gestures}
               activeGestureIndex={activeGestureIndex}
-              onTrigger={handleTriggerGesture}
             />
           </div>
         </div>

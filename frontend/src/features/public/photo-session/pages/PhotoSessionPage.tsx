@@ -11,6 +11,7 @@ import { useGetSession } from '@/shared/api/session';
 import { sendSessionBroadcast } from '../lib/broadcastChannel';
 import { useLiveStream } from '../api/getLivePreview';
 import { useRobotConfig } from '../api/getRobotConfig';
+import { useRobotDetection } from '../api/getRobotDetection';
 import { apiClient } from '@/lib/api-client';
 import { playBackendAudio } from '@/lib/audio';
 import { usePersistedCountdown } from '@/lib/usePersistedCountdown';
@@ -25,6 +26,12 @@ const MAX_GRACE_SEC = 30;
 // layout kartu pada desain).
 const PRESET_GESTURES =
   instructionSteps.find((s) => s.type === 'gesture-controls')?.gestures ?? [];
+
+// Frame ala layar Preview Camera (lihat CameraPreview): ring tebal primary +
+// offset + shadow biru. Dipakai agar 2 card kanan (Gesture Detection & Gesture
+// Controls) tampil senada dengan preview.
+const PREVIEW_FRAME =
+  'rounded-[28px] border-0 ring-[6px] ring-primary ring-offset-2 ring-offset-transparent shadow-[0_20px_60px_-15px_rgba(63,114,175,0.45)]';
 
 export function PhotoSessionPage() {
   const searchParams = useSearchParams();
@@ -62,10 +69,8 @@ export function PhotoSessionPage() {
     });
   }, [sessionId, session, isSessionFetching]);
 
-  // Guard: sesi belum dibayar / kedaluwarsa tidak boleh masuk sesi foto.
-  // Tunggu data FRESH (jangan bertindak saat fetching) agar cache 'pending_payment'
-  // lama tepat setelah bayar tidak salah me-redirect user. Backend juga menolak
-  // transisi ke 'shooting' tanpa 'paid' sebagai batas keamanan sebenarnya.
+  // Guard: sesi belum dibayar / kedaluwarsa di-redirect. Tunggu data FRESH
+  // (jangan react saat fetching) agar cache 'pending_payment' basi tidak salah redirect.
   useEffect(() => {
     if (isSessionFetching) return;
     if (session?.status === 'pending_payment' || session?.status === 'expired') {
@@ -94,15 +99,76 @@ export function PhotoSessionPage() {
     retryStream,
   } = useLiveStream();
 
-  // Track robot state untuk safeguard: jangan akhiri sesi kalau robot masih
-  // gerak / countdown shutter masih berjalan — biar foto terakhir tidak
-  // ke-cut di tengah jepretan. Polling 250ms (di-share dengan CameraPreview
-  // via React Query, single underlying request).
-  //
-  // `isFetched` jadi true setelah request pertama RESOLVES (success/error).
-  // Dipakai untuk menahan end-effect di edge case "refresh tepat saat
-  // sessionTimeLeft sudah 0" — kalau tidak, robotConfig masih undefined
-  // → robotBusy=false → end fire tanpa kasih kesempatan grace check.
+  // State real-time dari dobot (Flask :5001) untuk panel Gesture Detection:
+  // liveview kamera deteksi tangan + fsm lock/unlock + progress. Poll selama
+  // halaman sesi foto terbuka (sesi valid). Beda dari `frameUrl` di atas yang
+  // adalah preview kamera backend — panel gesture butuh stream dobot sendiri.
+  const {
+    detection: robotDetection,
+    reachable: robotReachable,
+    streamUrl: robotStreamUrl,
+  } = useRobotDetection({ enabled: !!sessionId });
+
+  const robotFsmState = robotDetection?.fsm_state ?? 'LOCKED';
+  const robotArmPercent =
+    robotDetection?.recognition_progress?.arm?.percent ?? 0;
+  const robotPresetPercent =
+    robotDetection?.recognition_progress?.preset?.percent ?? 0;
+  const robotHandDetected = !!robotDetection?.hand_detected;
+  const robotGestureName = robotHandDetected
+    ? robotDetection?.gesture_name ?? null
+    : null;
+  const robotActivePreset = robotDetection?.robot_preset ?? null;
+
+  // Suara "gesture terdeteksi" — main saat robot BARU masuk fase UNLOCKING
+  // (telapak buka mulai terbaca untuk unlock) atau CONFIRMING (gesture preset
+  // mulai terbaca). Anchor di TRANSISI state, bukan tiap poll, supaya tidak
+  // spam (poll deteksi 150ms).
+  const prevFsmRef = useRef<typeof robotFsmState>('LOCKED');
+  useEffect(() => {
+    const prev = prevFsmRef.current;
+    if (robotFsmState !== prev) {
+      if (robotFsmState === 'UNLOCKING' || robotFsmState === 'CONFIRMING') {
+        playBackendAudio('GestureTerdeteksi.mp3');
+      } else if (robotFsmState === 'UNLOCKED') {
+        // Kunci terbuka — robot siap menerima gesture preset.
+        playBackendAudio('unlock.mp3');
+      } else if (robotFsmState === 'LOCKED') {
+        // Robot kembali terkunci (mis. setelah foto) — ingatkan user untuk
+        // menunjukkan telapak buka lagi. LOCKED awal (mount) ditangani effect
+        // inisiasi terpisah, jadi tidak dobel di sini (prevFsmRef mulai dari
+        // 'LOCKED').
+        playBackendAudio('inisiasi.mp3');
+      }
+    }
+    prevFsmRef.current = robotFsmState;
+  }, [robotFsmState]);
+
+  // Re-prompt saat diam: selama LOCKED, tiap 5s tanpa tangan → ulangi inisiasi (maks 3x).
+  // Status tangan dibaca via ref DI DALAM interval (bukan deps) supaya flicker
+  // deteksi 150ms tidak terus mereset interval sebelum 5 detik tercapai.
+  const handDetectedRef = useRef(robotHandDetected);
+  handDetectedRef.current = robotHandDetected;
+  useEffect(() => {
+    if (robotFsmState !== 'LOCKED') return;
+    let count = 0;
+    const id = setInterval(() => {
+      // Tangan muncul → reset hitungan, tunggu diam lagi.
+      if (handDetectedRef.current) {
+        count = 0;
+        return;
+      }
+      if (count >= 3) return;
+      count += 1;
+      playBackendAudio('inisiasi.mp3');
+    }, 5000);
+    return () => clearInterval(id);
+  }, [robotFsmState]);
+
+  // Safeguard: jangan akhiri sesi selama robot gerak / countdown shutter jalan
+  // supaya foto terakhir tidak ke-cut. Poll 250ms (di-share dgn CameraPreview).
+  // `isFetched` menahan end-effect di edge case "refresh tepat saat timer 0":
+  // tanpa itu robotConfig undefined → robotBusy=false → grace check ke-skip.
   const { data: robotConfig, isFetched: robotConfigFetched } = useRobotConfig();
   const robotBusy =
     (robotConfig?.current_preset ?? 0) > 0 ||
@@ -140,19 +206,13 @@ export function PhotoSessionPage() {
   // Timer yang ditampilkan: negatif saat overtime (menunggu foto selesai).
   const displayTimeLeft = inGrace ? -graceSeconds : sessionTimeLeft;
 
-  // Visibilitas panel kanan (2 kartu + tombol "Selesai" yang kini ada di kartu
-  // ke-2): SEMBUNYIKAN selama robot sibuk (gesture aktif / sedang menjepret)
-  // supaya preview kamera bersih saat foto difreeze. TAMPILKAN saat robot idle —
-  // termasuk saat proses akhir sesi (endingNow) agar tombol bisa menampilkan
-  // status "Menyelesaikan foto…".
+  // Panel kanan (2 kartu + tombol "Selesai"): sembunyikan selama robot sibuk
+  // supaya preview kamera bersih saat foto difreeze; tampil lagi saat idle.
   const showGuide = !robotBusy;
 
-  // Animasi popup untuk panel kanan dengan masuk/keluar yang berbeda:
-  // - KELUAR (robot mulai sibuk): langsung mainkan slide-ke-kanan + fade.
-  // - MASUK (robot idle lagi): ditunda sejenak supaya kartu baru muncul SETELAH
-  //   freeze foto selesai & preview settle — menghindari kartu menyembul saat
-  //   layar masih sibuk (terasa "belibet").
-  // `guideMounted` = apakah ada di DOM, `guideVisible` = state transisi.
+  // Animasi popup panel kanan: keluar (robot sibuk) langsung slide+fade; masuk
+  // (idle lagi) ditunda ~450ms supaya kartu muncul setelah freeze foto settle.
+  // `guideMounted` = ada di DOM, `guideVisible` = state transisi.
   const [guideMounted, setGuideMounted] = useState(showGuide);
   const [guideVisible, setGuideVisible] = useState(showGuide);
   useEffect(() => {
@@ -263,7 +323,16 @@ export function PhotoSessionPage() {
                 Gesture Detection
               </h2>
               <div className="h-64">
-                <GestureDetectionPanel streamUrl={frameUrl} />
+                <GestureDetectionPanel
+                  streamUrl={robotStreamUrl}
+                  reachable={robotReachable}
+                  fsmState={robotFsmState}
+                  armPercent={robotArmPercent}
+                  presetPercent={robotPresetPercent}
+                  gestureName={robotGestureName}
+                  activePresetName={robotActivePreset}
+                  className={PREVIEW_FRAME}
+                />
               </div>
             </div>
 
@@ -272,7 +341,12 @@ export function PhotoSessionPage() {
               <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0">
                 Gesture Controls
               </h2>
-              <div className="flex min-h-0 flex-1 flex-col gap-5 rounded-2xl border border-white/10 bg-primary/75 p-5 shadow-lg">
+              <div
+                className={cn(
+                  'flex min-h-0 flex-1 flex-col gap-5 bg-primary/75 p-5',
+                  PREVIEW_FRAME,
+                )}
+              >
                 {/* Grid preset mengisi ruang sisa & rownya di-tengah-kan secara
                     vertikal (content-center) → tidak ada celah kosong yang
                     nyangkut di satu sisi; jarak atas-bawah simetris. */}
@@ -286,7 +360,12 @@ export function PhotoSessionPage() {
                       <img
                         src={g.icon ?? ''}
                         alt={`Preset ${i + 1}`}
-                        className="h-8 w-8 2xl:h-12 2xl:w-12 object-contain"
+                        className={cn(
+                          'h-8 w-8 2xl:h-12 2xl:w-12 object-contain',
+                          // Preset 6 (Move Left) — gambar diputar 100° ke kanan
+                          // supaya jempol menghadap ke atas.
+                          g.icon?.includes('MOVELEFT') && 'rotate-[100deg]',
+                        )}
                       />
                       <span className="text-[11px] 2xl:text-sm font-semibold text-white">
                         Preset {i + 1}

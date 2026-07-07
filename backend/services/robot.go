@@ -97,6 +97,12 @@ func StopRobot() error {
 	return nil
 }
 
+// UpdateRobotRuntimeConfig meneruskan parameter tuning (speed/timing) ke service
+// dobot agar berlaku live tanpa restart. Body = JSON robotSettings (camelCase).
+func UpdateRobotRuntimeConfig(body []byte) error {
+	return callRobotAPI(http.MethodPost, "/config/runtime", body)
+}
+
 // TriggerPreset menjalankan preset gerakan robot di service luar.
 func TriggerPreset(preset int) error {
 	body, err := json.Marshal(map[string]int{"preset": preset})

@@ -28,8 +28,8 @@ export const BACKEND_AUDIO_FILES = [
   'preset.mp3',
   'inisiasi.mp3',
   'presetTerkonfirmasi.mp3',
-  'presetBerikutnya.mp3',
   'GestureTerdeteksi.mp3',
+  'unlock.mp3',
   'satu.mp3',
   'dua.mp3',
   'tiga.mp3',
@@ -68,6 +68,19 @@ export function preloadBackendAudio(
 export function playBackendAudio(filename: string, onEnded?: () => void): void {
   if (typeof window === 'undefined') return;
   const audio = getAudio(filename);
+
+  // Satu channel narasi: hentikan voice yang sedang berbunyi (kalau beda clip)
+  // supaya dua narasi tidak menumpuk. "Terbaru menang" — cocok untuk cue
+  // real-time robot yang statenya berganti cepat. Clip yang sama cukup di-rewind.
+  if (currentVoice && currentVoice !== audio && !currentVoice.paused) {
+    try {
+      currentVoice.pause();
+      currentVoice.currentTime = 0;
+    } catch {
+      /* ignore */
+    }
+  }
+
   try {
     audio.currentTime = 0;
   } catch {
