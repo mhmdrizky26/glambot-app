@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import { useDebouncedSearch } from '@/lib/useDebouncedSearch';
 import { Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/admin/ui/input';
 import {
@@ -28,22 +29,10 @@ export function PackageFilters({
   code,
   onCodeChange,
 }: PackageFiltersProps) {
-  const [localSearch, setLocalSearch] = React.useState(search);
-  const [lastExternalSearch, setLastExternalSearch] = React.useState(search);
-  const isSearchPending = localSearch !== search;
-
-  if (search !== lastExternalSearch) {
-    setLastExternalSearch(search);
-    setLocalSearch(search);
-  }
-
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      onSearchChange(localSearch);
-    }, 300);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [localSearch]);
+  const { localSearch, setLocalSearch, isSearchPending } = useDebouncedSearch(
+    search,
+    onSearchChange,
+  );
 
   return (
     <div className="flex flex-wrap items-center gap-2">

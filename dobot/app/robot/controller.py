@@ -27,6 +27,7 @@ class DobotController:
         self.dashboard = None
         self.connected = False
         self.enabled   = False
+        self.enable_confirmed = False  # True kalau RobotMode() sempat konfirmasi ENABLE
 
         self.current_preset = None
         self.last_move_time = 0.0
@@ -99,8 +100,15 @@ class DobotController:
         self._send_dashboard("ClearError()")
         self._send_dashboard("EnableRobot()")
         # Tunggu servo benar-benar ENABLE (event-driven), bukan sleep 3 detik.
-        self._wait_until_enabled()
+        # Catatan desain "lanjut saja": pembacaan RobotMode() bisa flaky di
+        # hardware ini, jadi kita TETAP proceed walau belum terkonfirmasi
+        # (memaksa berhenti di sini justru bisa menggagalkan robot yang
+        # sebenarnya sudah enable). Hasil konfirmasi disimpan agar bisa
+        # diobservasi/di-log, bukan disembunyikan.
+        self.enable_confirmed = self._wait_until_enabled()
         self.enabled = True
+        if not self.enable_confirmed:
+            print("  [ROBOT] ⚠️  status ENABLE belum terkonfirmasi (mode read flaky) — tetap lanjut")
         self.set_speed()
         print("  [ROBOT] ✓ Ready!")
         return True
@@ -267,12 +275,3 @@ class DobotController:
                 pass
         self.connected = False
         print("  [ROBOT] Disconnected")
-
-    def get_status(self, presets=None):
-        return {
-            "connected":      self.connected,
-            "enabled":        self.enabled,
-            "ip":             self.ip,
-            "current_preset": self.current_preset,
-            "presets":        {k: v["name"] for k, v in presets.items()} if presets else {},
-        }

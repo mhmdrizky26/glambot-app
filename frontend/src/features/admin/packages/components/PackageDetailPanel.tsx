@@ -2,6 +2,7 @@ import React from 'react';
 import Image from 'next/image';
 import { Badge } from '@/components/admin/ui/badge';
 import { type Package, type PackageStatus } from '../api/types';
+import { formatIDR as formatCurrency } from '@/lib/formats';
 
 interface PackageDetailPanelProps {
   pkg: Package | null;
@@ -46,13 +47,6 @@ const formatDate = (iso: string) =>
     month: 'short',
     year: 'numeric',
   });
-
-const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(n);
 
 export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
   if (!pkg) return null;

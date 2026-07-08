@@ -26,6 +26,12 @@ type txFrame struct {
 	Category string `json:"category"`
 }
 
+// txVoucher — info voucher yang dipakai sesi (dari voucher_usage + sessions.discount).
+type txVoucher struct {
+	Code     string `json:"code"`
+	Discount int    `json:"discount"`
+}
+
 // transactionResponse — bentuk yang diharapkan frontend (transaction/api/types.ts).
 type transactionResponse struct {
 	ID              string     `json:"id"`
@@ -37,7 +43,7 @@ type transactionResponse struct {
 	QRISRawString   string     `json:"qris_raw_string,omitempty"`
 	PaidAt          *string    `json:"paid_at,omitempty"`
 	CreatedAt       string     `json:"created_at"`
-	AdminFee        int        `json:"admin_fee"`
+	Voucher         *txVoucher `json:"voucher,omitempty"`
 	Package         *txPackage `json:"package,omitempty"`
 	Frame           *txFrame   `json:"frame,omitempty"`
 }
@@ -65,10 +71,16 @@ func packageCodeToType(code string) string {
 	return "digital"
 }
 
+// Voucher diambil lewat correlated subquery (bukan JOIN) supaya SATU baris
+// transaksi tetap satu baris — voucher_usage.session_id tidak unik, jadi JOIN
+// bisa menggandakan baris & bikin list desync dengan COUNT(*) yang tak ikut join.
 const txSelect = `t.id, t.session_id, t.midtrans_order_id, t.amount, t.status,
 	COALESCE(t.qris_url, ''), COALESCE(t.qris_raw_string, ''), t.paid_at, t.created_at,
 	p.id, p.code, p.name, f.id, f.name, f.category,
-	s.expires_at
+	s.expires_at, COALESCE(s.discount, 0),
+	(SELECT vu.voucher_code FROM voucher_usage vu
+	 WHERE vu.session_id = t.session_id
+	 ORDER BY vu.used_at DESC LIMIT 1)
 	FROM transactions t
 	LEFT JOIN sessions s ON s.id = t.session_id
 	LEFT JOIN packages p ON p.id = s.package_id
@@ -83,15 +95,17 @@ func scanTransaction(s interface{ Scan(...any) error }) (transactionResponse, er
 		pkgID      sql.NullInt64
 		pkgCode    sql.NullString
 		pkgName    sql.NullString
-		frameID    sql.NullString
-		frameName  sql.NullString
-		frameCat   sql.NullString
-		expiresAt  sql.NullTime
+		frameID     sql.NullString
+		frameName   sql.NullString
+		frameCat    sql.NullString
+		expiresAt   sql.NullTime
+		discount    int
+		voucherCode sql.NullString
 	)
 	err := s.Scan(&t.ID, &t.SessionID, &t.MidtransOrderID, &t.Amount, &dbStatus,
 		&t.QRISUrl, &t.QRISRawString, &paidAt, &createdAt,
 		&pkgID, &pkgCode, &pkgName, &frameID, &frameName, &frameCat,
-		&expiresAt)
+		&expiresAt, &discount, &voucherCode)
 	if err != nil {
 		return t, err
 	}
@@ -116,6 +130,9 @@ func scanTransaction(s interface{ Scan(...any) error }) (transactionResponse, er
 	}
 	if frameID.Valid && frameID.String != "" {
 		t.Frame = &txFrame{ID: frameID.String, Name: frameName.String, Category: frameCat.String}
+	}
+	if voucherCode.Valid && voucherCode.String != "" {
+		t.Voucher = &txVoucher{Code: voucherCode.String, Discount: discount}
 	}
 	return t, nil
 }
@@ -225,16 +242,7 @@ func AdminTransactionStats(w http.ResponseWriter, r *http.Request) {
 	_ = database.DB.QueryRow(`SELECT COUNT(*) FROM transactions WHERE status = 'paid'`).Scan(&stats.Successful)
 	_ = database.DB.QueryRow(`SELECT COUNT(*) FROM transactions WHERE status = 'failed'`).Scan(&stats.Failed)
 
-	// % perubahan hari ini vs kemarin
-	pct := func(today, yesterday float64) float64 {
-		if yesterday == 0 {
-			if today == 0 {
-				return 0
-			}
-			return 100
-		}
-		return (today - yesterday) / yesterday * 100
-	}
+	// % perubahan hari ini vs kemarin — pakai pctChange bersama (admin_dashboard.go).
 	count := func(cond string) (today, yest float64) {
 		_ = database.DB.QueryRow(`SELECT COUNT(*) FROM transactions WHERE created_at::date = NOW()::date AND ` + cond).Scan(&today)
 		_ = database.DB.QueryRow(`SELECT COUNT(*) FROM transactions WHERE created_at::date = (NOW() - INTERVAL '1 day')::date AND ` + cond).Scan(&yest)
@@ -242,16 +250,16 @@ func AdminTransactionStats(w http.ResponseWriter, r *http.Request) {
 	}
 
 	tT, tY := count("1=1")
-	stats.TotalChangePct = pct(tT, tY)
+	stats.TotalChangePct = pctChange(tT, tY)
 	sT, sY := count("status = 'paid'")
-	stats.SuccessfulChangePct = pct(sT, sY)
+	stats.SuccessfulChangePct = pctChange(sT, sY)
 	fT, fY := count("status = 'failed'")
-	stats.FailedChangePct = pct(fT, fY)
+	stats.FailedChangePct = pctChange(fT, fY)
 
 	var revT, revY float64
 	_ = database.DB.QueryRow(`SELECT COALESCE(SUM(amount),0) FROM transactions WHERE status = 'paid' AND paid_at::date = NOW()::date`).Scan(&revT)
 	_ = database.DB.QueryRow(`SELECT COALESCE(SUM(amount),0) FROM transactions WHERE status = 'paid' AND paid_at::date = (NOW() - INTERVAL '1 day')::date`).Scan(&revY)
-	stats.RevenueChangePct = pct(revT, revY)
+	stats.RevenueChangePct = pctChange(revT, revY)
 
 	respondJSON(w, http.StatusOK, stats)
 }

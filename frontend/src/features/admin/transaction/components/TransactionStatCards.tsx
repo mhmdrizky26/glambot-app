@@ -7,18 +7,12 @@ import {
   ArrowUpIcon,
 } from 'lucide-react';
 import { type TransactionStats } from '../api/types';
+import { formatIDR as formatCurrency } from '@/lib/formats';
 
 interface TransactionStatCardsProps {
   stats?: TransactionStats;
   isLoading?: boolean;
 }
-
-const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(n);
 
 function TrendText({ value, suffix }: { value: number; suffix: string }) {
   const isUp = value >= 0;

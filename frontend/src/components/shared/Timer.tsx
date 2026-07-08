@@ -26,7 +26,10 @@ export default function Timer({
   // karena mutation pending yang trigger render baru).
   const firedRef = useRef(false);
   const onTimeUpRef = useRef(onTimeUp);
-  onTimeUpRef.current = onTimeUp;
+  // Sinkronkan ref setelah render (bukan saat render) — dibaca di effect di bawah.
+  useEffect(() => {
+    onTimeUpRef.current = onTimeUp;
+  }, [onTimeUp]);
 
   useEffect(() => {
     if (timeLeft > 0) return;

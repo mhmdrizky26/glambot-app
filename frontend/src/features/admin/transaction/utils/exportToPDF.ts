@@ -2,6 +2,9 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { type Transaction } from '../api/types';
 
+// jspdf-autotable menempelkan lastAutoTable ke instance doc tanpa deklarasi tipe.
+type AutoTableDoc = jsPDF & { lastAutoTable?: { finalY: number } };
+
 const PURPLE = [138, 56, 245] as const;
 const PURPLE_LIGHT = [248, 245, 255] as const;
 const GREEN = [18, 201, 100] as const;
@@ -108,7 +111,7 @@ export function exportTransactionsToPDF(
   });
 
   // ── Revenue summary box ───────────────────────────────────────────────────
-  const finalY: number = (doc as any).lastAutoTable?.finalY ?? 200;
+  const finalY: number = (doc as AutoTableDoc).lastAutoTable?.finalY ?? 200;
   const totalRevenue = transactions
     .filter((t) => t.status === 'success')
     .reduce((s, t) => s + t.amount, 0);

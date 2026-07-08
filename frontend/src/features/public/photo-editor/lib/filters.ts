@@ -19,7 +19,9 @@ export type FilterType =
  * Get Fabric.js filter array for given filter type.
  * Each case returns an array of Fabric image filters applied left-to-right.
  */
-export const getFiltersByType = (filterType: FilterType): any[] => {
+export const getFiltersByType = (
+  filterType: FilterType,
+): fabric.IBaseFilter[] => {
   switch (filterType) {
     case 'original':
       return [];
@@ -127,7 +129,10 @@ export const applyFilterToComposition = (
   const objects = canvas.getObjects();
 
   objects.forEach((obj) => {
-    if (obj.type === 'image' && (obj as any).data?.isPhoto) {
+    if (
+      obj.type === 'image' &&
+      (obj as FabricImage & { data?: { isPhoto?: boolean } }).data?.isPhoto
+    ) {
       applyFilterToImage(obj as FabricImage, filterType);
     }
   });

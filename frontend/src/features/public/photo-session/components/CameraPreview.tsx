@@ -36,6 +36,9 @@ export function CameraPreview({
   const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const frameCountRef = useRef(0);
   const pendingRef = useRef(false);
+  // Hitung kegagalan load frame berturut-turut. Baru anggap stream error setelah
+  // ~2 detik gagal terus (bukan 1 frame transient) → hindari flicker error.
+  const errorStreakRef = useRef(0);
   const playedRef = useRef<Set<number>>(new Set());
   const wasActiveRef = useRef(false);
   const captureTriggeredRef = useRef(false);
@@ -200,6 +203,8 @@ export function CameraPreview({
       if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
       return;
     }
+    // Reset hitungan error tiap kali stream (re-)start, mis. setelah retry.
+    errorStreakRef.current = 0;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -224,10 +229,17 @@ export function CameraPreview({
       img.onload = () => {
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         pendingRef.current = false;
+        errorStreakRef.current = 0;
       };
 
       img.onerror = () => {
         pendingRef.current = false;
+        errorStreakRef.current += 1;
+        // ~20 frame gagal beruntun (interval 100ms ≈ 2 detik) → laporkan ke
+        // parent supaya UI "Stream not available" + tombol retry muncul.
+        if (errorStreakRef.current === 20) {
+          onError?.();
+        }
       };
 
       img.src = url;
@@ -239,10 +251,9 @@ export function CameraPreview({
     return () => {
       if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
     };
-  }, [displayUrl, hasError]);
+  }, [displayUrl, hasError, onError]);
 
   const showError = hasError || !displayUrl;
-  void onError; // accepted for API compatibility
 
   return (
     <div

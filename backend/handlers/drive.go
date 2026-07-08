@@ -81,12 +81,7 @@ func collectDriveFiles(sessionID string) []services.DriveUpload {
 	var files []services.DriveUpload
 
 	// 1) Strip framed terbaru.
-	var framedRel string
-	if err := database.DB.QueryRow(`
-		SELECT file_path FROM photos
-		WHERE session_id = ? AND type = 'framed'
-		ORDER BY created_at DESC LIMIT 1`, sessionID,
-	).Scan(&framedRel); err == nil && framedRel != "" {
+	if framedRel, err := latestFramedStripRelPath(sessionID); err == nil {
 		if abs, ok := safeStoragePath(framedRel); ok {
 			if fileExists(abs) {
 				files = append(files, services.DriveUpload{

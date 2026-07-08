@@ -65,6 +65,7 @@ export function GIFPreview({
       )}
 
       {src && (
+        // eslint-disable-next-line @next/next/no-img-element -- foto/GIF dari host LAN backend; <img> disengaja agar tak perlu allowlist host next/image (lihat next.config)
         <img
           src={src}
           alt={alt}

@@ -69,9 +69,7 @@ func EnableRobot() error {
 	if err := callRobotAPI(http.MethodPost, "/robot/enable", nil); err != nil {
 		return err
 	}
-	if config.App != nil {
-		config.App.RobotEnabled = true
-	}
+	config.App.SetRobotEnabled(true)
 	return nil
 }
 
@@ -80,9 +78,7 @@ func DisableRobot() error {
 	if err := callRobotAPI(http.MethodPost, "/robot/disable", nil); err != nil {
 		return err
 	}
-	if config.App != nil {
-		config.App.RobotEnabled = false
-	}
+	config.App.SetRobotEnabled(false)
 	return nil
 }
 
@@ -91,9 +87,7 @@ func StopRobot() error {
 	if err := callRobotAPI(http.MethodPost, "/robot/stop", nil); err != nil {
 		return err
 	}
-	if config.App != nil {
-		config.App.RobotEnabled = false
-	}
+	config.App.SetRobotEnabled(false)
 	return nil
 }
 

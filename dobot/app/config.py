@@ -10,9 +10,6 @@ def _require(key: str) -> str:
         raise ValueError(f"[CONFIG ERROR] Missing required env: {key}")
     return value
 
-def _get_bool(key: str) -> bool:
-    return _require(key).lower() in ("1", "true", "yes")
-
 def _get_int(key: str) -> int:
     return int(_require(key))
 

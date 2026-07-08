@@ -370,8 +370,15 @@ func markTransactionPaid(orderID string) (string, error) {
 	// menit) menjadi retensi penuh (SESSION_EXPIRY_HOURS) supaya foto & link
 	// download tidak ikut ke-cleanup tak lama setelah bayar.
 	sessionExpiresAt := now.Add(time.Duration(config.App.SessionExpiryHours) * time.Hour)
+	// Guard status: hanya transisi ke 'paid' dari state pra-shooting.
+	// Webhook Midtrans bisa dobel/terlambat (capture + settlement, atau retry).
+	// Tanpa guard, notifikasi 'settlement' yang telat bisa mereset sesi yang
+	// sudah 'shooting'/'completed' kembali ke 'paid' dan memajukan expires_at.
+	// 'expired' tetap diikutkan agar pembayaran yang lolos setelah payment window
+	// singkat masih bisa memulihkan sesi (perilaku lama untuk kasus itu terjaga).
 	if _, err := tx.Exec(`
-		UPDATE sessions SET status = 'paid', expires_at = ? WHERE id = ?`, sessionExpiresAt, sessionID,
+		UPDATE sessions SET status = 'paid', expires_at = ?
+		WHERE id = ? AND status IN ('pending_payment', 'expired')`, sessionExpiresAt, sessionID,
 	); err != nil {
 		return "", err
 	}

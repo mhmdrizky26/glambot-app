@@ -13,6 +13,7 @@ import {
 import { Badge } from '@/components/admin/ui/badge';
 import { Checkbox } from '@/components/admin/ui/checkbox';
 import { type RecentOrder, type OrderStatus } from '../api/types';
+import { formatIDR as formatCurrency } from '@/lib/formats';
 
 interface RecentOrderTableProps {
   data: RecentOrder[];
@@ -39,13 +40,6 @@ const STATUS_CONFIG: Record<
     className: 'bg-amber-100 text-amber-800 hover:bg-amber-100/80',
   },
 };
-
-const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(n);
 
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString('id-ID', {

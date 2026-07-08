@@ -116,66 +116,72 @@ export default function FrameSelectionPanel({
       </div>
 
       {/* Tab content */}
-      <GlassCard className="flex-1 overflow-y-auto shadow-none rounded-[19.28px] scrollbar-none">
+      <GlassCard className="flex-1 min-h-0 flex flex-col overflow-hidden shadow-none rounded-[19.28px]">
         {/* Frame tab */}
         {activeTab === 'frame' && (
-          <div className="p-4">
-            {/* Section label */}
-            <p className="text-[#ffff]/40 text-[13px] font-semibold uppercase tracking-wide mb-4">
-              Frame Style
-            </p>
-
-            {/* Filter kategori — baris chip ramping (scroll horizontal).
-                Tampil hanya bila ada lebih dari satu kategori. */}
-            {categories.length > 2 && (
-              <div className="flex gap-2 overflow-x-auto scrollbar-none mb-4 pb-1">
-                {categories.map((cat) => {
-                  const isActive = category === cat;
-                  return (
-                    <button
-                      key={cat}
-                      type="button"
-                      onClick={() => setCategory(cat)}
-                      className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
-                        isActive
-                          ? 'bg-[#3F72AF] text-white'
-                          : 'bg-[#F9F7F7]/5 text-[#F9F7F7]/55 hover:bg-[#F9F7F7]/10'
-                      }`}
-                      aria-pressed={isActive}
-                    >
-                      {cat}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-
-            {frames.length === 0 ? (
-              <p className="text-sm text-white/60 text-center py-8">
-                No frames available
+          <div className="flex flex-col min-h-0 h-full">
+            {/* Header tetap (diam) — label + filter kategori tidak ikut scroll. */}
+            <div className="shrink-0 p-4 pb-2">
+              {/* Section label */}
+              <p className="text-[#ffff]/40 text-[13px] font-semibold uppercase tracking-wide mb-4">
+                Frame Style
               </p>
-            ) : visibleFrames.length === 0 ? (
-              <p className="text-sm text-white/60 text-center py-8">
-                No frames in this category
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-3">
-                {visibleFrames.map((frame) => (
-                  <FrameItem
-                    key={frame.id}
-                    frame={frame}
-                    isSelected={selectedFrame?.id === frame.id}
-                    onClick={() => onFrameSelect(frame)}
-                  />
-                ))}
-              </div>
-            )}
+
+              {/* Filter kategori — baris chip ramping (scroll horizontal).
+                  Tampil hanya bila ada lebih dari satu kategori. */}
+              {categories.length > 2 && (
+                <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
+                  {categories.map((cat) => {
+                    const isActive = category === cat;
+                    return (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setCategory(cat)}
+                        className={`shrink-0 rounded-full px-3.5 py-1.5 text-[13px] font-medium transition-colors ${
+                          isActive
+                            ? 'bg-[#3F72AF] text-white'
+                            : 'bg-[#F9F7F7]/5 text-[#F9F7F7]/55 hover:bg-[#F9F7F7]/10'
+                        }`}
+                        aria-pressed={isActive}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Hanya grid frame yang scroll. */}
+            <div className="flex-1 min-h-0 overflow-y-auto scrollbar-none px-4 pb-4 pt-2">
+              {frames.length === 0 ? (
+                <p className="text-sm text-white/60 text-center py-8">
+                  No frames available
+                </p>
+              ) : visibleFrames.length === 0 ? (
+                <p className="text-sm text-white/60 text-center py-8">
+                  No frames in this category
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {visibleFrames.map((frame) => (
+                    <FrameItem
+                      key={frame.id}
+                      frame={frame}
+                      isSelected={selectedFrame?.id === frame.id}
+                      onClick={() => onFrameSelect(frame)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
         {/* Filter tab */}
         {activeTab === 'filter' && (
-          <div className="p-4 flex flex-col gap-2">
+          <div className="p-4 flex flex-col gap-2 h-full overflow-y-auto scrollbar-none">
             <p className="text-[#ffff]/40 text-[13px] mb-1">FILTER STYLE</p>
             {FILTER_OPTIONS.map((filter) => {
               const isSelected = selectedFilter === filter.id;

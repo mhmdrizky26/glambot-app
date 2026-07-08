@@ -189,16 +189,9 @@ func AdminUpdateRobotSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	for k, v := range updates {
-		if _, err := database.DB.Exec(
-			`INSERT INTO app_settings (key, value, updated_at)
-			 VALUES (?, ?, NOW())
-			 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-			k, v,
-		); err != nil {
-			respondInternal(w, "update app_settings", err)
-			return
-		}
+	if err := upsertAppSettings(updates); err != nil {
+		respondInternal(w, "update app_settings", err)
+		return
 	}
 
 	cfg, err := loadRobotSettings()

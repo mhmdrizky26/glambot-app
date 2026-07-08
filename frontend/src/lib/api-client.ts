@@ -89,9 +89,9 @@ export const toAbsoluteUrl = (path: string): string =>
 
 apiClient.interceptors.response.use(
   (response) => {
-    const body = (response as any).data;
+    const body: unknown = response.data;
     if (body && typeof body === 'object' && Object.prototype.hasOwnProperty.call(body, 'data')) {
-      (response as any).data = body.data;
+      response.data = (body as { data: unknown }).data;
     }
     return response;
   },

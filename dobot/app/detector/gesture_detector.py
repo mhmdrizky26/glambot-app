@@ -34,7 +34,6 @@ class GestureDetector:
         # Camera handles
         self._camera      = None
         self._rs_pipeline = None
-        self._rs_align    = None
 
         # Detection backend
         self._hands_detector = None
@@ -114,7 +113,6 @@ class GestureDetector:
                                  cfg.frame_width, cfg.frame_height,
                                  rs.format.bgr8, 30)
             self._rs_pipeline.start(rs_cfg)
-            self._rs_align = rs.align(rs.stream.color)
             time.sleep(1)
             print(f"  [CAM] RealSense opened: {cfg.frame_width}x{cfg.frame_height}")
             return
@@ -218,6 +216,9 @@ class GestureDetector:
             while self._running:
                 frame = self._read_frame()
                 if frame is None:
+                    # Hindari busy-spin 100% CPU saat kamera gagal/lepas atau
+                    # belum siap — beri jeda singkat sebelum coba baca lagi.
+                    time.sleep(0.02)
                     continue
 
                 with self._lock:

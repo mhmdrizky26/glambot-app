@@ -82,8 +82,12 @@ func ParseSlotsJSON(raw []byte) ([]LiveStripSlot, error) {
 
 // LiveStripOutputPath path file GIF #2.
 //
-// Filename versioned (v10) supaya cached GIF dari versi compositing lama
-// otomatis di-skip dan regenerate. v10: burst kini juga dimasking ke BENTUK
+// Filename versioned (v12) supaya cached GIF dari versi compositing lama
+// otomatis di-skip dan regenerate. v12: slot yang fotonya TIDAK punya burst
+// sendiri tidak lagi ditambal burst foto lain (fallback pool dihapus) — dulu
+// tambalan itu menampilkan konten slot lain sehingga live image terlihat
+// "tertukar slot" dibanding hasil akhir. Sekarang slot tanpa burst diam
+// menampilkan foto finalnya. v10: burst kini juga dimasking ke BENTUK
 // slot (elips/lingkaran), bukan cuma transparansi frame overlay — memperbaiki
 // burst yang nyembul ke sudut rect saat lubang foto dibentuk lewat clipping
 // frontend (frame PNG transparan di sudut). v9: frame overlay dari SVG embed-PNG
@@ -101,7 +105,7 @@ func ParseSlotsJSON(raw []byte) ([]LiveStripSlot, error) {
 func LiveStripOutputPath(sessionID string) string {
 	return filepath.Join(
 		config.App.StoragePath,
-		"sessions", sessionID, "animation-live-v11.gif",
+		"sessions", sessionID, "animation-live-v12.gif",
 	)
 }
 
@@ -214,17 +218,6 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 		return "", fmt.Errorf("tidak ada burst frame untuk session %s — GIF live tidak tersedia", opts.SessionID)
 	}
 
-	// Pool burst yang tersedia → fallback supaya SETIAP slot ikut hidup, termasuk
-	// slot yang fotonya tidak punya burst sendiri (jumlah foto < jumlah slot, atau
-	// foto dipakai ulang di beberapa slot). Tanpa ini slot tsb akan diam (foto
-	// beku) sementara slot lain beranimasi.
-	fallbackPool := make([][]image.Image, 0, len(bursts))
-	for i := range bursts {
-		if len(bursts[i].frames) > 0 {
-			fallbackPool = append(fallbackPool, bursts[i].frames)
-		}
-	}
-
 	if err := os.MkdirAll(filepath.Dir(outPath), 0755); err != nil {
 		return "", fmt.Errorf("mkdir: %w", err)
 	}
@@ -238,17 +231,16 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 		draw.Draw(canvas, canvas.Bounds(), framedScaled, image.Point{}, draw.Src)
 
 		for i, slot := range slotRects {
-			// Burst milik slot sendiri kalau ada; kalau tidak, ambil dari pool
-			// supaya slot tetap HIDUP (tidak ada slot yang diam).
-			var frames []image.Image
-			if i < len(bursts) && len(bursts[i].frames) > 0 {
-				frames = bursts[i].frames
-			} else if len(fallbackPool) > 0 {
-				frames = fallbackPool[i%len(fallbackPool)]
+			// HANYA gunakan burst milik slot ini sendiri. Kalau slot tidak punya
+			// burst (liveview Canon gagal saat shot itu), JANGAN tambal dengan
+			// burst foto lain — itu menampilkan foto yang salah di slot ini
+			// (live image tidak cocok dengan hasil akhir → seolah slot tertukar).
+			// Lebih baik slot tsb diam menampilkan foto finalnya (framedScaled)
+			// ketimbang beranimasi dengan konten milik slot lain.
+			if i >= len(bursts) || len(bursts[i].frames) == 0 {
+				continue
 			}
-			if len(frames) == 0 {
-				continue // benar-benar tidak ada burst sama sekali
-			}
+			frames := bursts[i].frames
 			// Pilih burst frame proporsional dengan progress tick.
 			idx := tick * len(frames) / liveGIFAnimTicks
 			if idx >= len(frames) {

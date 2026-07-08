@@ -1,4 +1,5 @@
 import axios, { AxiosError } from 'axios';
+import { resolveBaseUrl } from './api-client';
 
 // Token admin disimpan di dua tempat:
 // - localStorage  → dibaca interceptor axios (client-side request).
@@ -46,12 +47,17 @@ export const clearAdminToken = () => {
 };
 
 export const axiosInstance = axios.create({
-  baseURL: `${process.env.NEXT_PUBLIC_API_URL}`,
+  // baseURL diresolusi ulang per-request lewat interceptor (LAN-aware). Nilai
+  // awal ini hanya default SSR/first-tick.
+  baseURL: resolveBaseUrl(),
   withCredentials: false,
 });
 
-// Sisipkan Bearer token (disimpan saat login) ke setiap request admin.
+// Sisipkan Bearer token (disimpan saat login) ke setiap request admin, dan
+// resolusi baseURL yang sama dengan apiClient publik supaya panel admin yang
+// dibuka dari LAN IP tidak menembak "localhost"/"undefined".
 axiosInstance.interceptors.request.use((config) => {
+  config.baseURL = resolveBaseUrl();
   if (typeof window !== 'undefined') {
     const token = window.localStorage.getItem(ADMIN_TOKEN_KEY);
     if (token) {
