@@ -66,6 +66,7 @@ export default function InstructionPage() {
 
   // Panduan suara per step — diputar sekali saat masuk step (keyed step.type).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset flag audio tiap ganti step (keyed step.type), lalu mulai narasi.
     setAudioDone(false);
     let cancelled = false;
     const markDone = () => {

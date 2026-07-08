@@ -20,6 +20,11 @@ export interface TransactionFrame {
   category?: string;
 }
 
+export interface TransactionVoucher {
+  code: string;
+  discount: number;
+}
+
 export interface Transaction {
   id: string;
   sessionId: string;
@@ -34,7 +39,7 @@ export interface Transaction {
   // Relational fields — joined by the backend
   package?: TransactionPackage;
   frame?: TransactionFrame;
-  adminFee?: number;
+  voucher?: TransactionVoucher;
 }
 
 export interface TransactionStats {
@@ -84,7 +89,7 @@ export type BackendResponse = {
   qris_raw_string?: string;
   paid_at?: string;
   created_at: string;
-  admin_fee?: number;
+  voucher?: TransactionVoucher | null;
   package?: BackendPackage | null;
   frame?: BackendFrame | null;
 };
@@ -99,7 +104,7 @@ export const normalizeTransaction = (data: BackendResponse): Transaction => ({
   qrisRawString: data.qris_raw_string,
   paidAt: data.paid_at,
   createdAt: data.created_at,
-  adminFee: data.admin_fee,
+  voucher: data.voucher ?? undefined,
   package: data.package ?? undefined,
   frame: data.frame ?? undefined,
 });

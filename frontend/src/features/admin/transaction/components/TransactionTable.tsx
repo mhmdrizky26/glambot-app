@@ -15,6 +15,7 @@ import { Button } from '@/components/admin/ui/button';
 import { Checkbox } from '@/components/admin/ui/checkbox';
 import { Skeleton } from '@/components/admin/ui/skeleton';
 import { type Transaction, type TransactionStatus } from '../api/types';
+import { formatIDR as formatCurrency } from '@/lib/formats';
 
 type SortKey = 'id' | 'package' | 'amount' | 'createdAt' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -67,13 +68,6 @@ const TYPE_CONFIG: Record<string, string> = {
   digital: 'bg-blue-100 text-blue-800 hover:bg-blue-100/80',
   'digital+print': 'bg-purple-100 text-purple-800 hover:bg-purple-100/80',
 };
-
-const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(n);
 
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString('id-ID', {

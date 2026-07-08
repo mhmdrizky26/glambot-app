@@ -608,7 +608,7 @@ export function VoucherForm({
               </div>
               <ul className="space-y-1 text-xs leading-relaxed text-blue-800">
                 <li>• Make sure the voucher code is unique</li>
-                <li>• A voucher's code cannot be changed after it is created</li>
+                <li>• A voucher&apos;s code cannot be changed after it is created</li>
                 <li>• Deactivate vouchers that are no longer valid</li>
               </ul>
             </CardContent>

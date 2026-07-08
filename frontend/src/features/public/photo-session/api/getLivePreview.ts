@@ -1,20 +1,19 @@
-import { useState, useMemo, useCallback, useRef } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { resolveBaseUrl } from '@/lib/api-client';
 
 export const useLiveStream = () => {
   const [hasError, setHasError] = useState(false);
   const [retryCount, setRetryCount] = useState(0);
-  const frameCountRef = useRef(0);
 
   const baseUrl = useMemo(() => resolveBaseUrl(), []);
 
   // Canon-only: live preview di-polling sebagai JPEG dari backend
   // (/api/robot/liveview, sumber digiCamControl). Tidak ada lagi mode webcam
-  // laptop (builtin).
+  // laptop (builtin). Cache-buster cukup dari retryCount — CameraPreview
+  // menambahkan timestamp-nya sendiri per frame saat polling.
   const frameUrl = useMemo(() => {
     if (hasError) return null;
-    frameCountRef.current += 1;
-    return `${baseUrl}/api/robot/liveview?t=${Date.now()}_${retryCount}_${frameCountRef.current}`;
+    return `${baseUrl}/api/robot/liveview?retry=${retryCount}`;
   }, [hasError, retryCount, baseUrl]);
 
   const handleStreamError = useCallback(() => {

@@ -359,7 +359,7 @@ func GetRobotConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	respondJSON(w, http.StatusOK, models.SuccessResponse(map[string]interface{}{
-		"enabled":                   config.App.RobotEnabled,
+		"enabled":                   config.App.GetRobotEnabled(),
 		"url":                       config.App.RobotAPIURL,
 		"current_preset":            currentPreset,
 		"auto_capture_at":           autoCaptureAt.UTC().Format(time.RFC3339Nano),

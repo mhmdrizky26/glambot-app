@@ -272,12 +272,15 @@ class Runtime:
     #  Manual trigger
     # ─────────────────────────────────────────────────────────────
     def trigger_preset(self, preset_num):
-        if self._capture_in_progress:
-            return False
         if preset_num not in self.presets:
             return False
 
+        # Check-and-set atomik DI DALAM lock — cegah dua panggilan /robot/preset
+        # (thread Flask) atau race dengan FSM meloloskan dua sekuens gerak
+        # sekaligus (TOCTOU: dulu cek di luar lock, set di dalam lock).
         with self._fsm_lock:
+            if self._capture_in_progress:
+                return False
             self._capture_in_progress = True
             self._selected_preset     = preset_num
             self._fsm_state           = "MOVING"

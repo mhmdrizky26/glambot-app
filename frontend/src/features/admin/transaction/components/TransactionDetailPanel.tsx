@@ -2,6 +2,7 @@ import React from 'react';
 import { Badge } from '@/components/admin/ui/badge';
 import { Separator } from '@/components/admin/ui/separator';
 import { type Transaction, type TransactionStatus } from '../api/types';
+import { formatIDR as formatCurrency } from '@/lib/formats';
 
 interface TransactionDetailPanelProps {
   transaction: Transaction | null;
@@ -33,13 +34,6 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const formatCurrency = (n: number) =>
-  new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(n);
-
 const formatDateTime = (iso: string) =>
   new Date(iso).toLocaleString('id-ID', {
     day: 'numeric',
@@ -69,8 +63,7 @@ export function TransactionDetailPanel({
 }: TransactionDetailPanelProps) {
   if (!transaction) return null;
 
-  const adminFee = transaction.adminFee ?? 0;
-  const total = transaction.amount + adminFee;
+  const total = transaction.amount;
   const statusConfig = STATUS_CONFIG[transaction.status];
 
   return (
@@ -106,7 +99,20 @@ export function TransactionDetailPanel({
             </span>
           </Row>
           <Row label="Amount">{formatCurrency(transaction.amount)}</Row>
-          <Row label="Admin Fee">{formatCurrency(adminFee)}</Row>
+          <Row label="Voucher">
+            {transaction.voucher ? (
+              <span className="flex flex-col items-end">
+                <span className="font-mono">{transaction.voucher.code}</span>
+                {transaction.voucher.discount > 0 && (
+                  <span className="text-xs text-emerald-600">
+                    -{formatCurrency(transaction.voucher.discount)}
+                  </span>
+                )}
+              </span>
+            ) : (
+              '-'
+            )}
+          </Row>
           <Separator />
           <Row label="Total">
             <span className="text-base font-semibold">

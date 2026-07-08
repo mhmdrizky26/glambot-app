@@ -91,6 +91,26 @@ func Load() {
 	}
 }
 
+func (c *Config) SetRobotEnabled(enabled bool) {
+	if c == nil {
+		return
+	}
+
+	c.mu.Lock()
+	c.RobotEnabled = enabled
+	c.mu.Unlock()
+}
+
+func (c *Config) GetRobotEnabled() bool {
+	if c == nil {
+		return false
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.RobotEnabled
+}
+
 func (c *Config) SetCurrentPreset(currentPreset int) {
 	if c == nil {
 		return

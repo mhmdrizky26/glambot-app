@@ -114,6 +114,23 @@ func AdminGetSettings(w http.ResponseWriter, r *http.Request) {
 
 // PATCH /api/admin/settings — update sebagian/semua timer. Field nil = tidak
 // diubah. Setiap nilai divalidasi ke rentang [minTimerSecs, maxTimerSecs].
+// upsertAppSettings menyimpan beberapa pasangan key/value ke tabel app_settings
+// (INSERT ... ON CONFLICT DO UPDATE). Dipakai bersama oleh handler timer &
+// robot-settings supaya loop upsert tidak diduplikasi.
+func upsertAppSettings(updates map[string]string) error {
+	for k, v := range updates {
+		if _, err := database.DB.Exec(
+			`INSERT INTO app_settings (key, value, updated_at)
+			 VALUES (?, ?, NOW())
+			 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
+			k, v,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func AdminUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		PackageTimeoutSecs     *int `json:"packageTimeoutSecs"`
@@ -161,16 +178,13 @@ func AdminUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	strUpdates := make(map[string]string, len(updates))
 	for k, v := range updates {
-		if _, err := database.DB.Exec(
-			`INSERT INTO app_settings (key, value, updated_at)
-			 VALUES (?, ?, NOW())
-			 ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()`,
-			k, strconv.Itoa(v),
-		); err != nil {
-			respondInternal(w, "update app_settings", err)
-			return
-		}
+		strUpdates[k] = strconv.Itoa(v)
+	}
+	if err := upsertAppSettings(strUpdates); err != nil {
+		respondInternal(w, "update app_settings", err)
+		return
 	}
 
 	cfg, err := loadTimerConfig()

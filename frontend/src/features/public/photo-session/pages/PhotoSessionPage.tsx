@@ -57,6 +57,9 @@ export function PhotoSessionPage() {
   // tidak ikut menyalakan robot. Disable-nya ada di end-effect di bawah, jadi
   // enable↔disable seimbang dan dimiliki oleh halaman yang sama.
   const enableFiredRef = useRef(false);
+  // Dipakai bersama end-effect & cleanup unmount agar disable robot hanya
+  // dikirim SEKALI (tidak dobel) dan tidak terlewat.
+  const robotDisabledRef = useRef(false);
   useEffect(() => {
     if (!sessionId || isSessionFetching || !session) return;
     if (session.status === 'pending_payment' || session.status === 'expired')
@@ -68,6 +71,19 @@ export function PhotoSessionPage() {
       console.warn('[PhotoSession] robot/enable failed:', err);
     });
   }, [sessionId, session, isSessionFetching]);
+
+  // Safety-net: kalau halaman ditinggalkan lewat jalur SELAIN end-flow normal
+  // (tombol back browser, redirect eksternal), pastikan robot tetap dimatikan
+  // saat unmount. Guard robotDisabledRef mencegah dobel dengan disable di
+  // end-effect. Fire hanya bila robot memang sempat di-enable.
+  useEffect(() => {
+    return () => {
+      if (enableFiredRef.current && !robotDisabledRef.current) {
+        robotDisabledRef.current = true;
+        apiClient.post('/api/robot/disable').catch(() => {});
+      }
+    };
+  }, []);
 
   // Guard: sesi belum dibayar / kedaluwarsa di-redirect. Tunggu data FRESH
   // (jangan react saat fetching) agar cache 'pending_payment' basi tidak salah redirect.
@@ -148,7 +164,11 @@ export function PhotoSessionPage() {
   // Status tangan dibaca via ref DI DALAM interval (bukan deps) supaya flicker
   // deteksi 150ms tidak terus mereset interval sebelum 5 detik tercapai.
   const handDetectedRef = useRef(robotHandDetected);
-  handDetectedRef.current = robotHandDetected;
+  // Sinkronkan ref SETELAH render (bukan saat render) — nilai dibaca di dalam
+  // interval 5s di bawah, jadi update pasca-commit sudah cukup mutakhir.
+  useEffect(() => {
+    handDetectedRef.current = robotHandDetected;
+  }, [robotHandDetected]);
   useEffect(() => {
     if (robotFsmState !== 'LOCKED') return;
     let count = 0;
@@ -191,6 +211,7 @@ export function PhotoSessionPage() {
   // "00:00" sesaat.
   useEffect(() => {
     if (!endingNow || !robotBusy) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- reset counter timer grace; tak ada cara derive tanpa efek karena ada interval.
       setGraceSeconds(0);
       return;
     }
@@ -224,6 +245,7 @@ export function PhotoSessionPage() {
       }, 450);
       return () => clearTimeout(enterDelay);
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sinkron animasi enter/exit panduan dengan transisi 300ms; butuh efek.
     setGuideVisible(false);
     // Tunggu durasi transisi sebelum benar-benar unmount (hentikan polling).
     const id = setTimeout(() => setGuideMounted(false), 300);
@@ -246,7 +268,8 @@ export function PhotoSessionPage() {
     // Sesi selesai → bersihkan entri timer di sessionStorage
     clearSessionTimer();
 
-    // Sesi selesai → matikan robot
+    // Sesi selesai → matikan robot. Tandai agar cleanup unmount tidak dobel.
+    robotDisabledRef.current = true;
     apiClient.post('/api/robot/disable').catch((err) => {
       console.warn('[PhotoSession] robot/disable failed:', err);
     });

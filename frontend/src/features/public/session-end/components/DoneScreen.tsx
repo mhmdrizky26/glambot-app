@@ -34,6 +34,7 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
 
       {/* Robot Icon */}
       <div className="mb-4">
+        {/* eslint-disable-next-line @next/next/no-img-element -- aset SVG statik lokal; app sengaja pakai <img> (lihat next.config images) */}
         <img src="/robot 1.svg" alt="Robot" className="w-30" />
       </div>
 
@@ -66,6 +67,7 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
 
           {/* QR Code — primary color */}
           <div className="flex  gap-4 shrink-0">
+            {/* eslint-disable-next-line @next/next/no-img-element -- aset SVG statik lokal; app sengaja pakai <img> (lihat next.config images) */}
             <img
               src="/qr-d.svg"
               alt="Scan Feedback"

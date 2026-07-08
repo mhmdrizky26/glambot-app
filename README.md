@@ -127,6 +127,12 @@ Ringkasan perubahan terbaru (per Juli 2026):
 - **lottie-react** — loading animations
 - **lucide-react** — icons
 - **Radix UI** — primitives (dialog, slot)
+- **Recharts** — grafik dashboard admin
+- **react-hook-form + Zod** — form + validasi (form admin)
+- **xlsx, jsPDF (+autotable)** — export transaksi ke Excel/PDF
+- **sonner** — toast notifications
+- **date-fns, react-day-picker** — util & picker tanggal
+- **next-themes** — tema (light/dark)
 
 ### Eksternal (opsional)
 - **digiCamControl** — control Canon DSLR (Windows only)
@@ -232,6 +238,7 @@ STORAGE_PATH=./storage
 DIGICAM_BASE_URL=http://localhost:5513/api
 
 # Session
+PAYMENT_EXPIRY_MINS=2          # jendela bayar QRIS sebelum transaksi expired (default 2)
 SESSION_EXPIRY_HOURS=72
 CLEANUP_INTERVAL_HOURS=24
 
@@ -466,8 +473,13 @@ glambot-app/
 │   │   ├── admin_frames.go        # CRUD frame + ensureSlotIDs (normalisasi slot id)
 │   │   ├── admin_packages.go      # CRUD paket (+ print_unit_price)
 │   │   ├── admin_vouchers.go      # CRUD voucher
+│   │   ├── admin_transactions.go  # List/detail/stats/export transaksi (CSV)
 │   │   ├── admin_dashboard.go     # Summary metrics
-│   │   └── admin_devices.go       # Tes koneksi kamera/printer/robot
+│   │   ├── admin_devices.go       # Tes koneksi kamera/printer/robot
+│   │   ├── admin_helpers.go       # Helper upload/paging admin bersama
+│   │   ├── config.go              # Timer config + app_settings (upsertAppSettings)
+│   │   ├── robot_settings.go      # Tuning runtime robot (speed/timing) → forward ke dobot
+│   │   └── drive.go               # GetSessionDriveLink + kumpulkan file upload Drive
 │   ├── middleware/
 │   │   └── cors.go                # CORS allow list (localhost + LAN private ranges)
 │   ├── migrations/
@@ -483,6 +495,10 @@ glambot-app/
 │   │   ├── gif_live.go            # Live Strip GIF generator (framed + burst overlay + frame design top-layer)
 │   │   ├── cleanup.go             # Periodic cleanup of expired sessions
 │   │   ├── midtrans.go            # Midtrans QRIS integration
+│   │   ├── print.go               # Cetak strip framed ke printer
+│   │   ├── gdrive.go              # Upload hasil sesi ke Google Drive (OAuth2)
+│   │   ├── photo_filters.go       # Filter foto server-side
+│   │   ├── devices.go             # Probe kamera/printer/robot untuk admin devices
 │   │   └── robot.go               # HTTP client to external robot API
 │   ├── storage/
 │   │   ├── audio/                 # narasi voice-over per halaman (selamatDatang, pilihJumlahCetak, pembayaran*, intro, keselamatan, preset, inisiasi, countdown tiga/dua/satu, pilihFoto, prosesFoto, scanQrAmbilFoto, terimaKasih, etc.)
@@ -505,7 +521,7 @@ glambot-app/
 │   │   │   ├── (admin)/           # Admin dashboard (login + protected routes)
 │   │   │   │   ├── login/page.tsx
 │   │   │   │   └── (dashboard)/   # dashboard, frame, packages, voucher,
-│   │   │   │                      # transaction, devices, settings, filter
+│   │   │   │                      # transaction, devices, settings
 │   │   │   ├── (public)/          # Public routes (kiosk + download)
 │   │   │   │   ├── package/page.tsx
 │   │   │   │   ├── payment/summary/page.tsx
@@ -602,11 +618,12 @@ Sesi photo booth per user.
 | id | TEXT PK | UUID |
 | package_id | BIGINT FK packages | |
 | package_code | TEXT | Denormalized cache |
+| category | TEXT | Denormalized dari package_code (kompat legacy) |
 | duration_secs | INT | Copied from package |
 | print_count | INT | |
 | print_unit_price | INT | Snapshot harga cetak ekstra saat sesi dibuat |
 | price, discount, final_price | INT | |
-| status | TEXT | `pending_payment` → `paid` → `shooting` → `completed` |
+| status | TEXT | `pending_payment` → `paid` → `shooting` → `completed` (+ `expired`) |
 | frame_id | TEXT | Frame yang dipilih (NULL kalau Digital) |
 | created_at, expires_at, completed_at | TIMESTAMPTZ | |
 
@@ -686,6 +703,8 @@ Diskon code.
 | GET | `/api/frames` | List frames dari DB (dengan slots) |
 | POST | `/api/photo/upload` | Upload single photo (multipart) |
 | POST | `/api/photo/compose` | Save composition (multipart: frame + filter + image blob) |
+| POST | `/api/photo/print` | Cetak komposisi (strip framed terbaru) ke printer — [`PrintComposition`](backend/handlers/photo.go) |
+| GET | `/api/photo/session/{id}/drive` | Link folder Google Drive publik hasil sesi (kalau fitur Drive aktif) — [`GetSessionDriveLink`](backend/handlers/drive.go) |
 | GET | `/api/photo/session/{id}` | List raw photos |
 | GET | `/api/photo/session/{id}/framed` | List framed photos |
 | GET | `/api/photo/download/{photoID}` | Download single photo |
@@ -731,7 +750,7 @@ Diskon code.
     │                    Step 3: 🔊 preset.mp3
     ↓ "Got it, Let's Go!" → POST /api/robot/enable
 [ /photo-session ]     ← 🔊 inisiasi.mp3, live preview (mirrored)
-    │                    10 menit session timer
+    │                    5 menit session timer (durasi mengikuti paket, seed = 300s)
     │                    Robot trigger: 🔊 presetTerkonfirmasi.mp3
     │                    Auto-capture: countdown 3-2-1 (🔊 tiga/dua/satu.mp3)
     │                    + modal hasil 3 detik
@@ -793,7 +812,7 @@ Dashboard robot: `http://localhost:5001`. Untuk koneksi langsung (backend & robo
 
 **Konfigurasi utama (`dobot/.env`):** `DOBOT_IP` (IP robot), `CAMERA_INDEX` (`0` = webcam utama), `BACKEND_URL` (default `http://localhost:8080`), `MP_MODEL_PATH` (model gesture), preset via `DOBOT_PRESETS_JSON`. Semua field wajib terisi — loader menolak default tersembunyi.
 
-**Alur sesi (session-locked):** robot tidak aktif sampai sesi dibuka via `/robot/enable`. Setelah aktif → tahan gesture "semua jari" 2 detik untuk buka kunci → tunjukkan gesture preset → robot bergerak → jeda → terkunci lagi. Akhiri via `/robot/disable` (robot pulang ke initial pose, servo off).
+**Alur sesi (session-locked):** robot tidak aktif sampai sesi dibuka via `/robot/enable`. Setelah aktif → tahan gesture "semua jari" 1,5 detik (SAFETY_HOLD_SEC) untuk buka kunci → tunjukkan gesture preset → robot bergerak → jeda → terkunci lagi. Akhiri via `/robot/disable` (robot pulang ke initial pose, servo off).
 
 **Peta gesture → preset:**
 

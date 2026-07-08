@@ -46,6 +46,10 @@ export function GetPhotosScreen({
     const base =
       process.env.NEXT_PUBLIC_DOWNLOAD_PUBLIC_URL?.trim() ||
       window.location.origin;
+    // Sengaja setState di effect: `window` tak tersedia saat SSR, jadi URL baru
+    // bisa dihitung setelah mount. Melakukannya di initializer akan memicu
+    // hydration mismatch (server '' vs client URL asli).
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDownloadUrl(`${base}/download-photos/${sessionId}`);
   }, [sessionId]);
 
@@ -130,16 +134,6 @@ export function GetPhotosScreen({
             Scan the QR code below to download all your photos
           </p>
         </div>
-
-        {/* DEV: Next button instead of timer */}
-        {/* {DEV_MODE && (
-          <button
-            onClick={onComplete}
-            className="absolute right-10 top-10 bg-primary/20 hover:bg-primary/30 border border-primary/30 text-primary text-sm font-semibold px-4 py-2 rounded-xl transition-all"
-          >
-            {formatTime}
-          </button>
-        )} */}
       </div>
 
       {/* Content */}

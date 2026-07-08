@@ -339,9 +339,10 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update sesi: frame_id + filter strip + status completed
+	// Update sesi: frame_id + filter strip + status completed.
+	// completed_at diisi di sini (sebelumnya kolomnya tidak pernah ditulis).
 	if _, err := database.DB.Exec(
-		`UPDATE sessions SET frame_id = ?, strip_filter = ?, status = 'completed' WHERE id = ?`,
+		`UPDATE sessions SET frame_id = ?, strip_filter = ?, status = 'completed', completed_at = NOW() WHERE id = ?`,
 		frameID, stripFilter, sessionID,
 	); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal memperbarui sesi")
@@ -399,6 +400,25 @@ type printCompositionRequest struct {
 // fisik. Jumlah salinan mengikuti print_count paket sesi. Cetak hanya jalan
 // kalau ada printer fisik yang siap (lihat services.PrintFile); kalau tidak,
 // balas error supaya frontend bisa memberi tahu user tanpa menghentikan alur.
+// latestFramedStripRelPath mengembalikan relative path strip framed TERBARU
+// untuk sesi. Mengembalikan error kalau belum ada (compose belum dijalankan).
+// Dipakai bersama oleh PrintComposition, collectLiveStripSources, dan
+// collectDriveFiles supaya query "strip framed terbaru" tidak diduplikasi.
+func latestFramedStripRelPath(sessionID string) (string, error) {
+	var rel string
+	if err := database.DB.QueryRow(`
+		SELECT file_path FROM photos
+		WHERE session_id = ? AND type = 'framed'
+		ORDER BY created_at DESC LIMIT 1`, sessionID,
+	).Scan(&rel); err != nil {
+		return "", err
+	}
+	if rel == "" {
+		return "", fmt.Errorf("framed strip belum ada")
+	}
+	return rel, nil
+}
+
 func PrintComposition(w http.ResponseWriter, r *http.Request) {
 	var req printCompositionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -412,13 +432,8 @@ func PrintComposition(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Ambil strip framed terbaru untuk sesi ini.
-	var relPath string
-	if err := database.DB.QueryRow(
-		`SELECT file_path FROM photos
-		 WHERE session_id = ? AND type = 'framed'
-		 ORDER BY created_at DESC LIMIT 1`,
-		sessionID,
-	).Scan(&relPath); err != nil {
+	relPath, err := latestFramedStripRelPath(sessionID)
+	if err != nil {
 		respondError(w, http.StatusNotFound, "Strip foto belum tersedia untuk sesi ini")
 		return
 	}
@@ -726,12 +741,8 @@ func collectLiveStripSources(sessionID string) (services.LiveStripOptions, error
 	}
 
 	// Framed strip terbaru
-	var framedRel string
-	if err := database.DB.QueryRow(`
-		SELECT file_path FROM photos
-		WHERE session_id = ? AND type = 'framed'
-		ORDER BY created_at DESC LIMIT 1`, sessionID,
-	).Scan(&framedRel); err != nil || framedRel == "" {
+	framedRel, err := latestFramedStripRelPath(sessionID)
+	if err != nil {
 		return opts, fmt.Errorf("framed strip belum ada — selesaikan compose dulu")
 	}
 	abs, ok := safeStoragePath(framedRel)

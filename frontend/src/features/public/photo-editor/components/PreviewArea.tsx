@@ -117,6 +117,9 @@ export default function PreviewArea({
         console.error('Failed to load frame:', err);
         loadedFrameIdRef.current = null;
       });
+    // Sengaja re-run hanya saat id frame berubah (bukan tiap perubahan objek
+    // selectedFrame); imageUrl terikat pada id & dijaga loadedFrameIdRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedFrame?.id, fabricCanvas, getFabricCanvas]);
 
   // Apply filter when selectedFilter changes

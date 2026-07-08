@@ -2,6 +2,9 @@ import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { type DashboardSummary } from '../api/types';
 
+// jspdf-autotable menempelkan lastAutoTable ke instance doc tanpa deklarasi tipe.
+type AutoTableDoc = jsPDF & { lastAutoTable: { finalY: number } };
+
 const PURPLE = [138, 56, 245] as const;
 const PURPLE_LIGHT = [248, 245, 255] as const;
 const GREEN = [18, 201, 100] as const;
@@ -101,7 +104,7 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
   });
 
   // ── Sales Summary ───────────────────────────────────────────────────────
-  const salesStartY: number = (doc as any).lastAutoTable.finalY + 10;
+  const salesStartY: number = (doc as AutoTableDoc).lastAutoTable.finalY + 10;
   y = sectionTitle(doc, 'Sales Summary', salesStartY, pageW);
 
   const salesDelta = Math.round(summary.salesReport.delta);
@@ -130,7 +133,7 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
   });
 
   // ── Top Frames & Top Products (side by side) ─────────────────────────────
-  const topStartY: number = (doc as any).lastAutoTable.finalY + 10;
+  const topStartY: number = (doc as AutoTableDoc).lastAutoTable.finalY + 10;
   y = sectionTitle(doc, 'Top Frames & Products', topStartY, pageW);
 
   const midX = pageW / 2 + 3;
@@ -157,7 +160,7 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
     margin: { left: 14, right: midX },
     styles: { overflow: 'ellipsize' },
   });
-  const leftFinalY: number = (doc as any).lastAutoTable.finalY;
+  const leftFinalY: number = (doc as AutoTableDoc).lastAutoTable.finalY;
 
   autoTable(doc, {
     startY: y,
@@ -181,7 +184,7 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
     margin: { left: midX, right: 14 },
     styles: { overflow: 'ellipsize' },
   });
-  const rightFinalY: number = (doc as any).lastAutoTable.finalY;
+  const rightFinalY: number = (doc as AutoTableDoc).lastAutoTable.finalY;
 
   // ── Recent Orders ────────────────────────────────────────────────────────
   const recentStartY = Math.max(leftFinalY, rightFinalY) + 10;
