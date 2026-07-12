@@ -4,6 +4,7 @@ import { SessionHeader } from '../components/SessionHeader';
 import { CameraPreview } from '../components/CameraPreview';
 import EndSessionButton from '../components/EndSessionButton';
 import { GestureDetectionPanel } from '../components/GestureDetectionPanel';
+import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { instructionSteps } from '@/features/public/instruction/data/steps';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
@@ -107,6 +108,14 @@ export function PhotoSessionPage() {
   // fire SEKALI walaupun effect re-run akibat dep `session` (dari useGetSession)
   // refresh/refetch saat sessionTimeLeft sudah 0.
   const endFiredRef = useRef(false);
+  const endTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (endTimeoutRef.current) clearTimeout(endTimeoutRef.current);
+    };
+  }, []);
+
   const {
     frameUrl,
     hasError,
@@ -202,6 +211,8 @@ export function PhotoSessionPage() {
   // akhir sesi yang sama (broadcast + disable robot + navigate), termasuk
   // safeguard robot-busy & grace. Jadi end bisa terpicu oleh timer ATAU ini.
   const [endRequested, setEndRequested] = useState(false);
+  // Tampilkan overlay animasi "menunggu" sebelum navigasi ke halaman berikutnya.
+  const [showTransition, setShowTransition] = useState(false);
   // "Sedang menuju akhir sesi" — timer habis atau user minta selesai. Dipakai
   // untuk state tombol (disabled + label "Menyelesaikan foto…").
   const endingNow = endRequested || sessionTimeLeft === 0;
@@ -279,13 +290,13 @@ export function PhotoSessionPage() {
       ? `/photo-editor?sessionId=${sessionId}`
       : `/session-end?sessionId=${sessionId}`;
 
-    const timeout = setTimeout(() => {
+    setShowTransition(true);
+
+    endTimeoutRef.current = setTimeout(() => {
       // VIP: photo-editor dulu untuk pilih frame + foto, lalu session-end.
       // Digital: langsung session-end (tampil QR untuk scan di HP).
       router.push(target);
-    }, 1000);
-
-    return () => clearTimeout(timeout);
+    }, 3000);
   }, [
     endingNow,
     sessionId,
@@ -366,14 +377,14 @@ export function PhotoSessionPage() {
               </h2>
               <div
                 className={cn(
-                  'flex min-h-0 flex-1 flex-col gap-5 bg-primary/75 p-5',
+                  'flex min-h-0  flex-col gap-5 bg-primary/75 p-5',
                   PREVIEW_FRAME,
                 )}
               >
                 {/* Grid preset mengisi ruang sisa & rownya di-tengah-kan secara
                     vertikal (content-center) → tidak ada celah kosong yang
                     nyangkut di satu sisi; jarak atas-bawah simetris. */}
-                <div className="grid flex-1 grid-cols-5 2xl:grid-cols-4 content-center gap-2.5 2xl:gap-3">
+                <div className="grid grid-cols-5 2xl:grid-cols-4 content-center gap-2.5 2xl:gap-3">
                   {PRESET_GESTURES.map((g, i) => (
                     <div
                       key={`${g.name}-${i}`}
@@ -399,13 +410,13 @@ export function PhotoSessionPage() {
 
                 {/* Aturan keselamatan + tombol — dikelompokkan di bawah dengan
                     jarak konsisten. */}
-                <div className="space-y-1.5 border-t border-white/10 pt-4 text-[11px] leading-relaxed text-white/40">
+                {/* <div className="space-y-1.5 border-t border-white/10 pt-4 text-[11px] leading-relaxed text-white/40">
                   <p className="text-amber-300/70">
                     ⚠ Stay at least 2 meters away from robot arm
                   </p>
                   <p>Keep gestures within detection area</p>
                   <p>Avoid sudden movement near robot arm</p>
-                </div>
+                </div> */}
 
                 {/* Tombol "Selesai sekarang" — dipindah ke pojok kanan-bawah
                     kartu ini supaya preview kamera bersih tanpa tombol melayang. */}
@@ -419,6 +430,15 @@ export function PhotoSessionPage() {
           </div>
         )}
       </main>
+
+      {showTransition && (
+        <div className="fixed inset-0 z-50 flex flex-col items-center justify-center backdrop-blur-lg">
+          <StatusAnimation status="processing" className="w-32 h-32" />
+          <p className="mt-4 text-xl font-medium text-white/80 animate-pulse">
+            Preparing your photos...
+          </p>
+        </div>
+      )}
     </div>
   );
 }

@@ -17,10 +17,17 @@ export default function Home() {
         Control the camera with your gestures
       </p>
 
-      <Button asChild size="lg" className="mt-20 w-88.5 h-30 rounded-[60px]">
+      <Button
+        asChild
+        size="lg"
+        className="mt-20 w-88.5 h-30 rounded-[60px] animate-pulse-glow"
+      >
         {/* Sapaan diputar saat tap — interaksi user ini sekaligus meng-"unlock"
             autoplay browser untuk suara di halaman berikutnya. */}
-        <Link href="/package" onClick={() => playBackendAudio('selamatDatang.mp3')}>
+        <Link
+          href="/package"
+          onClick={() => playBackendAudio('selamatDatang.mp3')}
+        >
           Tap to Start
         </Link>
       </Button>

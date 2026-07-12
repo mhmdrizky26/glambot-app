@@ -21,6 +21,7 @@ export interface InstructionStep {
   activities?: ActivityItem[];
   doRules?: RuleItem[];
   dontRules?: RuleItem[];
+  guideline?: string;
   gestures?: GestureItem[];
 }
 
@@ -29,12 +30,13 @@ export const instructionSteps: InstructionStep[] = [
     id: 1,
     type: 'get-ready',
     heading: 'Get Ready!',
-    subheading: 'Your session lasts',
+    subheading: 'Session',
     sessionDuration: 5,
     activities: [
       { label: 'Use gestures' },
       { label: 'Strike a pose' },
       { label: 'Camera moves' },
+      { label: 'Session' },
     ],
   },
   {
@@ -53,6 +55,8 @@ export const instructionSteps: InstructionStep[] = [
       { text: 'Don’t block the sensor' },
       { text: 'No food or drinks nearby' },
     ],
+    guideline:
+      'Only one person’s hand should be used at a time — multiple hands or gestures will confuse the camera detection.',
   },
   {
     id: 3,
