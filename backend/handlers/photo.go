@@ -113,6 +113,10 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Streaming ke Drive: kirim foto ini segera (non-blocking), sama seperti
+	// jalur auto-capture robot — tidak menunggu akhir sesi.
+	EnqueueRawPhotoUpload(sessionID, photoID, filePath)
+
 	photo := models.Photo{
 		ID:        photoID,
 		SessionID: sessionID,
@@ -339,11 +343,17 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Update sesi: frame_id + filter strip + status completed.
+	// Assignment per-slot (photoIds URUT SESUAI SLOT, boleh duplikat kalau 1
+	// foto dipakai di beberapa slot) disimpan apa adanya. Ini sumber kebenaran
+	// pemetaan slot→foto untuk generator GIF live — supaya burst tampil di slot
+	// yang benar, tidak bergeser, dan foto berulang muncul di tiap slotnya.
+	slotPhotoIDsJSON, _ := json.Marshal(photoIDs)
+
+	// Update sesi: frame_id + filter strip + assignment slot + status completed.
 	// completed_at diisi di sini (sebelumnya kolomnya tidak pernah ditulis).
 	if _, err := database.DB.Exec(
-		`UPDATE sessions SET frame_id = ?, strip_filter = ?, status = 'completed', completed_at = NOW() WHERE id = ?`,
-		frameID, stripFilter, sessionID,
+		`UPDATE sessions SET frame_id = ?, strip_filter = ?, slot_photo_ids = ?, status = 'completed', completed_at = NOW() WHERE id = ?`,
+		frameID, stripFilter, string(slotPhotoIDsJSON), sessionID,
 	); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal memperbarui sesi")
 		return
@@ -403,7 +413,7 @@ type printCompositionRequest struct {
 // latestFramedStripRelPath mengembalikan relative path strip framed TERBARU
 // untuk sesi. Mengembalikan error kalau belum ada (compose belum dijalankan).
 // Dipakai bersama oleh PrintComposition, collectLiveStripSources, dan
-// collectDriveFiles supaya query "strip framed terbaru" tidak diduplikasi.
+// collectFinalDriveFiles supaya query "strip framed terbaru" tidak diduplikasi.
 func latestFramedStripRelPath(sessionID string) (string, error) {
 	var rel string
 	if err := database.DB.QueryRow(`
@@ -575,7 +585,8 @@ func collectAnimationSources(sessionID string) (services.GenerateAnimationOption
 // selectedRawRelPaths mengembalikan relative path foto raw TERPILIH (urut
 // posisi), atau semua raw kalau tidak ada yang ditandai selected. Dipakai
 // generator GIF — GIF hanya menampilkan foto yang dipilih untuk strip.
-// (Upload Drive memakai allRawRelPaths di drive.go: semua foto raw.)
+// (Upload Drive kini streaming per-capture; lihat EnqueueRawPhotoUpload &
+// collectFinalDriveFiles di drive.go.)
 func selectedRawRelPaths(sessionID string) []string {
 	var paths []string
 
@@ -751,7 +762,35 @@ func collectLiveStripSources(sessionID string) (services.LiveStripOptions, error
 	}
 	opts.FramedImagePath = abs
 
-	// Foto terpilih + burst frames per photo
+	// Pemetaan slot→foto: pakai slot_photo_ids (array photoId URUT SESUAI SLOT,
+	// disimpan saat compose, boleh duplikat). Ini WAJIB — men-derive ulang dari
+	// photos.selected/position salah untuk foto yang dipakai di beberapa slot
+	// (model 1-baris-per-foto meng-collapse duplikat → jumlah foto < jumlah slot
+	// → slot bergeser). Satu entri per slot, urut slot; burst diambil per photoId
+	// (foto yang sama di 2 slot → burst yang sama di kedua slot, sesuai hasil).
+	var slotJSON string
+	_ = database.DB.QueryRow(
+		`SELECT COALESCE(slot_photo_ids, '') FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&slotJSON)
+	var slotPhotoIDs []string
+	if slotJSON != "" {
+		_ = json.Unmarshal([]byte(slotJSON), &slotPhotoIDs)
+	}
+
+	if len(slotPhotoIDs) == len(opts.Slots) && len(slotPhotoIDs) > 0 {
+		for i, photoID := range slotPhotoIDs {
+			opts.Photos = append(opts.Photos, services.LiveStripPhoto{
+				PhotoID:     photoID,
+				Position:    i + 1,
+				BurstFrames: services.ListBurstFrames(sessionID, photoID),
+			})
+		}
+		return opts, nil
+	}
+
+	// Fallback (sesi lama tanpa slot_photo_ids): pakai foto terpilih urut posisi.
+	// Tetap benar untuk kasus 1 foto per slot; hanya kasus reuse yang tak bisa
+	// direkonstruksi tanpa slot_photo_ids.
 	rows, err := database.DB.Query(`
 		SELECT id, COALESCE(position, 0) FROM photos
 		WHERE session_id = ? AND type = 'raw' AND selected = 1

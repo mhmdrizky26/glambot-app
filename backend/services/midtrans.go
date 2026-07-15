@@ -32,8 +32,7 @@ func InitMidtrans() {
 
 // CreateQRISPayment membuat transaksi QRIS baru via Midtrans Core API
 func CreateQRISPayment(orderID string, amount int, sessionID string) (*QRISResult, error) {
-	// Buat pointer untuk CustomField
-	sid := sessionID // ← tampung dulu ke variable
+	sid := sessionID
 
 	req := &coreapi.ChargeReq{
 		PaymentType: coreapi.PaymentTypeQris,
@@ -44,7 +43,7 @@ func CreateQRISPayment(orderID string, amount int, sessionID string) (*QRISResul
 		Qris: &coreapi.QrisDetails{
 			Acquirer: "gopay",
 		},
-		CustomField1: &sid, // ← pakai pointer &sid bukan langsung sessionID
+		CustomField1: &sid,
 	}
 
 	resp, err := midtransClient.ChargeTransaction(req)

@@ -4,6 +4,11 @@ import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePersistedCountdown } from '@/lib/usePersistedCountdown';
 import { formatTimeMMSS } from '@/lib/formatTime';
+import { cn } from '@/lib/utils';
+
+// 15 detik terakhir → timer merah + denyut membesar (sama seperti header sesi
+// foto) sebagai peringatan waktu menipis.
+const URGENT_THRESHOLD_SEC = 15;
 
 interface TimerProps {
   duration?: number;
@@ -12,12 +17,17 @@ interface TimerProps {
   // refresh halaman tetap melanjutkan hitungan (bukan reset ke `duration`).
   // Biasanya sertakan sessionId di key supaya tidak bocor antar sesi.
   storageKey?: string | null;
+  // Kalau true, 15 detik terakhir → timer merah + denyut (peringatan waktu
+  // menipis). Sengaja opt-in supaya HANYA dipakai di sesi foto & edit foto,
+  // bukan di layar lain (mis. get-photos).
+  urgentWhenLow?: boolean;
 }
 
 export default function Timer({
   duration = 120,
   onTimeUp,
   storageKey = null,
+  urgentWhenLow = false,
 }: TimerProps) {
   const { timeLeft, clear } = usePersistedCountdown(storageKey, duration);
   const router = useRouter();
@@ -43,9 +53,18 @@ export default function Timer({
     }
   }, [timeLeft, router, clear]);
 
+  const isUrgent = urgentWhenLow && timeLeft <= URGENT_THRESHOLD_SEC;
+
   return (
     <div className="fixed p-8 top-4 right-4 z-50 pointer-events-none">
-      <div className="text-primary text-[40px] font-bold">
+      <div
+        className={cn(
+          'text-[40px] font-bold origin-center transition-colors duration-300',
+          isUrgent
+            ? 'text-[#ff5252] animate-timer-urgent'
+            : 'text-primary',
+        )}
+      >
         {formatTimeMMSS(timeLeft)}
       </div>
     </div>

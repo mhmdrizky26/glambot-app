@@ -15,128 +15,239 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// driveInflight menjaga agar satu sesi tidak diupload bersamaan oleh dua
-// goroutine (mis. compose dipanggil ulang) yang bisa membuat folder dobel.
+// driveInflight menjaga agar FINALIZE satu sesi tidak jalan bersamaan oleh dua
+// goroutine (mis. compose dipanggil ulang).
 var driveInflight sync.Map
 
-// Orkestrasi upload aset sesi ke Google Drive. Dipanggil non-blocking setelah
-// compose + GIF siap. Hasil (link folder publik) disimpan ke sessions.drive_url
-// dan dipakai frontend untuk QR di halaman download.
+// driveFolderLocks: mutex per-sesi untuk pembuatan folder Drive. Upload kini
+// per-capture (beberapa goroutine paralel) — tanpa lock, dua capture pertama
+// bisa sama-sama membuat folder → folder dobel. Lock memastikan folder dibuat
+// SEKALI; goroutine lain menunggu lalu reuse folder yang sama dari DB.
+var driveFolderLocks sync.Map
 
-// UploadSessionToDrive mengumpulkan semua aset sesi (strip framed, GIF, foto
-// mentah terpilih) lalu mengunggahnya ke folder Drive per-sesi. Menyimpan link
-// folder ke DB saat sukses. Aman dipanggil kalau Drive tidak dikonfigurasi
-// (langsung no-op).
+// Orkestrasi upload aset sesi ke Google Drive.
+//
+// STRATEGI: file besar (foto full-res DSLR) di-upload STREAMING — tiap foto
+// dikirim ke Drive segera setelah di-capture (EnqueueRawPhotoUpload), bukan
+// ditumpuk di akhir. Folder Drive dibuat sekali saat foto pertama masuk, dan
+// link-nya langsung disimpan ke sessions.drive_url (QR siap lebih awal).
+// Di akhir sesi (setelah compose + GIF), UploadSessionToDrive hanya mengirim
+// artefak akhir: strip framed + GIF — plus jaring pengaman untuk foto raw yang
+// upload per-capture-nya sempat gagal.
+
+// driveFolderName nama folder Drive per-sesi (dibuat sekali di awal).
+func driveFolderName(sessionID string) string {
+	return fmt.Sprintf("Glambot %s (%s)",
+		time.Now().Format("2006-01-02 15.04"), shortID(sessionID))
+}
+
+// ensureSessionDriveFolder mengembalikan folder Drive sesi, membuatnya (dan
+// menyimpan drive_url + drive_folder_id ke DB) sekali kalau belum ada. Aman
+// dipanggil dari banyak goroutine — pembuatan di-serialize per sesi.
+func ensureSessionDriveFolder(sessionID string) (string, error) {
+	// Fast path: sudah ada di DB.
+	if id := storedDriveFolderID(sessionID); id != "" {
+		return id, nil
+	}
+
+	lockAny, _ := driveFolderLocks.LoadOrStore(sessionID, &sync.Mutex{})
+	lock := lockAny.(*sync.Mutex)
+	lock.Lock()
+	defer lock.Unlock()
+
+	// Re-check setelah dapat lock (goroutine lain mungkin sudah membuat).
+	if id := storedDriveFolderID(sessionID); id != "" {
+		return id, nil
+	}
+
+	ctx, cancel := services.DriveContext()
+	defer cancel()
+
+	folderID, link, err := services.CreateSharedFolder(ctx, driveFolderName(sessionID))
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := database.DB.Exec(
+		`UPDATE sessions SET drive_url = ?, drive_folder_id = ? WHERE id = ?`,
+		link, folderID, sessionID,
+	); err != nil {
+		// Folder sudah terlanjur dibuat — tetap kembalikan ID-nya supaya upload
+		// bisa lanjut; hanya link QR yang mungkin belum tersimpan.
+		log.Printf("⚠️  gagal simpan drive_url (%s): %v", sessionID, err)
+	}
+	log.Printf("📁 drive folder dibuat (%s): %s", sessionID, link)
+	return folderID, nil
+}
+
+func storedDriveFolderID(sessionID string) string {
+	var id string
+	_ = database.DB.QueryRow(
+		`SELECT drive_folder_id FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&id)
+	return id
+}
+
+// EnqueueRawPhotoUpload mengunggah satu foto raw ke folder Drive sesi secara
+// non-blocking, segera setelah foto di-capture. No-op kalau Drive tidak aktif.
+func EnqueueRawPhotoUpload(sessionID, photoID, absPath string) {
+	if !services.IsDriveEnabled() || sessionID == "" || photoID == "" {
+		return
+	}
+	go uploadRawPhotoToDrive(sessionID, photoID, absPath)
+}
+
+func uploadRawPhotoToDrive(sessionID, photoID, absPath string) {
+	if !fileExists(absPath) {
+		return
+	}
+	folderID, err := ensureSessionDriveFolder(sessionID)
+	if err != nil {
+		log.Printf("⚠️  drive folder gagal (%s): %v — foto akan di-upload saat finalize", sessionID, err)
+		return
+	}
+
+	ctx, cancel := services.DriveContext()
+	defer cancel()
+
+	name := fmt.Sprintf("foto-%d%s", rawPhotoIndex(sessionID, photoID), filepath.Ext(absPath))
+	if err := services.UploadFileToFolder(ctx, folderID, services.DriveUpload{LocalPath: absPath, Name: name}); err != nil {
+		log.Printf("⚠️  drive upload foto gagal (%s, %s): %v — akan dicoba lagi saat finalize", sessionID, name, err)
+		return
+	}
+
+	if _, err := database.DB.Exec(
+		`UPDATE photos SET drive_uploaded = TRUE WHERE id = ?`, photoID,
+	); err != nil {
+		log.Printf("⚠️  gagal tandai drive_uploaded (%s): %v", photoID, err)
+	}
+	log.Printf("☁️  drive %s terkirim (%s)", name, sessionID)
+}
+
+// rawPhotoIndex posisi 1-based foto (urut created_at) di antara foto raw sesi —
+// dipakai untuk penamaan "foto-N" yang konsisten antara upload per-capture &
+// finalize.
+func rawPhotoIndex(sessionID, photoID string) int {
+	var idx int
+	_ = database.DB.QueryRow(`
+		SELECT COUNT(*) FROM photos
+		WHERE session_id = ? AND type = 'raw'
+		  AND created_at <= (SELECT created_at FROM photos WHERE id = ?)`,
+		sessionID, photoID,
+	).Scan(&idx)
+	if idx < 1 {
+		idx = 1
+	}
+	return idx
+}
+
+// UploadSessionToDrive FINALIZE: dipanggil setelah compose + GIF siap. Mengirim
+// artefak akhir (strip framed + GIF) ke folder sesi, plus foto raw yang belum
+// sempat terkirim per-capture (jaring pengaman). Aman kalau Drive tidak aktif.
 func UploadSessionToDrive(sessionID string) {
 	if !services.IsDriveEnabled() {
 		return
 	}
 
-	// Cegah dua upload paralel untuk sesi yang sama.
+	// Cegah dua finalize paralel untuk sesi yang sama.
 	if _, busy := driveInflight.LoadOrStore(sessionID, struct{}{}); busy {
 		return
 	}
 	defer driveInflight.Delete(sessionID)
 
-	// Kalau sudah pernah diupload, jangan dobel.
-	var existing string
-	if err := database.DB.QueryRow(
-		`SELECT drive_url FROM sessions WHERE id = ?`, sessionID,
-	).Scan(&existing); err == nil && existing != "" {
+	folderID, err := ensureSessionDriveFolder(sessionID)
+	if err != nil {
+		log.Printf("⚠️  drive finalize gagal (%s): folder — %v", sessionID, err)
 		return
 	}
 
-	files := collectDriveFiles(sessionID)
+	files := collectFinalDriveFiles(sessionID)
 	if len(files) == 0 {
-		log.Printf("ℹ️  drive upload skip (%s): tidak ada file", sessionID)
 		return
 	}
-
-	folderName := fmt.Sprintf("Glambot %s (%s)",
-		time.Now().Format("2006-01-02 15.04"), shortID(sessionID))
 
 	ctx, cancel := services.DriveContext()
 	defer cancel()
 
-	res, err := services.UploadSessionAssets(ctx, folderName, files)
-	if err != nil {
-		log.Printf("⚠️  drive upload gagal (%s): %v", sessionID, err)
-		return
-	}
-
-	if _, err := database.DB.Exec(
-		`UPDATE sessions SET drive_url = ?, drive_folder_id = ? WHERE id = ?`,
-		res.WebViewLink, res.FolderID, sessionID,
-	); err != nil {
-		log.Printf("⚠️  gagal simpan drive_url (%s): %v", sessionID, err)
-		return
-	}
-
-	log.Printf("✅ drive upload selesai (%s): %s", sessionID, res.WebViewLink)
-}
-
-// collectDriveFiles mengumpulkan daftar file lokal yang akan diunggah, dengan
-// nama tampil yang ramah. Urutan: strip → GIF → foto mentah.
-func collectDriveFiles(sessionID string) []services.DriveUpload {
-	var files []services.DriveUpload
-
-	// 1) Strip framed terbaru.
-	if framedRel, err := latestFramedStripRelPath(sessionID); err == nil {
-		if abs, ok := safeStoragePath(framedRel); ok {
-			if fileExists(abs) {
-				files = append(files, services.DriveUpload{
-					LocalPath: abs,
-					Name:      "strip" + filepath.Ext(abs),
-				})
-			}
+	for _, f := range files {
+		if err := services.UploadFileToFolder(ctx, folderID, f.DriveUpload); err != nil {
+			log.Printf("⚠️  drive upload gagal (%s, %s): %v", sessionID, f.Name, err)
+			continue
+		}
+		// Tandai foto raw yang tadinya belum terkirim.
+		if f.PhotoID != "" {
+			_, _ = database.DB.Exec(`UPDATE photos SET drive_uploaded = TRUE WHERE id = ?`, f.PhotoID)
 		}
 	}
 
-	// 2) GIF slideshow + live strip (kalau file-nya sudah ter-generate).
-	if p := services.AnimationOutputPath(sessionID); fileExists(p) {
-		files = append(files, services.DriveUpload{LocalPath: p, Name: "slideshow.gif"})
-	}
-	if p := services.LiveStripOutputPath(sessionID); fileExists(p) {
-		files = append(files, services.DriveUpload{LocalPath: p, Name: "live-strip.gif"})
-	}
+	log.Printf("✅ drive finalize selesai (%s)", sessionID)
+}
 
-	// 3) SEMUA foto mentah (urut created_at) — sengaja semua, bukan hanya yang
-	// terpilih, supaya isi folder Drive sama persis dengan yang tampil di
-	// halaman download (yang juga menampilkan semua foto raw).
-	rawPaths := allRawRelPaths(sessionID)
-	for i, rel := range rawPaths {
-		if abs, ok := safeStoragePath(rel); ok && fileExists(abs) {
-			files = append(files, services.DriveUpload{
-				LocalPath: abs,
-				Name:      fmt.Sprintf("foto-%d%s", i+1, filepath.Ext(abs)),
+// finalDriveFile satu file untuk tahap finalize. PhotoID diisi hanya untuk foto
+// raw (supaya bisa ditandai drive_uploaded setelah sukses).
+type finalDriveFile struct {
+	services.DriveUpload
+	PhotoID string
+}
+
+// collectFinalDriveFiles kumpulkan artefak akhir: strip + GIF, plus foto raw
+// yang belum ter-upload per-capture (jaring pengaman). Penamaan foto-N mengikut
+// urutan created_at supaya konsisten dengan upload streaming.
+func collectFinalDriveFiles(sessionID string) []finalDriveFile {
+	var files []finalDriveFile
+
+	// 1) Strip framed terbaru.
+	if framedRel, err := latestFramedStripRelPath(sessionID); err == nil {
+		if abs, ok := safeStoragePath(framedRel); ok && fileExists(abs) {
+			files = append(files, finalDriveFile{
+				DriveUpload: services.DriveUpload{LocalPath: abs, Name: "strip" + filepath.Ext(abs)},
 			})
 		}
 	}
 
-	return files
-}
+	// 2) GIF slideshow + live strip (kalau sudah ter-generate).
+	if p := services.AnimationOutputPath(sessionID); fileExists(p) {
+		files = append(files, finalDriveFile{DriveUpload: services.DriveUpload{LocalPath: p, Name: "slideshow.gif"}})
+	}
+	if p := services.LiveStripOutputPath(sessionID); fileExists(p) {
+		files = append(files, finalDriveFile{DriveUpload: services.DriveUpload{LocalPath: p, Name: "live-strip.gif"}})
+	}
 
-// allRawRelPaths mengembalikan relative path SEMUA foto raw sesi (urut
-// created_at ASC) — sama dengan yang ditampilkan halaman download
-// (GetSessionPhotos). Berbeda dari selectedRawRelPaths (di photo.go) yang
-// hanya untuk GIF (foto terpilih saja).
-func allRawRelPaths(sessionID string) []string {
-	var paths []string
+	// 3) Foto raw yang BELUM ter-upload per-capture (mis. upload sempat gagal,
+	// atau Drive baru diaktifkan di tengah sesi). Index by created_at agar nama
+	// "foto-N" konsisten dengan yang sudah terkirim streaming.
 	rows, err := database.DB.Query(`
-		SELECT file_path FROM photos
+		SELECT id, file_path, COALESCE(drive_uploaded, FALSE)
+		FROM photos
 		WHERE session_id = ? AND type = 'raw'
 		ORDER BY created_at ASC`, sessionID,
 	)
 	if err == nil {
 		defer rows.Close()
+		i := 0
 		for rows.Next() {
-			var rel string
-			if rows.Scan(&rel) == nil {
-				paths = append(paths, rel)
+			i++
+			var id, rel string
+			var uploaded bool
+			if rows.Scan(&id, &rel, &uploaded) != nil {
+				continue
+			}
+			if uploaded {
+				continue
+			}
+			if abs, ok := safeStoragePath(rel); ok && fileExists(abs) {
+				files = append(files, finalDriveFile{
+					DriveUpload: services.DriveUpload{
+						LocalPath: abs,
+						Name:      fmt.Sprintf("foto-%d%s", i, filepath.Ext(abs)),
+					},
+					PhotoID: id,
+				})
 			}
 		}
 	}
-	return paths
+
+	return files
 }
 
 // GetSessionDriveLink — GET /api/photo/session/{sessionID}/drive

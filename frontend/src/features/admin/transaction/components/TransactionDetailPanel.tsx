@@ -63,7 +63,12 @@ export function TransactionDetailPanel({
 }: TransactionDetailPanelProps) {
   if (!transaction) return null;
 
+  // `amount` is the price AFTER the voucher discount (sessions.final_price).
+  // Harga asli sebelum voucher = amount + discount, jadi pengurangan voucher
+  // bisa ditelusuri: Subtotal − Voucher = Total.
+  const discount = transaction.voucher?.discount ?? 0;
   const total = transaction.amount;
+  const subtotal = total + discount;
   const statusConfig = STATUS_CONFIG[transaction.status];
 
   return (
@@ -98,14 +103,14 @@ export function TransactionDetailPanel({
               {transaction.midtransOrderId}
             </span>
           </Row>
-          <Row label="Amount">{formatCurrency(transaction.amount)}</Row>
+          <Row label="Subtotal">{formatCurrency(subtotal)}</Row>
           <Row label="Voucher">
             {transaction.voucher ? (
               <span className="flex flex-col items-end">
                 <span className="font-mono">{transaction.voucher.code}</span>
-                {transaction.voucher.discount > 0 && (
+                {discount > 0 && (
                   <span className="text-xs text-emerald-600">
-                    -{formatCurrency(transaction.voucher.discount)}
+                    -{formatCurrency(discount)}
                   </span>
                 )}
               </span>

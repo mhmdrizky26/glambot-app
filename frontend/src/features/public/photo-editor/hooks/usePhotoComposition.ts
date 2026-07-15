@@ -16,15 +16,6 @@ export interface SlotState {
 }
 
 /**
- * Overall composition state
- */
-export interface CompositionState {
-  slots: Record<string, SlotState>;
-  frameId: string | null;
-  filter: FilterType;
-}
-
-/**
  * Create initial empty slot state based on frame
  */
 const createInitialSlots = (frame: Frame | null): Record<string, SlotState> => {

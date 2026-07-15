@@ -49,6 +49,10 @@
   --font-changa: var(--font-changa-one);
 
   --animate-pulse-glow: pulseGlow 2.5s ease-in-out infinite;
+  /* Timer sesi foto saat sisa <= 15 detik (termasuk overtime/minus): denyut
+     membesar sedikit ala tombol "Tap to Start", tapi lebih cepat + glow merah
+     supaya terbaca sebagai peringatan. */
+  --animate-timer-urgent: timerUrgent 1s ease-in-out infinite;
 }
 
 @layer utilities {
@@ -145,5 +149,17 @@
   50% {
     transform: scale(1.04);
     box-shadow: 0 0 30px 8px rgba(17, 45, 78, 0.25);
+  }
+}
+
+@keyframes timerUrgent {
+  0%,
+  100% {
+    transform: scale(1);
+    text-shadow: 0 0 0 rgba(255, 82, 82, 0);
+  }
+  50% {
+    transform: scale(1.08);
+    text-shadow: 0 0 18px rgba(255, 82, 82, 0.6);
   }
 }

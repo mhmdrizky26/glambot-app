@@ -18,12 +18,12 @@ import (
 	xdraw "golang.org/x/image/draw"
 )
 
-// Ukuran kanvas GIF — dipilih agar file tetap kecil (~500KB–1.5MB) tapi
-// hasil masih nyaman dilihat di HP. Aspect ratio mengikuti frame strip
-// default (464 × 696 = ~2:3) supaya komposisi tidak terpotong.
+// Ukuran kanvas GIF — dinaikkan (480×720) untuk hasil lebih tajam sesuai foto
+// full-res DSLR, tetap aspect 2:3 (mengikuti frame strip default 464×696).
+// Slideshow ini hanya ~3 frame jadi kenaikan resolusi murah untuk ukuran file.
 const (
-	gifCanvasWidth  = 360
-	gifCanvasHeight = 540
+	gifCanvasWidth  = 480
+	gifCanvasHeight = 720
 	gifFrameDelay   = 70 // 100ths of a second → 0.7s per foto raw
 )
 

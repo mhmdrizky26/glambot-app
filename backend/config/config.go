@@ -26,6 +26,7 @@ type Config struct {
 	MidtransEnv          string
 	StoragePath          string
 	DigiCamBaseURL       string
+	DigiCamCaptureDir    string
 	PaymentExpiryMins    int
 	SessionExpiryHours   int
 	CleanupIntervalHours int
@@ -66,6 +67,7 @@ func Load() {
 		MidtransEnv:          getEnv("MIDTRANS_ENV", "sandbox"),
 		StoragePath:          getEnv("STORAGE_PATH", "./storage"),
 		DigiCamBaseURL:       getEnv("DIGICAM_BASE_URL", "http://localhost:5513/api"),
+		DigiCamCaptureDir:    getEnv("DIGICAM_CAPTURE_DIR", ""),
 		PaymentExpiryMins:    getEnvInt("PAYMENT_EXPIRY_MINS", 2),
 		SessionExpiryHours:   getEnvInt("SESSION_EXPIRY_HOURS", 72),
 		CleanupIntervalHours: getEnvInt("CLEANUP_INTERVAL_HOURS", 24),

@@ -14,7 +14,7 @@ import { useLiveStream } from '../api/getLivePreview';
 import { useRobotConfig } from '../api/getRobotConfig';
 import { useRobotDetection } from '../api/getRobotDetection';
 import { apiClient } from '@/lib/api-client';
-import { playBackendAudio } from '@/lib/audio';
+import { playBackendAudio, stopBackendAudio } from '@/lib/audio';
 import { usePersistedCountdown } from '@/lib/usePersistedCountdown';
 import { cn } from '@/lib/utils';
 
@@ -145,14 +145,28 @@ export function PhotoSessionPage() {
     : null;
   const robotActivePreset = robotDetection?.robot_preset ?? null;
 
+  // Fase "terkunci" (belum unlock): tampilan kontrol hanya menampilkan gesture
+  // unlock (Preset 5). Progress bar deteksi memakai progress unlock saat locked,
+  // dan progress pengenalan preset saat sudah unlock.
+  const isLockedPhase =
+    robotFsmState === 'LOCKED' || robotFsmState === 'UNLOCKING';
+  const detectionPercent = isLockedPhase ? robotArmPercent : robotPresetPercent;
+
   // Suara "gesture terdeteksi" — main saat robot BARU masuk fase UNLOCKING
   // (telapak buka mulai terbaca untuk unlock) atau CONFIRMING (gesture preset
   // mulai terbaca). Anchor di TRANSISI state, bukan tiap poll, supaya tidak
   // spam (poll deteksi 150ms).
+  // Dibaca DI DALAM effect audio (bukan sebagai dep) untuk menahan cue baru saat
+  // sesi sudah masuk fase berakhir — supaya tidak ada narasi sesi yang menyambung
+  // ke layar loading sebelum editor/hasil. Disinkronkan via effect di bawah.
+  const endingRef = useRef(false);
   const prevFsmRef = useRef<typeof robotFsmState>('LOCKED');
   useEffect(() => {
     const prev = prevFsmRef.current;
-    if (robotFsmState !== prev) {
+    // Sesi sedang berakhir (timer habis / user minta selesai) → jangan mulai
+    // narasi/cue sesi lagi. prevFsmRef tetap di-update agar tidak ada play
+    // "susulan" begitu state berubah setelahnya.
+    if (!endingRef.current && robotFsmState !== prev) {
       if (robotFsmState === 'UNLOCKING' || robotFsmState === 'CONFIRMING') {
         playBackendAudio('GestureTerdeteksi.mp3');
       } else if (robotFsmState === 'UNLOCKED') {
@@ -182,6 +196,9 @@ export function PhotoSessionPage() {
     if (robotFsmState !== 'LOCKED') return;
     let count = 0;
     const id = setInterval(() => {
+      // Sesi sedang berakhir → hentikan re-prompt supaya tak ada suara sesi
+      // yang menyambung ke layar loading.
+      if (endingRef.current) return;
       // Tangan muncul → reset hitungan, tunggu diam lagi.
       if (handDetectedRef.current) {
         count = 0;
@@ -202,6 +219,62 @@ export function PhotoSessionPage() {
   const robotBusy =
     (robotConfig?.current_preset ?? 0) > 0 ||
     robotConfig?.auto_capture_active === true;
+  // Sesi dianggap "masih dipakai" bukan hanya saat robot menjepret, tapi juga
+  // saat user BARU unlock & sedang berinteraksi (FSM keluar dari LOCKED). Dengan
+  // begitu, kalau timer habis tepat saat user sedang unlock, sesi tidak berhenti
+  // mendadak — melainkan ditahan dan masuk ke logika grace (waktu minus) sampai
+  // hard-cap MAX_GRACE_SEC.
+  // Anggap robot "engaged" di SELURUH rangkaian capture — dari user unlock
+  // (UNLOCKING/UNLOCKED/CONFIRMING) sampai gerak preset (MOVING) & robot
+  // menjepret + simpan foto full-res (COOLDOWN, ±COOLDOWN_AFTER_CAPTURE). Dengan
+  // FSM menutup seluruh urutan, latch capture tidak bergantung pada timing flag
+  // Go-backend (auto_capture_active) dan lepas TEPAT saat robot balik LOCKED —
+  // jadi begitu capture beres, sesi bisa langsung selesai tanpa jeda panjang.
+  const robotEngaged =
+    robotBusy ||
+    robotFsmState === 'UNLOCKING' ||
+    robotFsmState === 'UNLOCKED' ||
+    robotFsmState === 'CONFIRMING' ||
+    robotFsmState === 'MOVING' ||
+    robotFsmState === 'COOLDOWN';
+
+  // Latch "capture sedang berlangsung": sekali robot engaged, tetap dianggap
+  // aktif sampai robot benar-benar idle STABIL (debounce CAPTURE_SETTLE_MS).
+  // Karena `robotEngaged` kini menutup SELURUH urutan capture lewat FSM
+  // (termasuk MOVING & COOLDOWN), debounce ini hanya perlu menjembatani skew
+  // antar-poll (fsm 150ms vs config 250ms) & celah transisi FSM sub-detik —
+  // BUKAN menunggu proses simpan foto. Jadi dibuat pendek supaya begitu robot
+  // balik LOCKED (capture betul-betul beres) sesi langsung selesai tanpa jeda.
+  const CAPTURE_SETTLE_MS = 800;
+  const [captureActive, setCaptureActive] = useState(false);
+  const captureReleaseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
+  useEffect(() => {
+    if (robotEngaged) {
+      if (captureReleaseTimerRef.current) {
+        clearTimeout(captureReleaseTimerRef.current);
+        captureReleaseTimerRef.current = null;
+      }
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- latch dari state robot eksternal; butuh efek.
+      setCaptureActive(true);
+    } else if (!captureReleaseTimerRef.current) {
+      // Robot idle → tunggu settle sebelum melepas latch (biar bukan cuma celah
+      // transisi FSM sesaat). Kalau engaged lagi sebelum timer habis, timer di-
+      // clear di cabang atas pada run berikutnya.
+      captureReleaseTimerRef.current = setTimeout(() => {
+        captureReleaseTimerRef.current = null;
+        setCaptureActive(false);
+      }, CAPTURE_SETTLE_MS);
+    }
+  }, [robotEngaged]);
+  useEffect(() => {
+    return () => {
+      if (captureReleaseTimerRef.current)
+        clearTimeout(captureReleaseTimerRef.current);
+    };
+  }, []);
+
   // Grace counter (detik) saat sessionTimeLeft sudah 0 tapi robot masih busy.
   // Dipakai untuk tampilkan timer negatif (-1, -2, ...) sebagai indikator
   // sesi diperpanjang sementara untuk merampungkan foto.
@@ -217,11 +290,17 @@ export function PhotoSessionPage() {
   // untuk state tombol (disabled + label "Menyelesaikan foto…").
   const endingNow = endRequested || sessionTimeLeft === 0;
 
-  // Grace tick: hanya jalan saat sessionTimeLeft sudah 0 DAN robot masih
-  // busy. Mulai dari 1 supaya tampilan langsung "-00:01" tanpa nampung
-  // "00:00" sesaat.
+  // Sinkronkan ref "sedang mengakhiri sesi" agar bisa dibaca di dalam effect
+  // audio (yang sengaja tidak memasukkan endingNow ke deps supaya tak re-run).
   useEffect(() => {
-    if (!endingNow || !robotBusy) {
+    endingRef.current = endingNow;
+  }, [endingNow]);
+
+  // Grace tick: hanya jalan saat sessionTimeLeft sudah 0 DAN robot masih
+  // dipakai (menjepret ATAU user sedang unlock). Mulai dari 1 supaya tampilan
+  // langsung "-00:01" tanpa nampung "00:00" sesaat.
+  useEffect(() => {
+    if (!endingNow || !captureActive) {
       // eslint-disable-next-line react-hooks/set-state-in-effect -- reset counter timer grace; tak ada cara derive tanpa efek karena ada interval.
       setGraceSeconds(0);
       return;
@@ -231,37 +310,23 @@ export function PhotoSessionPage() {
       setGraceSeconds((s) => s + 1);
     }, 1000);
     return () => clearInterval(id);
-  }, [endingNow, robotBusy]);
+  }, [endingNow, captureActive]);
 
   const graceExpired = graceSeconds >= MAX_GRACE_SEC;
-  const inGrace = endingNow && robotBusy && !graceExpired;
+  const inGrace = endingNow && captureActive && !graceExpired;
   // Timer yang ditampilkan: negatif saat overtime (menunggu foto selesai).
   const displayTimeLeft = inGrace ? -graceSeconds : sessionTimeLeft;
 
-  // Panel kanan (2 kartu + tombol "Selesai"): sembunyikan selama robot sibuk
-  // supaya preview kamera bersih saat foto difreeze; tampil lagi saat idle.
+  // Panel kanan (kartu Gesture Controls + tombol "Selesai"): sembunyikan selama
+  // robot sibuk supaya preview kamera bersih saat foto difreeze; tampil lagi
+  // saat idle.
   const showGuide = !robotBusy;
 
-  // Animasi popup panel kanan: keluar (robot sibuk) langsung slide+fade; masuk
-  // (idle lagi) ditunda ~450ms supaya kartu muncul setelah freeze foto settle.
-  // `guideMounted` = ada di DOM, `guideVisible` = state transisi.
-  const [guideMounted, setGuideMounted] = useState(showGuide);
-  const [guideVisible, setGuideVisible] = useState(showGuide);
-  useEffect(() => {
-    if (showGuide) {
-      const enterDelay = setTimeout(() => {
-        setGuideMounted(true);
-        // Frame berikutnya supaya kelas "masuk" ter-transisi dari state awal.
-        requestAnimationFrame(() => setGuideVisible(true));
-      }, 450);
-      return () => clearTimeout(enterDelay);
-    }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sinkron animasi enter/exit panduan dengan transisi 300ms; butuh efek.
-    setGuideVisible(false);
-    // Tunggu durasi transisi sebelum benar-benar unmount (hentikan polling).
-    const id = setTimeout(() => setGuideMounted(false), 300);
-    return () => clearTimeout(id);
-  }, [showGuide]);
+  // Liveview besar bergantian: DEFAULT tampil kamera deteksi gesture (robot),
+  // lalu PINDAH ke liveview Canon begitu preset dikonfirmasi (robot mulai
+  // bergerak/capture). CameraPreview selalu ter-mount di bawah supaya logika
+  // countdown/freeze tetap jalan; overlay deteksi gesture yang disembunyikan.
+  const showCanonPreview = robotBusy;
 
   useEffect(() => {
     if (!endingNow || !sessionId) return;
@@ -269,10 +334,17 @@ export function PhotoSessionPage() {
     // bisa false hanya karena query masih loading, dan kita lewatkan grace
     // check (mis. user refresh tepat saat sessionTimeLeft sudah 0).
     if (!robotConfigFetched) return;
-    // Tahan end sesi selama robot masih sibuk (sampai grace hard-cap).
-    if (robotBusy && !graceExpired) return;
+    // Tahan end sesi selama SATU capture masih berlangsung — dari user unlock,
+    // gerak preset, sampai robot beres capture (latch captureActive menahan lewat
+    // celah transisi FSM sesaat). Baru lepas setelah robot idle stabil, atau saat
+    // grace hard-cap tercapai.
+    if (captureActive && !graceExpired) return;
     if (endFiredRef.current) return;
     endFiredRef.current = true;
+
+    // Sesi benar-benar berakhir → hentikan semua narasi/cue sesi supaya tidak
+    // ada audio yang menyambung ke layar loading sebelum editor/hasil.
+    stopBackendAudio();
 
     sendSessionBroadcast({ type: 'SESSION_END', sessionId });
 
@@ -292,18 +364,21 @@ export function PhotoSessionPage() {
 
     setShowTransition(true);
 
+    // Tampilkan dulu loading screen "Preparing…" sejenak sebelum pindah ke
+    // editor/hasil — supaya transisi terasa mulus (bukan lompat mendadak). Jeda
+    // dibuat pendek: cukup untuk memperlihatkan loader, tanpa terasa lama.
+    // VIP: photo-editor dulu untuk pilih frame + foto, lalu session-end.
+    // Digital: langsung session-end (tampil QR untuk scan di HP).
     endTimeoutRef.current = setTimeout(() => {
-      // VIP: photo-editor dulu untuk pilih frame + foto, lalu session-end.
-      // Digital: langsung session-end (tampil QR untuk scan di HP).
       router.push(target);
-    }, 3000);
+    }, 1200);
   }, [
     endingNow,
     sessionId,
     session,
     router,
     clearSessionTimer,
-    robotBusy,
+    captureActive,
     graceExpired,
     robotConfigFetched,
   ]);
@@ -335,28 +410,13 @@ export function PhotoSessionPage() {
               onError={handleStreamError}
               onRetry={retryStream}
             />
-          </div>
-        </div>
-
-        {/* Kanan — 2 card: Gesture Detection + Gesture Controls. Keduanya
-            disembunyikan saat preset terdeteksi (fitur "hide" yang sudah ada),
-            dengan animasi popup: muncul slide dari kanan, hilang slide ke kanan. */}
-        {guideMounted && (
-          <div
-            className={cn(
-              'flex w-[26rem] 2xl:w-[30rem] shrink-0 flex-col gap-4 min-h-0',
-              'transition-all duration-300 ease-out will-change-transform',
-              guideVisible
-                ? 'translate-x-0 scale-100 opacity-100'
-                : 'translate-x-8 scale-95 opacity-0',
-            )}
-          >
-            {/* Gesture Detection */}
-            <div className="flex shrink-0 flex-col gap-3">
-              <h2 className="text-primary font-medium text-2xl tracking-[0.47px]">
-                Gesture Detection
-              </h2>
-              <div className="h-64">
+            {/* Overlay liveview deteksi gesture — menutup preview Canon SELAMA
+                belum ada preset terkonfirmasi. Begitu preset dikonfirmasi
+                (showCanonPreview true), overlay hilang → tampil liveview Canon
+                (CameraPreview di bawah) untuk countdown & hasil. Freeze hasil
+                (z-50, fixed) tetap menang di atas overlay ini. */}
+            {!showCanonPreview && (
+              <div className="absolute inset-0 z-30 rounded-[28px] overflow-hidden">
                 <GestureDetectionPanel
                   streamUrl={robotStreamUrl}
                   reachable={robotReachable}
@@ -365,61 +425,122 @@ export function PhotoSessionPage() {
                   presetPercent={robotPresetPercent}
                   gestureName={robotGestureName}
                   activePresetName={robotActivePreset}
-                  className={PREVIEW_FRAME}
+                  className="h-full rounded-[28px]"
                 />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Kanan — 2 kartu: Gesture Detection (bar + info preset, ringkas) di
+            atas, lalu Gesture Controls. Muncul/hilang INSTAN saat robot idle/
+            sibuk — tanpa animasi transisi (perpindahan cepat & langsung). */}
+        {showGuide && (
+          <div className="flex w-[26rem] 2xl:w-[30rem] shrink-0 flex-col gap-4 min-h-0">
+            {/* Gesture Detection — kartu ringkas: bar progress deteksi + info
+                preset/gesture. Tanpa label Locked/Unlocked (sudah tampil besar
+                di liveview). */}
+            <div className="flex shrink-0 flex-col gap-3">
+              <h2 className="text-primary font-medium text-2xl tracking-[0.47px]">
+                Gesture Detection
+              </h2>
+              <div
+                className={cn(
+                  'flex flex-col gap-3 bg-primary/75 px-5 py-4',
+                  PREVIEW_FRAME,
+                )}
+              >
+                {/* Label progress + persen */}
+                <div className="flex items-center justify-between">
+                  <span className="text-base font-medium text-white/80">
+                    {isLockedPhase ? 'Unlock progress' : 'Gesture progress'}
+                  </span>
+                  <span className="text-lg font-bold tabular-nums text-white">
+                    {Math.round(detectionPercent)}%
+                  </span>
+                </div>
+
+                {/* Bar progress deteksi — warna tema (blue-100) di atas track
+                    gelap supaya tetap jelas. */}
+                <div className="h-2.5 overflow-hidden rounded-full bg-white/15">
+                  <div
+                    className="h-full rounded-full bg-blue-100 transition-all duration-200 ease-linear"
+                    style={{
+                      width: `${Math.max(0, Math.min(100, detectionPercent))}%`,
+                    }}
+                  />
+                </div>
+
+                {/* Info preset / gesture terdeteksi */}
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-white/55">Detected</span>
+                  <span className="font-medium text-white">
+                    {robotActivePreset
+                      ? `Preset ${robotActivePreset}`
+                      : robotGestureName
+                        ? robotGestureName
+                        : '—'}
+                  </span>
+                </div>
               </div>
             </div>
 
-            {/* Gesture Controls */}
+            {/* Gesture Controls — mengisi sisa tinggi kolom. Sebelum unlock
+                hanya menampilkan gesture Preset 5 (telapak terbuka) sebagai
+                ajakan unlock; setelah unlock baru tampilkan semua preset. */}
             <div className="flex min-h-0 flex-1 flex-col gap-3">
               <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0">
                 Gesture Controls
               </h2>
               <div
                 className={cn(
-                  'flex min-h-0  flex-col gap-5 bg-primary/75 p-5',
+                  'flex min-h-0 flex-1 flex-col gap-4 bg-primary/75 p-5',
                   PREVIEW_FRAME,
                 )}
               >
-                {/* Grid preset mengisi ruang sisa & rownya di-tengah-kan secara
-                    vertikal (content-center) → tidak ada celah kosong yang
-                    nyangkut di satu sisi; jarak atas-bawah simetris. */}
-                <div className="grid grid-cols-5 2xl:grid-cols-4 content-center gap-2.5 2xl:gap-3">
-                  {PRESET_GESTURES.map((g, i) => (
-                    <div
-                      key={`${g.name}-${i}`}
-                      className="flex aspect-square flex-col items-center justify-center gap-1.5 2xl:gap-2 rounded-xl border border-white/10 bg-white/5 p-2 text-center"
-                    >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={g.icon ?? ''}
-                        alt={`Preset ${i + 1}`}
-                        className={cn(
-                          'h-8 w-8 2xl:h-12 2xl:w-12 object-contain',
-                          // Preset 6 (Move Left) — gambar diputar 100° ke kanan
-                          // supaya jempol menghadap ke atas.
-                          g.icon?.includes('MOVELEFT') && 'rotate-[100deg]',
-                        )}
-                      />
-                      <span className="text-[11px] 2xl:text-sm font-semibold text-white">
-                        Preset {i + 1}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                {isLockedPhase ? (
+                  /* Belum unlock → hanya gesture unlock (telapak terbuka) besar,
+                     tanpa label preset. */
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-10 text-center">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={PRESET_GESTURES[4]?.icon ?? '/finger/STOP.svg'}
+                      alt="Open palm to unlock"
+                      className="h-44 w-44 2xl:h-52 2xl:w-52 object-contain"
+                    />
+                    <p className="text-xl 2xl:text-2xl font-semibold text-white/85">
+                      Show this gesture to unlock
+                    </p>
+                  </div>
+                ) : (
+                  /* Sudah unlock → semua preset, 2 kolom × 5 baris, ikon lebih
+                     besar & rapi. */
+                  <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-5 gap-3 2xl:gap-4">
+                    {PRESET_GESTURES.map((g, i) => (
+                      <div
+                        key={`${g.name}-${i}`}
+                        className="flex min-h-0 flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 p-2 text-center"
+                      >
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={g.icon ?? ''}
+                          alt={`Preset ${i + 1}`}
+                          className={cn(
+                            'h-12 w-12 2xl:h-15 2xl:w-15 object-contain',
+                            // Preset 6 (Move Left) — gambar diputar 100° ke kanan
+                            // supaya jempol menghadap ke atas.
+                            g.icon?.includes('MOVELEFT') && 'rotate-[100deg]',
+                          )}
+                        />
+                        <span className="text-sm 2xl:text-base font-semibold text-white">
+                          Preset {i + 1}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
-                {/* Aturan keselamatan + tombol — dikelompokkan di bawah dengan
-                    jarak konsisten. */}
-                {/* <div className="space-y-1.5 border-t border-white/10 pt-4 text-[11px] leading-relaxed text-white/40">
-                  <p className="text-amber-300/70">
-                    ⚠ Stay at least 2 meters away from robot arm
-                  </p>
-                  <p>Keep gestures within detection area</p>
-                  <p>Avoid sudden movement near robot arm</p>
-                </div> */}
-
-                {/* Tombol "Selesai sekarang" — dipindah ke pojok kanan-bawah
-                    kartu ini supaya preview kamera bersih tanpa tombol melayang. */}
+                {/* Tombol "Selesai sekarang" — selalu tampil di bawah kartu. */}
                 <EndSessionButton
                   onEnd={() => setEndRequested(true)}
                   ending={endingNow}

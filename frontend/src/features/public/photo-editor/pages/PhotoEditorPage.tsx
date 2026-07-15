@@ -93,24 +93,70 @@ export default function PhotoEditorPage() {
   // Save composition mutation
   const { mutate: saveComposition, isPending: isSaving } = useSaveComposition();
 
-  // Panduan suara "pilih foto & frame" — main sekali saat editor siap. Effect
-  // dideklarasikan sebelum early-return loading (patuh Rules of Hooks).
+  // Pre-load semua gambar (thumbnail foto + gambar frame) SEBELUM editor
+  // ditampilkan. Tanpa ini, data query selesai lalu <img> di grid baru mulai
+  // fetch → foto & frame "pop-in" satu per satu. Dengan preload, load screen
+  // tetap tampil sampai semua aset ter-decode, lalu editor muncul utuh.
+  const [assetsReady, setAssetsReady] = useState(false);
+  const preloadFiredRef = useRef(false);
+  useEffect(() => {
+    if (preloadFiredRef.current) return;
+    if (!sessionId || photosLoading || framesLoading || !appConfig) return;
+    preloadFiredRef.current = true;
+
+    const urls = [
+      ...photos.map((p) => p.thumbnailUrl ?? p.url),
+      ...frames.map((f) => f.imageUrl),
+    ].filter((u): u is string => !!u);
+
+    if (urls.length === 0) {
+      setAssetsReady(true);
+      return;
+    }
+
+    let cancelled = false;
+    const preloadOne = (url: string) =>
+      new Promise<void>((resolve) => {
+        const img = new Image();
+        img.onload = () => resolve();
+        img.onerror = () => resolve(); // jangan blok reveal karena 1 aset gagal
+        img.src = url;
+      });
+
+    // Hard-cap 4s: kalau ada satu URL yang lambat/gagal senyap, editor tetap
+    // muncul dan tidak stuck selamanya di load screen.
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, 4000));
+    Promise.race([Promise.all(urls.map(preloadOne)), timeout]).then(() => {
+      if (!cancelled) setAssetsReady(true);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sessionId, photosLoading, framesLoading, appConfig, photos, frames]);
+
+  // Panduan suara "pilih foto & frame" — main sekali saat editor benar-benar
+  // tampil (aset siap). Effect dideklarasikan sebelum early-return loading
+  // (patuh Rules of Hooks).
   const introAudioFiredRef = useRef(false);
   useEffect(() => {
     if (introAudioFiredRef.current) return;
-    if (!sessionId || photosLoading || framesLoading || !appConfig) return;
+    if (!sessionId || !assetsReady) return;
     introAudioFiredRef.current = true;
     playBackendAudio('pilihFoto.mp3');
-  }, [sessionId, photosLoading, framesLoading, appConfig]);
+  }, [sessionId, assetsReady]);
 
-  // Loading state — juga handle case sessionId kosong, supaya halaman
-  // menampilkan spinner sembari router.replace('/package') jalan, BUKAN
-  // return null lebih awal yang akan melanggar Rules of Hooks (hooks di
-  // atas sudah dipanggil, conditional early return akan skip render saja).
-  if (!sessionId || photosLoading || framesLoading || !appConfig) {
+  // Loading state — tahan sampai data DAN aset gambar siap supaya editor
+  // muncul utuh (tidak pop-in). Juga handle case sessionId kosong, supaya
+  // halaman menampilkan spinner sembari router.replace('/package') jalan,
+  // BUKAN return null lebih awal yang melanggar Rules of Hooks.
+  if (!sessionId || photosLoading || framesLoading || !appConfig || !assetsReady) {
     return (
-      <div className="flex items-center justify-center min-h-full">
+      <div className="flex flex-col items-center justify-center min-h-full gap-4">
         <StatusAnimation status="waiting" className="w-24 h-24" />
+        <p className="text-primary font-medium text-lg animate-pulse">
+          Preparing your editor...
+        </p>
       </div>
     );
   }
@@ -183,11 +229,14 @@ export default function PhotoEditorPage() {
       }
 
       // Export canvas at high resolution (kept in-memory; user downloads from
-      // /download-photos page, not auto-saved to local directory)
+      // /download-photos page, not auto-saved to local directory).
+      // multiplier 4 + quality 0.97: strip di-render dari foto raw full-res DSLR,
+      // jadi resolusi kerja canvas dinaikkan supaya detail asli kamera terbawa
+      // ke hasil akhir & cetak (bukan lagi dibatasi ~1392px seperti multiplier 3).
       const exported = await exportComposition(fabricCanvasRef.current, {
         format: 'jpeg',
-        quality: 0.95,
-        multiplier: 3,
+        quality: 0.97,
+        multiplier: 4,
       });
 
       // Save composition to backend, then redirect to download page
@@ -246,6 +295,7 @@ export default function PhotoEditorPage() {
         duration={appConfig.photoEditorTimeoutSecs}
         onTimeUp={handleTimeUp}
         storageKey={sessionId ? `photo-editor:${sessionId}` : null}
+        urgentWhenLow
       />
 
       {/* Header */}

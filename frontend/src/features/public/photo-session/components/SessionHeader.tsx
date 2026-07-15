@@ -1,12 +1,18 @@
 import { Camera } from 'lucide-react';
 import { formatTimeMMSS } from '@/lib/formatTime';
+import { cn } from '@/lib/utils';
 
 interface SessionHeaderProps {
   sessionTimeLeft?: number;
 }
 
+// Ambang "waktu menipis": mulai 15 detik terakhir dan TERUS berlaku saat timer
+// sudah minus (overtime menunggu robot merampungkan capture).
+const URGENT_THRESHOLD_SEC = 15;
+
 export function SessionHeader({ sessionTimeLeft = 60 }: SessionHeaderProps) {
   const formattedTime = formatTimeMMSS(sessionTimeLeft);
+  const isUrgent = sessionTimeLeft <= URGENT_THRESHOLD_SEC;
 
   return (
     <div className="flex items-center justify-between bg-primary/80 backdrop-blur-md border border-white/10 px-5 py-3 rounded-2xl shadow-lg">
@@ -20,8 +26,16 @@ export function SessionHeader({ sessionTimeLeft = 60 }: SessionHeaderProps) {
         </span>
       </div>
 
-      {/* Right: timer */}
-      <div className="text-white text-[36px] tracking-[0.38px] leading-5.75 font-normal">
+      {/* Right: timer — 15 detik terakhir (dan seterusnya saat minus/overtime)
+          berubah merah + denyut membesar sedikit, seperti tombol "Tap to Start". */}
+      <div
+        className={cn(
+          'text-[36px] tracking-[0.38px] leading-5.75 origin-center transition-colors duration-300',
+          isUrgent
+            ? 'text-[#ff5252] font-semibold animate-timer-urgent'
+            : 'text-white font-normal',
+        )}
+      >
         {formattedTime}
       </div>
     </div>

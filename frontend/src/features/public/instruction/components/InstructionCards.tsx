@@ -2,14 +2,7 @@ import { useState, useEffect } from 'react';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import type { InstructionStep } from '../data/steps';
-import {
-  Clock4Icon,
-  Shield,
-  ThumbsDown,
-  ThumbsUp,
-  Camera,
-  Hand,
-} from 'lucide-react';
+import { ThumbsDown, ThumbsUp, Camera, Hand } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface CardProps {
@@ -37,14 +30,13 @@ export function GetReadyCard({
 }: GetReadyCardProps) {
   const minutes = sessionDurationMinutes ?? step.sessionDuration;
   return (
-    <GlassCard maxWidth="max-w-[920px]" className="px-4 pt-9 pb-14.5">
+    <GlassCard maxWidth="max-w-[920px]" className="px-12 pt-10 pb-12">
       <div className="flex flex-col items-center">
-        <Clock4Icon size={60} className=" text-white mb-4" />
-        <h2 className="text-[42px] font-bold text-white leading-12 mb-8">
+        <h2 className="text-[46px] font-bold text-white leading-tight mb-9">
           {step.heading}
         </h2>
 
-        <div className="grid grid-cols-2 gap-8 mb-12 w-full max-w-4xl">
+        <div className="grid grid-cols-2 gap-6 mb-10 w-full">
           {step.activities?.map((activity, i) => {
             const isLastActivity = i === 3;
             const displayLabel = isLastActivity
@@ -55,20 +47,20 @@ export function GetReadyCard({
               <GlassCard
                 key={activity.label}
                 variant="secondary"
-                className="flex h-40 w-full flex-col items-center justify-center p-6 text-center rounded-xl border"
+                className="flex h-44 w-full flex-col items-center justify-center gap-4 p-6 text-center rounded-xl border"
               >
-                <span className="mb-4 flex h-8 w-8 items-center justify-center rounded-full bg-[#F9F7F7]/15 text-[26px] font-bold text-white">
+                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F9F7F7]/15 text-[22px] font-bold text-white">
                   {i + 1}
                 </span>
                 {isLastActivity ? (
-                  <span className="font-extrabold text-[32px] text-white">
-                    {minutes} {minutes === 1 ? 'minute' : 'minutes'}{' '}
-                    <span className="text-[28px] font-medium">
-                      {step.subheading}
-                    </span>
+                  <span className="text-[32px] font-medium text-white">
+                    <span className="font-semibold">
+                      {minutes} {minutes === 1 ? 'minute' : 'minutes'}
+                    </span>{' '}
+                    {step.subheading}
                   </span>
                 ) : (
-                  <span className="text-[28px] font-medium text-white">
+                  <span className="text-[32px] font-medium text-white">
                     {displayLabel}
                   </span>
                 )}
@@ -100,32 +92,31 @@ export function SafetyRulesCard({
   buttonReady = true,
 }: CardProps) {
   return (
-    <GlassCard maxWidth="max-w-[1120px]" className="py-9 px-4 overflow-hidden">
+    <GlassCard maxWidth="max-w-[1120px]" className="py-9 px-10 overflow-hidden">
       <div className="flex flex-col items-center">
-        <Shield size={60} className="text-white" />
-        <h2 className="text-[28px] font-bold text-white leading-12 mb-6">
+        <h2 className="text-[46px] font-bold text-white leading-tight mb-8">
           {step.heading}
         </h2>
 
-        <div className="grid grid-cols-2 gap-12 lg:gap-14 items-start">
+        <div className="grid grid-cols-2 gap-12 lg:gap-14 items-stretch w-full">
           {/* Do column */}
           <GlassCard
             variant="secondary"
-            className="px-5 py-5 w-full lg:h-88 bg-[#3F72AF]/45"
+            className="p-6 w-full bg-[#3F72AF]/45"
           >
-            <div className="flex items-center gap-2 mb-4">
-              <ThumbsUp size={24} className="text-blue-100 shrink-0" />
-              <span className="text-sm lg:text-[24px] font-bold leading-7 text-white">
+            <div className="flex items-center gap-2 mb-5">
+              <ThumbsUp size={26} className="text-blue-100 shrink-0" />
+              <span className="text-[26px] font-bold leading-7 text-white">
                 Do
               </span>
             </div>
-            <ul className="space-y-3">
+            <ul className="space-y-4">
               {step.doRules?.map((rule, idx) => (
                 <li
                   key={`do-${idx}`}
-                  className="text-white text-xl font-medium lg:text-[32px] lg:leading-8 flex items-start gap-4"
+                  className="text-white text-[32px] font-medium leading-9 flex items-start gap-4"
                 >
-                  <span className="mt-0.5">•</span>
+                  <span className="mt-1">•</span>
                   {rule.text}
                 </li>
               ))}
@@ -135,21 +126,21 @@ export function SafetyRulesCard({
           {/* Don't column */}
           <GlassCard
             variant="secondary"
-            className="px-5 py-5 w-full lg:h-88 bg-[#D62F2F]/35"
+            className="p-6 w-full bg-[#D62F2F]/35"
           >
-            <div className="flex items-center gap-2 mb-4">
-              <ThumbsDown size={24} className="text-red-400 shrink-0" />
-              <span className="text-sm lg:text-[24px] font-bold leading-7 text-red-400">
+            <div className="flex items-center gap-2 mb-5">
+              <ThumbsDown size={26} className="text-red-400 shrink-0" />
+              <span className="text-[26px] font-bold leading-7 text-red-400">
                 Don&apos;t
               </span>
             </div>
-            <ul className="space-y-3">
+            <ul className="space-y-4">
               {step.dontRules?.map((rule, idx) => (
                 <li
                   key={`dont-${idx}`}
-                  className="text-white text-xl font-medium lg:text-[32px] lg:leading-8 flex items-start gap-4"
+                  className="text-white text-[32px] font-medium leading-9 flex items-start gap-4"
                 >
-                  <span className="mt-0.5 text-red-400">•</span>
+                  <span className="mt-1 text-red-400">•</span>
                   {rule.text}
                 </li>
               ))}
@@ -158,9 +149,9 @@ export function SafetyRulesCard({
         </div>
 
         {step.guideline && (
-          <div className="mt-5 max-w-255 flex items-center gap-4 rounded-xl border border-amber-300/40 bg-amber-300/10 px-6 py-4">
+          <div className="mt-6 w-full flex items-center gap-4 rounded-xl border border-amber-300/40 bg-amber-300/10 px-6 py-4">
             <Hand size={30} className="text-amber-300 shrink-0" />
-            <p className="text-amber-100 text-xl font-medium leading-7 lg:text-[26px] lg:leading-9">
+            <p className="text-amber-100 text-[28px] font-medium leading-9">
               {step.guideline}
             </p>
           </div>
@@ -196,7 +187,7 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
         }
         return nextIndex;
       });
-    }, 2500);
+    }, 1400);
     return () => clearInterval(interval);
   }, [step.gestures]);
 
@@ -253,7 +244,7 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
             <div className="w-full flex justify-center items-center flex-1 relative min-h-35">
               <div className="absolute w-full h-px bg-white/20" />
               <div
-                className="relative z-10 w-16 h-12 bg-blue-100 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-[1200ms] ease-in-out"
+                className="relative z-10 w-16 h-12 bg-blue-100 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-[800ms] ease-in-out"
                 style={{ transform: getPresetTransform() }}
               >
                 <Camera className="text-primary" size={24} />

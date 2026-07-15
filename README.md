@@ -875,7 +875,7 @@ Canon-only via digiCamControl. Saat startup ([services/camera.go:CheckCamera](ba
 
 ### Mirror behavior
 
-Backend `flipJPEGHorizontal` mirror JPEG liveview sebelum kirim ke frontend, jadi user lihat preview mirrored (familiar selfie). Hasil foto Canon disimpan apa adanya (natural orientation, tidak di-flip).
+Preview liveview di-mirror di sisi frontend (CSS `scaleX(-1)` pada canvas preview), jadi user lihat preview mirrored (familiar selfie) tanpa backend perlu decode+re-encode JPEG tiap frame. Hasil foto Canon disimpan apa adanya (natural orientation, tidak di-flip).
 
 ---
 

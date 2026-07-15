@@ -113,6 +113,28 @@ export function playBackendAudio(filename: string, onEnded?: () => void): void {
 }
 
 /**
+ * Hentikan SEMUA audio narasi/cue yang sedang berbunyi dan reset ke awal.
+ * Dipakai saat sesi foto berakhir supaya tidak ada suara sesi (inisiasi, cue
+ * gesture, countdown, dll.) yang menyambung ke layar loading / halaman berikut.
+ * Menyapu seluruh cache (bukan hanya `currentVoice`) agar clip apa pun yang
+ * mungkin masih diputar ikut berhenti.
+ */
+export function stopBackendAudio(): void {
+  if (typeof window === 'undefined') return;
+  for (const audio of audioCache.values()) {
+    try {
+      if (!audio.paused) {
+        audio.pause();
+        audio.currentTime = 0;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  currentVoice = null;
+}
+
+/**
  * Jalankan `cb` saat narasi yang sedang berbunyi selesai (atau langsung kalau
  * senyap); return fungsi cleanup untuk membatalkan (mis. saat unmount).
  *

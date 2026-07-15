@@ -62,9 +62,6 @@ class GestureDetector:
         if self._thread:
             self._thread.join(timeout=3)
 
-    def is_running(self):
-        return self._running
-
     def get_latest_frame(self):
         with self._lock:
             return self._latest_frame.copy() if self._latest_frame is not None else None

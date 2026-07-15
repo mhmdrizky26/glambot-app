@@ -30,13 +30,13 @@ export const instructionSteps: InstructionStep[] = [
     id: 1,
     type: 'get-ready',
     heading: 'Get Ready!',
-    subheading: 'Session',
+    subheading: 'session',
     sessionDuration: 5,
     activities: [
       { label: 'Use gestures' },
-      { label: 'Strike a pose' },
       { label: 'Camera moves' },
-      { label: 'Session' },
+      { label: 'Strike a pose' },
+      { label: 'session' },
     ],
   },
   {
@@ -56,7 +56,7 @@ export const instructionSteps: InstructionStep[] = [
       { text: 'No food or drinks nearby' },
     ],
     guideline:
-      'Only one person’s hand should be used at a time — multiple hands or gestures will confuse the camera detection.',
+      'Only one person’s hand should be used at a time',
   },
   {
     id: 3,
