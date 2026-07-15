@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { apiClient, resolveBaseUrl } from '@/lib/api-client';
 import { playBackendAudio } from '@/lib/audio';
 import { useRobotConfig } from '../api/getRobotConfig';
 
@@ -14,6 +13,8 @@ const COUNTDOWN_AUDIO: Record<number, string> = {
 interface CameraPreviewProps {
   frameUrl?: string | null;
   streamUrl?: string | null;
+  // Masih diterima dari parent untuk kompatibilitas; freeze kini pakai snapshot
+  // canvas instan sehingga sessionId tidak lagi dipakai di komponen ini.
   sessionId?: string;
   onError?: () => void;
   onRetry?: () => void;
@@ -25,7 +26,6 @@ interface CameraPreviewProps {
 export function CameraPreview({
   frameUrl,
   streamUrl,
-  sessionId,
   onError,
   onRetry,
   hasError = false,
@@ -43,38 +43,37 @@ export function CameraPreview({
   const wasActiveRef = useRef(false);
   const captureTriggeredRef = useRef(false);
   const prevPresetRef = useRef(0);
-  // Set false di cleanup. Async callback (showLatestCanonCapture) cek ref ini
-  // sebelum setState supaya tidak fire di komponen yang sudah unmount.
+  // Set false di cleanup. Callback timer freeze cek ref ini sebelum setState
+  // supaya tidak fire di komponen yang sudah unmount.
   const isMountedRef = useRef(true);
 
   const [countdown, setCountdown] = useState<number | null>(null);
   const [captureFired, setCaptureFired] = useState(false);
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
   const capturedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const capturedBlobUrlRef = useRef<string | null>(null);
 
   const displayUrl = frameUrl || streamUrl;
   const hasContent = !!displayUrl;
 
-  // Show captured photo modal for 3s, then auto-hide.
-  // Tracks blob URLs separately so we can revoke after hiding.
-  const showCapturedModal = useCallback((url: string, isBlobUrl: boolean) => {
-    if (capturedTimerRef.current) clearTimeout(capturedTimerRef.current);
-    if (capturedBlobUrlRef.current && capturedBlobUrlRef.current !== url) {
-      URL.revokeObjectURL(capturedBlobUrlRef.current);
-      capturedBlobUrlRef.current = null;
+  // Snapshot frame preview yang SEDANG tampil di canvas menjadi data URL.
+  // Dipakai untuk overlay freeze secara INSTAN saat shutter — tidak menunggu
+  // file full-res DSLR ditransfer dari backend (yang bisa 1-3 detik), jadi
+  // tidak ada jeda. Foto full-res asli tetap disimpan backend & dipakai di
+  // halaman editor. Canvas tidak tainted karena frame di-load
+  // crossOrigin='anonymous' dan backend mengirim header CORS (middleware.CORS),
+  // tapi tetap dijaga try/catch: kalau toDataURL gagal → fallback flash putih.
+  const captureCanvasSnapshot = useCallback((): string | null => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    try {
+      return canvas.toDataURL('image/jpeg', 0.9);
+    } catch (err) {
+      console.warn(
+        '[CameraPreview] snapshot freeze gagal (canvas tainted?):',
+        err,
+      );
+      return null;
     }
-    setCapturedUrl(url);
-    if (isBlobUrl) capturedBlobUrlRef.current = url;
-
-    capturedTimerRef.current = setTimeout(() => {
-      setCapturedUrl(null);
-      setCaptureFired(false);
-      if (capturedBlobUrlRef.current) {
-        URL.revokeObjectURL(capturedBlobUrlRef.current);
-        capturedBlobUrlRef.current = null;
-      }
-    }, 3000);
   }, []);
 
   // Cleanup on unmount
@@ -82,58 +81,8 @@ export function CameraPreview({
     return () => {
       isMountedRef.current = false;
       if (capturedTimerRef.current) clearTimeout(capturedTimerRef.current);
-      if (capturedBlobUrlRef.current) URL.revokeObjectURL(capturedBlobUrlRef.current);
     };
   }, []);
-
-  // Canon path: setelah capture, fetch foto terbaru dari backend & tampilkan di
-  // modal. Backend nulis ke DB via goroutine, jadi retry backoff (~2.2s total)
-  // sampai muncul. isMountedRef guard: user bisa navigate di tengah loop.
-  const showLatestCanonCapture = useCallback(async () => {
-    if (!sessionId) return;
-    const triggeredAt = Date.now();
-    // Attempts at 200, 400, 700, 1100, 1600, 2200 ms — total ~2.2s budget.
-    const delays = [200, 200, 300, 400, 500, 600];
-    for (let i = 0; i < delays.length; i++) {
-      await new Promise((r) => setTimeout(r, delays[i]));
-      if (!isMountedRef.current) return;
-      try {
-        const res = await apiClient.get<
-          Array<{ url?: string; created_at?: string }>
-        >(`/api/photo/session/${sessionId}`);
-        if (!isMountedRef.current) return;
-        const photos = res.data ?? [];
-        if (photos.length === 0) continue;
-        const sorted = [...photos].sort((a, b) => {
-          const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
-          const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
-          return tb - ta;
-        });
-        const latest = sorted[0];
-        const latestTs = latest?.created_at
-          ? new Date(latest.created_at).getTime()
-          : 0;
-        // Only accept photos created at/after this capture trigger,
-        // otherwise we might surface a leftover from the previous shot.
-        // Allow a 1s clock-skew tolerance.
-        if (!latest?.url || latestTs < triggeredAt - 1000) continue;
-        const url = latest.url.startsWith('http')
-          ? latest.url
-          : `${resolveBaseUrl()}${latest.url}`;
-        showCapturedModal(url, false);
-        return;
-      } catch (err) {
-        if (!isMountedRef.current) return;
-        console.error(
-          '[CameraPreview] Failed to fetch latest canon capture (attempt ' +
-            (i + 1) +
-            '):',
-          err,
-        );
-      }
-    }
-    console.warn('[CameraPreview] Canon capture not visible after retries');
-  }, [sessionId, showCapturedModal]);
 
   // Robot state — di-share via React Query hook (single underlying poll
   // dengan PhotoSessionPage). Effect di bawah ini react ke perubahan state,
@@ -176,26 +125,25 @@ export function CameraPreview({
     if (wasActiveRef.current && !captureTriggeredRef.current) {
       // Transition active → inactive = countdown just finished.
       captureTriggeredRef.current = true;
-      // Langsung tampilkan overlay freeze 3 detik; foto dari backend
-      // akan mengisi overlay saat selesai di-fetch via showLatestCanonCapture.
+      // Freeze INSTAN: snapshot frame preview terakhir (bukan file full-res),
+      // jadi tidak ada jeda saat shutter. Kalau snapshot gagal (null) overlay
+      // memakai flash putih sebagai fallback. Foto full-res asli tetap ditangani
+      // backend & dipakai di halaman editor — freeze ini murni visual sesaat.
+      const snapshot = captureCanvasSnapshot();
       setCaptureFired(true);
+      setCapturedUrl(snapshot);
       if (capturedTimerRef.current) clearTimeout(capturedTimerRef.current);
       capturedTimerRef.current = setTimeout(() => {
         if (isMountedRef.current) {
           setCaptureFired(false);
           setCapturedUrl(null);
-          if (capturedBlobUrlRef.current) {
-            URL.revokeObjectURL(capturedBlobUrlRef.current);
-            capturedBlobUrlRef.current = null;
-          }
         }
       }, 3000);
-      showLatestCanonCapture();
     }
 
     wasActiveRef.current = false;
     playedRef.current.clear();
-  }, [active, remainingMs, showLatestCanonCapture]);
+  }, [active, remainingMs, captureCanvasSnapshot]);
 
   // Canon mode: polling JPEG frames (backend already returns mirrored)
   useEffect(() => {
@@ -278,7 +226,10 @@ export function CameraPreview({
       ) : (
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 w-full h-full object-cover"
+          // Mirror preview (selfie-familiar) via CSS, bukan lagi flip JPEG di
+          // backend per frame — hemat decode+re-encode tiap frame di server.
+          // Hasil foto Canon tetap natural (tidak di-mirror), sama seperti dulu.
+          className="absolute inset-0 w-full h-full object-cover -scale-x-100"
           style={{ display: 'block' }}
         />
       )}
@@ -319,7 +270,10 @@ export function CameraPreview({
               <img
                 src={capturedUrl}
                 alt=""
-                className="relative w-screen h-screen object-contain drop-shadow-2xl"
+                // Snapshot canvas = frame mentah (belum di-mirror). Preview
+                // tampil di-mirror via CSS, jadi freeze ikut di-mirror supaya
+                // konsisten dengan yang barusan dilihat user (selfie-familiar).
+                className="relative w-screen h-screen object-contain drop-shadow-2xl -scale-x-100"
               />
             </>
           ) : (

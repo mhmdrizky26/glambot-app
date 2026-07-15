@@ -63,6 +63,8 @@ def create_app(runtime):
         preset_name = (str(runtime.selected_preset)
                        if isinstance(runtime.selected_preset, int) else None)
 
+        progress = runtime.recognition_progress()
+
         return jsonify({
             "session_active":       runtime.session_active,
             "hand_detected":        hand,
@@ -72,8 +74,8 @@ def create_app(runtime):
             "method":               d.get("method") or ("mediapipe" if hand else "idle"),
             "tracking":             runtime.tracking_active,
             "fsm_state":            runtime.fsm_state,
-            "status":               runtime.recognition_progress()["label"],
-            "recognition_progress": runtime.recognition_progress(),
+            "status":               progress["label"],
+            "recognition_progress": progress,
             "robot_preset":         preset_name,
             "robot": {
                 "connected":      runtime.robot.connected if runtime.robot else False,

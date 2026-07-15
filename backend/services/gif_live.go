@@ -27,10 +27,10 @@ import (
 // hasil final, lalu loop.
 
 const (
-	liveGIFWidth      = 320
-	liveGIFAnimTicks  = 25 // tick yang menampilkan burst overlay
-	liveGIFHoldTicks  = 5  // tick terakhir tanpa overlay (settle ke final)
-	liveGIFFrameDelay = 10 // 100ths sec → 0.1s per frame ≈ 10 fps
+	liveGIFWidth      = 448 // dinaikkan dari 320 → strip live lebih tajam
+	liveGIFAnimTicks  = 25  // tick yang menampilkan burst overlay
+	liveGIFHoldTicks  = 5   // tick terakhir tanpa overlay (settle ke final)
+	liveGIFFrameDelay = 10  // 100ths sec → 0.1s per frame ≈ 10 fps
 )
 
 // LiveStripPhoto data per-slot untuk generator GIF live.
@@ -82,8 +82,11 @@ func ParseSlotsJSON(raw []byte) ([]LiveStripSlot, error) {
 
 // LiveStripOutputPath path file GIF #2.
 //
-// Filename versioned (v12) supaya cached GIF dari versi compositing lama
-// otomatis di-skip dan regenerate. v12: slot yang fotonya TIDAK punya burst
+// Filename versioned (v13) supaya cached GIF dari versi compositing lama
+// otomatis di-skip dan regenerate. v13: pemetaan slot→foto kini mengikuti
+// assignment asli per-slot (sessions.slot_photo_ids) — foto tidak lagi geser
+// slot & foto yang dipakai di beberapa slot tampil benar di tiap slotnya; juga
+// resolusi dinaikkan (448 wide). v12: slot yang fotonya TIDAK punya burst
 // sendiri tidak lagi ditambal burst foto lain (fallback pool dihapus) — dulu
 // tambalan itu menampilkan konten slot lain sehingga live image terlihat
 // "tertukar slot" dibanding hasil akhir. Sekarang slot tanpa burst diam
@@ -105,7 +108,7 @@ func ParseSlotsJSON(raw []byte) ([]LiveStripSlot, error) {
 func LiveStripOutputPath(sessionID string) string {
 	return filepath.Join(
 		config.App.StoragePath,
-		"sessions", sessionID, "animation-live-v12.gif",
+		"sessions", sessionID, "animation-live-v13.gif",
 	)
 }
 

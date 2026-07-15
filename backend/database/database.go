@@ -48,10 +48,6 @@ func (tx *TxWrapper) Exec(query string, args ...interface{}) (sql.Result, error)
 	return tx.inner.Exec(rebindPostgres(query), args...)
 }
 
-func (tx *TxWrapper) Query(query string, args ...interface{}) (*sql.Rows, error) {
-	return tx.inner.Query(rebindPostgres(query), args...)
-}
-
 func (tx *TxWrapper) QueryRow(query string, args ...interface{}) *sql.Row {
 	return tx.inner.QueryRow(rebindPostgres(query), args...)
 }
@@ -102,6 +98,16 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		// bisa menerapkan filter yang sama ke burst frame (frontend bake-in filter
 		// ke hasil akhir, tapi burst mentah perlu difilter ulang server-side).
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS strip_filter TEXT NOT NULL DEFAULT 'original'`,
+		// Per-slot assignment saat compose: JSON array photoId URUT SESUAI SLOT
+		// (boleh duplikat kalau 1 foto dipakai di beberapa slot). Sumber kebenaran
+		// pemetaan slot→foto untuk generator GIF live — model photos.selected/
+		// position tidak bisa mewakili 1 foto di N slot (1 baris per foto).
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS slot_photo_ids TEXT NOT NULL DEFAULT ''`,
+		// Google Drive: tandai foto raw yang SUDAH diunggah ke Drive. Upload kini
+		// per-capture (streaming) supaya file full-res tidak menumpuk di akhir;
+		// kolom ini mencegah dobel-upload & memungkinkan finalize meng-upload
+		// hanya yang belum terkirim (mis. jika upload per-capture sempat gagal).
+		`ALTER TABLE photos ADD COLUMN IF NOT EXISTS drive_uploaded BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qris_url TEXT`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qris_raw_string TEXT`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ`,

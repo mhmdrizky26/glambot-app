@@ -1,6 +1,19 @@
 import { fabric } from 'fabric';
 import { Image as FabricImage } from 'fabric/fabric-impl';
 
+// Foto raw dari DSLR full-res (sisi panjang ±6000px) JAUH lebih besar dari
+// default fabric.textureSize (2048). Saat filter di-apply lewat backend WebGL,
+// sumber yang melebihi textureSize hanya dirender bagian pojok kiri-atasnya →
+// foto tampak "kepotong" di dalam slot. Naikkan ke 8192 supaya menampung sisi
+// panjang DSLR utuh. Kalau GPU tidak mendukung ukuran ini, fabric otomatis
+// fallback ke backend Canvas2D (tanpa batas ukuran tekstur), jadi hasil tetap
+// tidak kepotong. WAJIB di-set SEBELUM applyFilters pertama (backend filter
+// dibuat lazy memakai nilai ini), jadi ditaruh di module-load — modul ini hanya
+// diimpor komponen 'use client' sehingga eksekusi terjadi di browser.
+if (typeof window !== 'undefined' && fabric.textureSize < 8192) {
+  fabric.textureSize = 8192;
+}
+
 // Definisi KANONIK FilterType. Modul lain (mis. PhotoEditorPage) me-re-export
 // dari sini agar tidak ada dua definisi yang bisa drift.
 export type FilterType =

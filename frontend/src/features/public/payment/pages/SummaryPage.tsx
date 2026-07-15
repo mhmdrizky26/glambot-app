@@ -88,7 +88,13 @@ export default function SummaryPage() {
     <main className="flex flex-col items-center justify-center min-h-full px-4">
       {appConfig && <Timer duration={appConfig.summaryTimeoutSecs} />}
       <BackButton onClick={() => router.push('/package')} />
-      <GlassCard className="px-13.5 pb-[56.59px] pt-[54.92px] max-w-174.75">
+      {/* Lebar dipersempit (~560px, dari ~699px) supaya isi tidak terlihat
+          terlalu kosong di tengah. Tombol Proceed dibuat w-full agar ikut
+          menyesuaikan lebar kartu. */}
+      <GlassCard
+        maxWidth="max-w-[560px]"
+        className="px-13.5 pb-[56.59px] pt-[54.92px]"
+      >
         {/* Title */}
         <h1 className="text-[48.46px] leading-[72.7px] font-bold text-white text-center mb-10.75">
           Order Summary
@@ -110,7 +116,7 @@ export default function SummaryPage() {
           {extraPrintCost > 0 && (
             <div className="flex justify-between items-center">
               <span className="text-blue-100/50 text-[22.8px] leading-8.5">
-                Extra prints
+                Print
               </span>
               <span className="text-white text-[22.8px] leading-8.5">
                 Rp {formatRupiah(extraPrintCost)}
@@ -187,7 +193,7 @@ export default function SummaryPage() {
         <Button
           variant="outline"
           onClick={handleProceed}
-          className="w-[592.29px] py-[26.58px] px-[58.48px] rounded-[45.9px] text-[26.45px] leading-[39.7px] font-medium"
+          className="w-full py-[26.58px] px-[58.48px] rounded-[45.9px] text-[26.45px] leading-[39.7px] font-medium"
         >
           Proceed to Payment
         </Button>

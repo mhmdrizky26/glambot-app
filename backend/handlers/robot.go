@@ -1,13 +1,9 @@
 package handlers
 
 import (
-	"bytes"
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"image"
-	"image/draw"
-	"image/jpeg"
 	"log"
 	"net/http"
 	"path/filepath"
@@ -23,45 +19,9 @@ import (
 
 const presetCaptureDelay = 3 * time.Second
 
-func flipJPEGHorizontal(frame []byte) []byte {
-	img, _, err := image.Decode(bytes.NewReader(frame))
-	if err != nil {
-		return frame
-	}
-
-	b := img.Bounds()
-	w := b.Dx()
-	h := b.Dy()
-	if w <= 1 || h <= 1 {
-		return frame
-	}
-
-	// Decode ke RGBA sekali, lalu reverse setiap baris via pixel-swap di
-	// buffer Pix langsung. Lebih cepat dibanding loop image.Set per pixel:
-	// hot path MJPEG stream jalan ~10 fps per client, jadi setiap microsec
-	// counts. 4-byte pixel swap = move RGBA bytes pairwise.
-	dst := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.Draw(dst, dst.Bounds(), img, b.Min, draw.Src)
-
-	stride := dst.Stride
-	for y := 0; y < h; y++ {
-		row := dst.Pix[y*stride : y*stride+w*4]
-		for x := 0; x < w/2; x++ {
-			i := x * 4
-			j := (w - 1 - x) * 4
-			row[i], row[j] = row[j], row[i]
-			row[i+1], row[j+1] = row[j+1], row[i+1]
-			row[i+2], row[j+2] = row[j+2], row[i+2]
-			row[i+3], row[j+3] = row[j+3], row[i+3]
-		}
-	}
-
-	var out bytes.Buffer
-	if err := jpeg.Encode(&out, dst, &jpeg.Options{Quality: 85}); err != nil {
-		return frame
-	}
-	return out.Bytes()
-}
+// Catatan mirror: preview di-mirror di sisi frontend (CSS scaleX(-1)), bukan lagi
+// flip JPEG per frame di server — menghindari decode+re-encode tiap frame di hot
+// path liveview. Frame yang dikirim = natural apa adanya dari kamera.
 
 // GET /api/robot/status
 // Cek apakah kamera terhubung
@@ -149,6 +109,10 @@ func recordCanonCapture(sessionID string) (*models.Photo, error) {
 		return nil, fmt.Errorf("Gagal simpan metadata foto")
 	}
 
+	// Streaming ke Drive: kirim foto full-res ini segera (non-blocking) supaya
+	// tidak menumpuk jadi satu batch besar di akhir sesi. filePath = path absolut.
+	EnqueueRawPhotoUpload(sessionID, photoID, filePath)
+
 	return &models.Photo{
 		ID:        photoID,
 		SessionID: sessionID,
@@ -169,8 +133,6 @@ func GetLiveView(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusServiceUnavailable, "Live view tidak tersedia")
 		return
 	}
-
-	frame = flipJPEGHorizontal(frame)
 
 	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
@@ -197,8 +159,6 @@ func StreamLiveView(w http.ResponseWriter, r *http.Request) {
 				time.Sleep(500 * time.Millisecond)
 				continue
 			}
-
-			frame = flipJPEGHorizontal(frame)
 
 			fmt.Fprintf(w, "--frame\r\nContent-Type: image/jpeg\r\n\r\n")
 			w.Write(frame)

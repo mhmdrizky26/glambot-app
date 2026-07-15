@@ -13,6 +13,7 @@ import { GIFPreview } from '@/features/public/photo-download/components/GIFPrevi
 import { useFramedPhotos } from '@/features/public/photo-editor/api/getPhotos';
 import { useAppConfig } from '@/shared/api/config';
 import { playBackendAudio, playBackendAudioAfterCurrent } from '@/lib/audio';
+import { toAbsoluteUrl } from '@/lib/api-client';
 
 interface GetPhotosScreenProps {
   onComplete: () => void;
@@ -82,7 +83,62 @@ export function GetPhotosScreen({
   // langsung membuka folder Drive, bukan QR kosong/menyusul.
   const driveMaybeActive = drive === undefined || drive.enabled === true;
   const waitingForDrive = driveMaybeActive && !driveReady && !driveTimedOut;
-  const isLoading = !minSplashDone || waitingForDrive;
+
+  // Pre-load preview strip (GIF live / framed) SEBELUM QR hasil tampil, supaya
+  // saat halaman muncul preview sudah siap — bukan spinner di dalam kartu.
+  // GIF live di-generate backend (pre-gen goroutine saat compose); preload ini
+  // memicu/menunggu generasi selesai sehingga onload = GIF benar-benar siap.
+  const [stripReady, setStripReady] = useState(false);
+  const stripPreloadRef = useRef(false);
+  // Jaring pengaman lepas dari state query: kalau availability/framed tak
+  // kunjung resolve (mis. error), jangan biarkan loading menggantung selamanya.
+  useEffect(() => {
+    const t = setTimeout(() => setStripReady(true), 20000);
+    return () => clearTimeout(t);
+  }, []);
+  useEffect(() => {
+    if (stripPreloadRef.current) return;
+    // Tunggu status ketersediaan diketahui dulu agar sumber yang dipilih benar
+    // (live strip vs framed vs statis). undefined = query belum selesai.
+    if (liveGifAvailability === undefined || framedPhotos === undefined) return;
+    stripPreloadRef.current = true;
+
+    let src: string | null = null;
+    if (isLiveStripAvailable) {
+      src = toAbsoluteUrl(`/api/photo/session/${sessionId}/gif-live?inline=1`);
+    } else if (framedStrip?.url) {
+      src = framedStrip.url;
+    }
+    // Fallback statis (tidak ada strip nyata) → tak perlu ditunggu.
+    if (!src) {
+      setStripReady(true);
+      return;
+    }
+
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        setStripReady(true);
+      }
+    };
+    const img = new Image();
+    img.onload = finish;
+    img.onerror = finish; // jangan hang kalau GIF gagal — biar GIFPreview handle
+    img.src = src;
+    // Hard-cap: GIF live bisa perlu beberapa detik saat generate; setelah 15s
+    // tetap lanjut supaya loading tidak menggantung.
+    const t = setTimeout(finish, 15000);
+    return () => clearTimeout(t);
+  }, [
+    liveGifAvailability,
+    framedPhotos,
+    isLiveStripAvailable,
+    framedStrip,
+    sessionId,
+  ]);
+
+  const isLoading = !minSplashDone || waitingForDrive || !stripReady;
 
   // Suara "scan QR untuk ambil foto" — main sekali saat loading selesai & QR
   // tampil (deklarasi sebelum early-return loading, patuh Rules of Hooks).

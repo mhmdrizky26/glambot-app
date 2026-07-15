@@ -272,7 +272,15 @@ func TriggerCapture(sessionID string) (string, error) {
 }
 
 // triggerCanonCapture trigger shutter Canon via digiCamControl
-// Foto akan disimpan ke folder sesi
+// Foto akan disimpan ke folder sesi.
+//
+// KUALITAS: yang disimpan adalah file JPEG FULL-RESOLUTION asli DSLR yang
+// ditransfer digiCamControl ke PC (folder DIGICAM_CAPTURE_DIR) — BUKAN frame
+// liveview res-rendah. Setelah shutter, kita tunggu file JPEG BARU muncul di
+// folder itu (transfer selesai = ukuran stabil) lalu salin apa adanya (tanpa
+// re-encode) ke folder sesi. Frame liveview hanya dipakai sebagai fallback
+// darurat kalau folder tidak diset / file tak kunjung muncul, supaya sesi
+// tetap menghasilkan foto ketimbang gagal total.
 func triggerCanonCapture(sessionID string) (string, error) {
 	// Buat folder sesi kalau belum ada
 	sessionDir := filepath.Join(config.App.StoragePath, "sessions", sessionID, "raw")
@@ -282,7 +290,12 @@ func triggerCanonCapture(sessionID string) (string, error) {
 
 	root := digiCamRootURL()
 	base := digiCamBaseURL()
-	beforeHash, _ := getLastLiveFrameHash()
+
+	// Baseline SEBELUM trigger: kumpulan nama JPEG yang sudah ada di folder
+	// capture. File full-res hasil jepretan ini = JPEG yang BARU (tak ada di
+	// baseline) setelah shutter.
+	captureDir := digiCamCaptureDir()
+	existingBefore := listJPEGNames(captureDir)
 
 	// Aktifkan mode live window jika diperlukan oleh device/profile digiCamControl.
 	_ = digiCamTryCommand([]string{
@@ -298,7 +311,26 @@ func triggerCanonCapture(sessionID string) (string, error) {
 		return "", fmt.Errorf("gagal trigger kamera: %w", err)
 	}
 
-	// Ambil frame live terbaru yang berubah setelah trigger untuk sinkronisasi preview dan hasil foto.
+	// Utamakan file full-res asli dari folder simpan digiCamControl.
+	if captureDir != "" {
+		// Timeout 6s: transfer JPEG full-res via USB umumnya < 1-3s, beri margin.
+		// Frontend menunggu foto muncul ~7s (CameraPreview), jadi 6s aman.
+		fullResPath, err := waitForNewCapturedFile(captureDir, existingBefore, 6*time.Second)
+		if err == nil {
+			if dst, cErr := copyCapturedFile(fullResPath, sessionDir); cErr == nil {
+				return dst, nil
+			} else {
+				log.Printf("⚠️  gagal salin file full-res (%s): %v — fallback liveview", fullResPath, cErr)
+			}
+		} else {
+			log.Printf("⚠️  file full-res tidak muncul di %s (%v) — fallback frame liveview (resolusi rendah)", captureDir, err)
+		}
+	} else {
+		log.Printf("⚠️  DIGICAM_CAPTURE_DIR belum diset — foto memakai frame liveview (resolusi rendah). Set folder simpan digiCamControl ke env ini untuk hasil full DSLR.")
+	}
+
+	// ── Fallback darurat: frame liveview (metode lama) ──────────────────────────
+	beforeHash, _ := getLastLiveFrameHash()
 	frame, err := waitForFreshFrameAfterCapture(beforeHash, 2*time.Second)
 	if err == nil {
 		return saveCaptureFrame(sessionDir, frame)
@@ -309,6 +341,121 @@ func triggerCanonCapture(sessionID string) (string, error) {
 
 	// Simpan snapshot terbaru non-empty sebagai hasil capture sesi.
 	return downloadLastCaptured(sessionID, sessionDir)
+}
+
+// digiCamCaptureDir mengembalikan folder tempat digiCamControl menyimpan hasil
+// jepretan full-res ke PC (dari env DIGICAM_CAPTURE_DIR). Kosong = tidak diset.
+func digiCamCaptureDir() string {
+	if config.App == nil {
+		return ""
+	}
+	return strings.TrimSpace(config.App.DigiCamCaptureDir)
+}
+
+func isJPEGName(name string) bool {
+	ext := strings.ToLower(filepath.Ext(name))
+	return ext == ".jpg" || ext == ".jpeg"
+}
+
+// listJPEGNames mengumpulkan nama file JPEG yang ada di dir (non-rekursif).
+// Set kosong kalau dir kosong/tidak terbaca.
+func listJPEGNames(dir string) map[string]struct{} {
+	set := make(map[string]struct{})
+	if dir == "" {
+		return set
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return set
+	}
+	for _, e := range entries {
+		if !e.IsDir() && isJPEGName(e.Name()) {
+			set[e.Name()] = struct{}{}
+		}
+	}
+	return set
+}
+
+// waitForNewCapturedFile menunggu file JPEG BARU (tak ada di `before`) muncul di
+// dir dan transfer-nya selesai (ukuran stabil), lalu mengembalikan path-nya.
+// Kalau ada beberapa file baru, ambil yang paling baru (mtime terbesar).
+func waitForNewCapturedFile(dir string, before map[string]struct{}, timeout time.Duration) (string, error) {
+	deadline := time.Now().Add(timeout)
+	for {
+		entries, err := os.ReadDir(dir)
+		if err == nil {
+			var candidate string
+			var candMod time.Time
+			for _, e := range entries {
+				if e.IsDir() || !isJPEGName(e.Name()) {
+					continue
+				}
+				if _, seen := before[e.Name()]; seen {
+					continue
+				}
+				info, iErr := e.Info()
+				if iErr != nil {
+					continue
+				}
+				if candidate == "" || info.ModTime().After(candMod) {
+					candMod = info.ModTime()
+					candidate = filepath.Join(dir, e.Name())
+				}
+			}
+			// Tunggu transfer selesai: ukuran stabil di dua pembacaan.
+			if candidate != "" && isFileSizeStable(candidate) {
+				return candidate, nil
+			}
+		}
+
+		if time.Now().After(deadline) {
+			return "", fmt.Errorf("timeout menunggu file capture baru")
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+}
+
+// isFileSizeStable true kalau ukuran file tidak berubah pada dua pembacaan
+// (~120ms) dan > 0 — menandakan digiCamControl selesai menulis/transfer file.
+func isFileSizeStable(path string) bool {
+	info1, err := os.Stat(path)
+	if err != nil || info1.Size() == 0 {
+		return false
+	}
+	time.Sleep(120 * time.Millisecond)
+	info2, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info1.Size() == info2.Size()
+}
+
+// copyCapturedFile menyalin file full-res APA ADANYA (byte-for-byte, tanpa
+// re-encode) dari folder capture digiCamControl ke folder sesi.
+func copyCapturedFile(src, sessionDir string) (string, error) {
+	in, err := os.Open(src)
+	if err != nil {
+		return "", fmt.Errorf("gagal buka file capture: %w", err)
+	}
+	defer in.Close()
+
+	ext := strings.ToLower(filepath.Ext(src))
+	if ext == "" {
+		ext = ".jpg"
+	}
+	fileName := fmt.Sprintf("canon_%d%s", time.Now().UnixMilli(), ext)
+	dstPath := filepath.Join(sessionDir, fileName)
+
+	out, err := os.Create(dstPath)
+	if err != nil {
+		return "", fmt.Errorf("gagal buat file: %w", err)
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return "", fmt.Errorf("gagal salin file capture: %w", err)
+	}
+	return dstPath, nil
 }
 
 func waitForFreshFrameAfterCapture(beforeHash [16]byte, timeout time.Duration) ([]byte, error) {

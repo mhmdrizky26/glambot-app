@@ -40,12 +40,6 @@ type DriveUpload struct {
 	Name      string // nama file yang tampil di Drive
 }
 
-// DriveResult ringkasan hasil upload sesi.
-type DriveResult struct {
-	FolderID    string
-	WebViewLink string
-}
-
 // IsDriveEnabled true kalau kredensial OAuth Drive lengkap di config.
 func IsDriveEnabled() bool {
 	c := config.App
@@ -79,42 +73,39 @@ func driveClient(ctx context.Context) *http.Client {
 	return conf.Client(ctx, tok)
 }
 
-// UploadSessionAssets membuat folder per-sesi di Drive, mengunggah semua file,
-// lalu membuat folder publik (anyone with link → reader). Mengembalikan
-// folder ID + webViewLink yang siap dipakai untuk QR.
-func UploadSessionAssets(ctx context.Context, folderName string, files []DriveUpload) (DriveResult, error) {
-	var res DriveResult
+// CreateSharedFolder membuat satu folder Drive per-sesi lalu men-share-nya
+// publik (anyone with link → reader). Dipakai untuk membuat folder SEKALI di
+// awal (saat foto pertama masuk) supaya file bisa di-stream masuk satu per satu
+// tanpa menunggu akhir sesi. Mengembalikan folder ID + webViewLink (untuk QR).
+func CreateSharedFolder(ctx context.Context, folderName string) (folderID, webViewLink string, err error) {
 	if !IsDriveEnabled() {
-		return res, fmt.Errorf("google drive belum dikonfigurasi")
+		return "", "", fmt.Errorf("google drive belum dikonfigurasi")
 	}
-	if len(files) == 0 {
-		return res, fmt.Errorf("tidak ada file untuk diunggah")
-	}
-
 	client := driveClient(ctx)
 
-	folderID, link, err := createDriveFolder(ctx, client, folderName, config.App.GoogleDriveFolderID)
+	folderID, webViewLink, err = createDriveFolder(ctx, client, folderName, config.App.GoogleDriveFolderID)
 	if err != nil {
-		return res, fmt.Errorf("gagal membuat folder Drive: %w", err)
+		return "", "", fmt.Errorf("gagal membuat folder Drive: %w", err)
 	}
-
 	// Share folder: anyone with link → reader. File di dalamnya mewarisi izin.
 	if err := setAnyoneReader(ctx, client, folderID); err != nil {
-		return res, fmt.Errorf("gagal share folder Drive: %w", err)
+		return "", "", fmt.Errorf("gagal share folder Drive: %w", err)
 	}
+	return folderID, webViewLink, nil
+}
 
-	for _, f := range files {
-		if _, err := uploadDriveFile(ctx, client, folderID, f); err != nil {
-			// Satu file gagal tidak membatalkan keseluruhan; lanjut file lain
-			// supaya customer tetap dapat sebagian besar aset.
-			fmt.Printf("⚠️  drive upload gagal (%s): %v\n", f.Name, err)
-			continue
-		}
+// UploadFileToFolder mengunggah SATU file ke folder Drive yang sudah ada.
+// Dipakai baik oleh upload per-capture (streaming) maupun finalize (strip/GIF).
+func UploadFileToFolder(ctx context.Context, folderID string, f DriveUpload) error {
+	if !IsDriveEnabled() {
+		return fmt.Errorf("google drive belum dikonfigurasi")
 	}
-
-	res.FolderID = folderID
-	res.WebViewLink = link
-	return res, nil
+	if folderID == "" {
+		return fmt.Errorf("folder ID kosong")
+	}
+	client := driveClient(ctx)
+	_, err := uploadDriveFile(ctx, client, folderID, f)
+	return err
 }
 
 // createDriveFolder membuat folder. parentID boleh kosong (folder dibuat di

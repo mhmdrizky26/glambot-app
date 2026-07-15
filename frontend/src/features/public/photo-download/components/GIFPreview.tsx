@@ -29,14 +29,15 @@ export function GIFPreview({
     'loading',
   );
 
-  // Bust cache pakai mount-time timestamp: tiap page load dapat versi GIF
-  // terbaru (kalau backend regenerate), tapi dalam page yang sama browser
-  // boleh cache (max-age 60s di server). `Date.now()` di useState lazy
-  // init pure dari sisi React — hanya jalan sekali saat mount.
-  const [cacheBust] = useState(() => Date.now());
+  // URL STABIL (tanpa cache-bust per-mount). GIF satu sesi bersifat immutable
+  // (URL sudah mengandung sessionId yang unik), jadi tidak perlu di-bust. URL
+  // yang stabil PENTING supaya preload di GetPhotosScreen memakai URL yang SAMA
+  // dengan yang dirender di sini → browser menyajikan dari cache secara instan
+  // (bukan download ulang + spinner lagi). Backend juga sudah pre-generate GIF
+  // saat compose, sehingga request pertama umumnya langsung hit cache file.
   const src = useMemo(
-    () => toAbsoluteUrl(`${endpoint}?inline=1&t=${cacheBust}`),
-    [endpoint, cacheBust],
+    () => toAbsoluteUrl(`${endpoint}?inline=1`),
+    [endpoint],
   );
 
   return (
@@ -69,7 +70,13 @@ export function GIFPreview({
         <img
           src={src}
           alt={alt}
-          loading="lazy"
+          // GIF sudah pre-generate backend saat compose (lihat ComposeFrame),
+          // jadi mulai fetch SEGERA saat mount — bukan `lazy` yang menunda
+          // sampai mendekati viewport. `decoding=async` + prioritas tinggi
+          // supaya preview muncul secepat mungkin begitu file diterima.
+          loading="eager"
+          decoding="async"
+          fetchPriority="high"
           className={`w-full h-full object-cover transition-opacity duration-300 ${
             status === 'ready' ? 'opacity-100' : 'opacity-0'
           }`}

@@ -28,7 +28,6 @@ export function GestureDetectionPanel({
   armPercent = 0,
   presetPercent = 0,
   gestureName,
-  activePresetName,
   className,
 }: GestureDetectionPanelProps) {
   // Bump nonce saat stream error → paksa <img> MJPEG reconnect. streamUrl ikut
@@ -58,108 +57,79 @@ export function GestureDetectionPanel({
         ? 'Locked'
         : 'Unlocked';
 
-  const hint = isMoving
-    ? 'Robot is moving to position…'
-    : isCooldown
-      ? 'Hold still — capturing photo…'
-      : isLocked
-        ? 'Show open palm (all fingers) to unlock'
-        : 'Show a gesture to move the robot';
-
   return (
     <div
       className={cn(
-        'bg-primary/75 border border-white/10 rounded-2xl overflow-hidden shadow-lg flex flex-col h-full',
+        'relative bg-black/40 border border-white/10 rounded-2xl overflow-hidden shadow-lg h-full',
         className,
       )}
     >
-      {/* Video area — MJPEG liveview kamera deteksi tangan (dobot /video_feed) */}
-      <div className="relative flex-1 min-h-0 bg-black/40">
-        {hasStream ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            key={`${streamUrl}-${nonce}`}
-            src={`${streamUrl}?k=${nonce}`}
-            alt="Robot hand-detection camera"
-            className="w-full h-full object-cover bg-black"
-            style={{ display: 'block' }}
-            onError={() => {
-              window.setTimeout(() => setNonce((n) => n + 1), 1500);
-            }}
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <p className="text-white/30 text-xs">
-              {reachable ? 'Stream not available' : 'Robot camera offline'}
-            </p>
-          </div>
-        )}
-
-        {/* Overlay saat robot bergerak */}
-        {(isMoving || isCooldown) && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-            <span className="text-white text-lg font-medium tracking-wide">
-              {isMoving ? 'Moving to position…' : 'Capturing…'}
-            </span>
-          </div>
-        )}
-
-        {/* Progress bar */}
-        <div className="absolute bottom-0 left-0 right-0 h-1 bg-white/10">
-          <div
-            className="h-full bg-[#00d084] transition-all duration-200 ease-linear"
-            style={{ width: `${Math.max(0, Math.min(100, progressPercentage))}%` }}
-          />
+      {/* Video mengisi SELURUH card — status & hint di-overlay di atasnya
+          (bukan bar terpisah) supaya tidak ada blok solid yang terpisah dari
+          video. */}
+      {hasStream ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          key={`${streamUrl}-${nonce}`}
+          src={`${streamUrl}?k=${nonce}`}
+          alt="Robot hand-detection camera"
+          className="absolute inset-0 w-full h-full object-cover bg-black"
+          onError={() => {
+            window.setTimeout(() => setNonce((n) => n + 1), 1500);
+          }}
+        />
+      ) : (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <p className="text-white/30 text-xs">
+            {reachable ? 'Stream not available' : 'Robot camera offline'}
+          </p>
         </div>
-      </div>
+      )}
 
-      {/* Status bar */}
-      <div className="px-4 py-3 flex items-center justify-between shrink-0">
-        {/* Left: lock status */}
-        <div className="flex items-center gap-2">
+      {/* Overlay saat robot bergerak */}
+      {(isMoving || isCooldown) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+          <span className="text-white text-lg font-medium tracking-wide">
+            {isMoving ? 'Moving to position…' : 'Capturing…'}
+          </span>
+        </div>
+      )}
+
+      {/* Overlay bawah: scrim gradient gelap + status lock (kiri) & indikator
+          gesture (kanan) — DIPERBESAR. Hint & progress bar dihilangkan (bar
+          detection + info preset kini ada di card Gesture Detection panel kanan). */}
+      <div className="absolute inset-x-0 bottom-0 flex items-center justify-between gap-3 bg-gradient-to-t from-black/80 via-black/45 to-transparent px-7 pt-20 pb-6">
+        {/* Status lock */}
+        <div className="flex items-center gap-3.5">
           {isLocked ? (
-            <Lock size={14} className="text-[#d4a373]" strokeWidth={2.5} />
+            <Lock size={38} className="text-[#e8b98f]" strokeWidth={2.5} />
           ) : (
-            <Unlock size={14} className="text-white/80" strokeWidth={2.5} />
+            <Unlock size={38} className="text-white" strokeWidth={2.5} />
           )}
           <span
-            className={`text-sm font-semibold ${
-              isLocked ? 'text-[#d4a373]' : 'text-white/80'
+            className={`text-5xl font-bold tracking-wide ${
+              isLocked ? 'text-[#e8b98f]' : 'text-white'
             }`}
           >
             {statusLabel}
           </span>
-          {activePresetName && (isMoving || isCooldown) && (
-            <span className="text-xs text-white/40">→ Preset {activePresetName}</span>
-          )}
         </div>
 
-        {/* Right: gesture / progress indicator */}
-        <div className="flex items-center gap-1.5">
+        {/* Indikator gesture / progress */}
+        <div className="flex items-center gap-3">
           <div
-            className={`w-1.5 h-1.5 rounded-full ${
-              isLocked ? 'bg-[#d4a373]' : 'bg-[#00d084] animate-pulse'
+            className={`w-3.5 h-3.5 rounded-full ${
+              isLocked ? 'bg-[#e8b98f]' : 'bg-[#00d084] animate-pulse'
             }`}
           />
-          <span className="text-xs text-white/40">
+          <span className="text-3xl font-semibold text-white">
             {gestureName
               ? gestureName
               : isLocked
-                ? 'Waiting..'
+                ? 'Waiting…'
                 : `${Math.round(progressPercentage)}%`}
           </span>
         </div>
-      </div>
-
-      {/* Hint */}
-      <div className="px-4 pb-4 -mt-1 shrink-0 flex items-center gap-2">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src="/finger/STOP.svg"
-          alt="Open palm"
-          className="h-5 w-5 object-contain"
-        />
-        <p className="text-sm text-[#00d084]/80">{hint}</p>
       </div>
     </div>
   );
