@@ -205,7 +205,7 @@ export function CameraPreview({
 
   return (
     <div
-      className={`relative h-full w-full rounded-[28px] overflow-hidden bg-black ring-[6px] ring-primary ring-offset-2 ring-offset-transparent shadow-[0_20px_60px_-15px_rgba(63,114,175,0.45)] ${className ?? ''}`}
+      className={`relative h-full w-full rounded-[28px] overflow-hidden bg-black ${className ?? ''}`}
     >
       {/* Soft inner highlight for depth */}
       <div className="pointer-events-none absolute inset-0 z-10 rounded-[22px] ring-1 ring-inset ring-white/10" />

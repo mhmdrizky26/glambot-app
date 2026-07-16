@@ -168,7 +168,7 @@ export function PhotoSessionPage() {
     // "susulan" begitu state berubah setelahnya.
     if (!endingRef.current && robotFsmState !== prev) {
       if (robotFsmState === 'UNLOCKING' || robotFsmState === 'CONFIRMING') {
-        playBackendAudio('GestureTerdeteksi.mp3');
+        playBackendAudio('tahan.mp3');
       } else if (robotFsmState === 'UNLOCKED') {
         // Kunci terbuka — robot siap menerima gesture preset.
         playBackendAudio('unlock.mp3');
@@ -401,7 +401,11 @@ export function PhotoSessionPage() {
           <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0 text-left">
             Preview Camera
           </h2>
-          <div className="relative flex-1 min-h-0">
+          {/* Frame ring biru dipindah ke wrapper ini (bukan di CameraPreview)
+              karena `overflow-hidden` — yang dibutuhkan agar panel gesture ter-
+              clip rapi saat slide keluar — akan memotong ring milik anak. Ring/
+              shadow milik elemen sendiri TIDAK ikut ter-clip oleh overflow-nya. */}
+          <div className="relative flex-1 min-h-0 overflow-hidden rounded-[28px] ring-[6px] ring-primary ring-offset-2 ring-offset-transparent shadow-[0_20px_60px_-15px_rgba(63,114,175,0.45)]">
             <CameraPreview
               frameUrl={frameUrl}
               sessionId={sessionId}
@@ -412,31 +416,38 @@ export function PhotoSessionPage() {
             />
             {/* Overlay liveview deteksi gesture — menutup preview Canon SELAMA
                 belum ada preset terkonfirmasi. Begitu preset dikonfirmasi
-                (showCanonPreview true), overlay hilang → tampil liveview Canon
-                (CameraPreview di bawah) untuk countdown & hasil. Freeze hasil
-                (z-50, fixed) tetap menang di atas overlay ini. */}
-            {!showCanonPreview && (
-              <div className="absolute inset-0 z-30 rounded-[28px] overflow-hidden">
-                <GestureDetectionPanel
-                  streamUrl={robotStreamUrl}
-                  reachable={robotReachable}
-                  fsmState={robotFsmState}
-                  armPercent={robotArmPercent}
-                  presetPercent={robotPresetPercent}
-                  gestureName={robotGestureName}
-                  activePresetName={robotActivePreset}
-                  className="h-full rounded-[28px]"
-                />
-              </div>
-            )}
+                (showCanonPreview true), overlay SLIDE keluar ke kiri → tampil
+                liveview Canon (CameraPreview di bawah) untuk countdown & hasil.
+                Tetap ter-mount (transform di-toggle) supaya perpindahan kamera
+                mulus, bukan berkedip; di-clip oleh wrapper (overflow-hidden).
+                Freeze hasil (z-50, fixed) tetap menang di atas overlay ini. */}
+            <div
+              className={cn(
+                'absolute inset-0 z-30 rounded-[28px] overflow-hidden transition-transform duration-500 ease-in-out',
+                showCanonPreview
+                  ? '-translate-x-[105%] pointer-events-none'
+                  : 'translate-x-0',
+              )}
+            >
+              <GestureDetectionPanel
+                streamUrl={robotStreamUrl}
+                reachable={robotReachable}
+                fsmState={robotFsmState}
+                armPercent={robotArmPercent}
+                presetPercent={robotPresetPercent}
+                gestureName={robotGestureName}
+                activePresetName={robotActivePreset}
+                className="h-full rounded-[28px]"
+              />
+            </div>
           </div>
         </div>
 
         {/* Kanan — 2 kartu: Gesture Detection (bar + info preset, ringkas) di
-            atas, lalu Gesture Controls. Muncul/hilang INSTAN saat robot idle/
-            sibuk — tanpa animasi transisi (perpindahan cepat & langsung). */}
+            atas, lalu Gesture Controls. Muncul saat robot idle dengan animasi
+            slide-in dari kanan; hilang saat robot sibuk. */}
         {showGuide && (
-          <div className="flex w-[26rem] 2xl:w-[30rem] shrink-0 flex-col gap-4 min-h-0">
+          <div className="flex w-[26rem] 2xl:w-[30rem] shrink-0 flex-col gap-4 min-h-0 animate-[slideInRight_350ms_ease-out]">
             {/* Gesture Detection — kartu ringkas: bar progress deteksi + info
                 preset/gesture. Tanpa label Locked/Unlocked (sudah tampil besar
                 di liveview). */}
@@ -498,6 +509,20 @@ export function PhotoSessionPage() {
                   PREVIEW_FRAME,
                 )}
               >
+                {/* Konten swap locked↔unlocked — di-`key` per fase supaya React
+                    me-remount & memainkan animasi slide tiap kali berpindah.
+                    Arah slide directional: unlock masuk dari KANAN, kembali
+                    locked masuk dari KIRI. Tombol "Selesai" di luar wrapper agar
+                    tetap diam (tak ikut beranimasi). */}
+                <div
+                  key={isLockedPhase ? 'locked' : 'unlocked'}
+                  className={cn(
+                    'flex min-h-0 flex-1 flex-col',
+                    isLockedPhase
+                      ? 'animate-[slideInLeft_350ms_ease-out]'
+                      : 'animate-[slideInRight_350ms_ease-out]',
+                  )}
+                >
                 {isLockedPhase ? (
                   /* Belum unlock → hanya gesture unlock (telapak terbuka) besar,
                      tanpa label preset. */
@@ -539,6 +564,7 @@ export function PhotoSessionPage() {
                     ))}
                   </div>
                 )}
+                </div>
 
                 {/* Tombol "Selesai sekarang" — selalu tampil di bawah kartu. */}
                 <EndSessionButton

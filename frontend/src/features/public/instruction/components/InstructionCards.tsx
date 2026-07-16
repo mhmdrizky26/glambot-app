@@ -2,8 +2,33 @@ import { useState, useEffect } from 'react';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import type { InstructionStep } from '../data/steps';
-import { ThumbsDown, ThumbsUp, Camera, Hand } from 'lucide-react';
+import {
+  Camera,
+  Hand,
+  Ruler,
+  LayoutGrid,
+  Sparkles,
+  ShieldCheck,
+  CircleAlert,
+  ShieldAlert,
+  Ban,
+  WifiOff,
+  CupSoda,
+  type LucideIcon,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Pemetaan kunci ikon (dari data steps) ke komponen lucide.
+const RULE_ICONS: Record<string, LucideIcon> = {
+  ruler: Ruler,
+  zone: LayoutGrid,
+  hand: Hand,
+  fun: Sparkles,
+  close: ShieldAlert,
+  touch: Ban,
+  sensor: WifiOff,
+  food: CupSoda,
+};
 
 interface CardProps {
   step: InstructionStep;
@@ -20,7 +45,64 @@ interface GetReadyCardProps extends CardProps {
   sessionDurationMinutes?: number;
 }
 
-/** "Get Ready" step — session duration + numbered activity list. */
+/** Circular ring showing the session duration (mm:00), busur ter-animasi. */
+function DurationRing({ minutes }: { minutes: number }) {
+  const size = 260;
+  const stroke = 13;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+
+  // Busur "naik-turun" terus-menerus: offset dianimasikan bolak-balik antara
+  // isi rendah (~55%) dan tinggi (~92%) lewat keyframe CSS (bukan sekali di awal).
+  const offHigh = c * (1 - 0.92); // paling terisi
+  const offLow = c * (1 - 0.55); // paling kosong
+  const keyframes = `@keyframes durationRingPulse {
+    0%, 100% { stroke-dashoffset: ${offLow}px; }
+    50% { stroke-dashoffset: ${offHigh}px; }
+  }`;
+
+  return (
+    <div
+      className="relative flex items-center justify-center"
+      style={{ width: size, height: size }}
+    >
+      <style>{keyframes}</style>
+      <svg width={size} height={size} className="-rotate-[125deg]">
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="rgba(249,247,247,0.12)"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+        />
+        <circle
+          cx={size / 2}
+          cy={size / 2}
+          r={r}
+          fill="none"
+          stroke="#DBE2EF"
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeDasharray={c}
+          strokeDashoffset={offLow}
+          style={{ animation: 'durationRingPulse 3s ease-in-out infinite' }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[62px] font-bold leading-none text-white tabular-nums">
+          {minutes}:00
+        </span>
+        <span className="mt-3 text-[16px] font-semibold uppercase tracking-[0.35em] text-white/45">
+          Duration
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** "Get Ready" step — numbered activity list + session duration ring. */
 export function GetReadyCard({
   step,
   onNext,
@@ -28,58 +110,92 @@ export function GetReadyCard({
   buttonReady = true,
   sessionDurationMinutes,
 }: GetReadyCardProps) {
-  const minutes = sessionDurationMinutes ?? step.sessionDuration;
+  const minutes = sessionDurationMinutes ?? step.sessionDuration ?? 5;
   return (
-    <GlassCard maxWidth="max-w-[920px]" className="px-12 pt-10 pb-12">
+    <GlassCard maxWidth="max-w-[960px]" className="px-14 py-12">
       <div className="flex flex-col items-center">
-        <h2 className="text-[46px] font-bold text-white leading-tight mb-9">
+        <h2 className="mb-14 text-center text-[46px] font-bold leading-tight text-white">
           {step.heading}
         </h2>
 
-        <div className="grid grid-cols-2 gap-6 mb-10 w-full">
-          {step.activities?.map((activity, i) => {
-            const isLastActivity = i === 3;
-            const displayLabel = isLastActivity
-              ? `${step.subheading} ${minutes} ${minutes === 1 ? 'minute' : 'minutes'}`
-              : activity.label;
-
-            return (
+        {/* Grup list + ring di-center sebagai satu blok (justify-center) supaya
+            margin kiri & kanan simetris; gap-14 mengatur jarak list↔ring. */}
+        <div className="flex w-full flex-row items-center justify-center gap-14">
+          {/* Kiri — daftar aktivitas bernomor */}
+          <div className="flex w-[440px] shrink-0 flex-col gap-4">
+            {step.activities?.map((activity, i) => (
               <GlassCard
                 key={activity.label}
                 variant="secondary"
-                className="flex h-44 w-full flex-col items-center justify-center gap-4 p-6 text-center rounded-xl border"
+                className="flex w-full items-center gap-5 rounded-2xl px-6 py-5"
               >
-                <span className="flex h-11 w-11 items-center justify-center rounded-full bg-[#F9F7F7]/15 text-[22px] font-bold text-white">
+                <span className="flex h-13 w-13 shrink-0 items-center justify-center rounded-full bg-[#F9F7F7]/15 text-[24px] font-bold text-white">
                   {i + 1}
                 </span>
-                {isLastActivity ? (
-                  <span className="text-[32px] font-medium text-white">
-                    <span className="font-semibold">
-                      {minutes} {minutes === 1 ? 'minute' : 'minutes'}
-                    </span>{' '}
-                    {step.subheading}
-                  </span>
-                ) : (
-                  <span className="text-[32px] font-medium text-white">
-                    {displayLabel}
-                  </span>
-                )}
+                <span className="text-[28px] font-bold leading-8 text-white">
+                  {activity.label}
+                </span>
               </GlassCard>
-            );
-          })}
+            ))}
+          </div>
+
+          {/* Kanan — ring durasi sesi */}
+          <DurationRing minutes={minutes} />
         </div>
 
         <Button
           variant="outline"
           onClick={onNext}
           className={cn(
-            'transition-opacity duration-300',
+            'mt-14 transition-opacity duration-300',
             !buttonReady && 'opacity-0 pointer-events-none',
           )}
         >
           {buttonLabel}
         </Button>
       </div>
+    </GlassCard>
+  );
+}
+
+/** Satu baris aturan sebagai kartu: kotak ikon + teks. */
+function RuleCard({
+  text,
+  icon,
+  tone,
+}: {
+  text: string;
+  icon?: string;
+  tone: 'do' | 'dont';
+}) {
+  const Icon = icon ? RULE_ICONS[icon] : null;
+  const isDo = tone === 'do';
+  return (
+    <GlassCard
+      variant="secondary"
+      className={cn(
+        'flex w-full items-center gap-4 rounded-2xl px-5 py-3.5 border',
+        isDo
+          ? 'bg-[#3F72AF]/20 border-[#3F72AF]/30'
+          : 'bg-[#D62F2F]/15 border-[#D62F2F]/30',
+      )}
+    >
+      <span
+        className={cn(
+          'flex h-12 w-12 shrink-0 items-center justify-center rounded-xl',
+          isDo ? 'bg-[#3F72AF]/35' : 'bg-[#D62F2F]/25',
+        )}
+      >
+        {Icon && (
+          <Icon
+            size={24}
+            className={isDo ? 'text-blue-100' : 'text-red-400'}
+          />
+        )}
+      </span>
+      <span className="text-[22px] font-semibold leading-7 text-white">
+        {text}
+      </span>
     </GlassCard>
   );
 }
@@ -92,69 +208,67 @@ export function SafetyRulesCard({
   buttonReady = true,
 }: CardProps) {
   return (
-    <GlassCard maxWidth="max-w-[1120px]" className="py-9 px-10 overflow-hidden">
+    <GlassCard maxWidth="max-w-[1120px]" className="py-8 px-10 overflow-hidden">
       <div className="flex flex-col items-center">
-        <h2 className="text-[46px] font-bold text-white leading-tight mb-8">
+        <h2 className="text-[46px] font-bold text-white leading-tight mb-6">
           {step.heading}
         </h2>
 
-        <div className="grid grid-cols-2 gap-12 lg:gap-14 items-stretch w-full">
+        <div className="grid grid-cols-2 gap-8 lg:gap-10 items-start w-full">
           {/* Do column */}
-          <GlassCard
-            variant="secondary"
-            className="p-6 w-full bg-[#3F72AF]/45"
-          >
-            <div className="flex items-center gap-2 mb-5">
-              <ThumbsUp size={26} className="text-blue-100 shrink-0" />
+          <div className="flex flex-col">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <ShieldCheck size={28} className="text-blue-100 shrink-0" />
               <span className="text-[26px] font-bold leading-7 text-white">
                 Do
               </span>
             </div>
-            <ul className="space-y-4">
+            <div className="flex flex-col gap-3.5">
               {step.doRules?.map((rule, idx) => (
-                <li
+                <RuleCard
                   key={`do-${idx}`}
-                  className="text-white text-[32px] font-medium leading-9 flex items-start gap-4"
-                >
-                  <span className="mt-1">•</span>
-                  {rule.text}
-                </li>
+                  text={rule.text}
+                  icon={rule.icon}
+                  tone="do"
+                />
               ))}
-            </ul>
-          </GlassCard>
+            </div>
+          </div>
 
           {/* Don't column */}
-          <GlassCard
-            variant="secondary"
-            className="p-6 w-full bg-[#D62F2F]/35"
-          >
-            <div className="flex items-center gap-2 mb-5">
-              <ThumbsDown size={26} className="text-red-400 shrink-0" />
+          <div className="flex flex-col">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <CircleAlert size={28} className="text-red-400 shrink-0" />
               <span className="text-[26px] font-bold leading-7 text-red-400">
                 Don&apos;t
               </span>
             </div>
-            <ul className="space-y-4">
+            <div className="flex flex-col gap-3.5">
               {step.dontRules?.map((rule, idx) => (
-                <li
+                <RuleCard
                   key={`dont-${idx}`}
-                  className="text-white text-[32px] font-medium leading-9 flex items-start gap-4"
-                >
-                  <span className="mt-1 text-red-400">•</span>
-                  {rule.text}
-                </li>
+                  text={rule.text}
+                  icon={rule.icon}
+                  tone="dont"
+                />
               ))}
-            </ul>
-          </GlassCard>
+            </div>
+          </div>
         </div>
 
         {step.guideline && (
-          <div className="mt-6 w-full flex items-center gap-4 rounded-xl border border-amber-300/40 bg-amber-300/10 px-6 py-4">
-            <Hand size={30} className="text-amber-300 shrink-0" />
-            <p className="text-amber-100 text-[28px] font-medium leading-9">
+          <GlassCard
+            variant="secondary"
+            maxWidth="max-w-full"
+            className="mt-6 w-full flex items-center justify-center gap-5 rounded-2xl px-7 py-5"
+          >
+            <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F9F7F7]/12">
+              <Hand size={30} className="text-blue-100" />
+            </span>
+            <p className="text-white text-[26px] font-medium leading-8 whitespace-nowrap">
               {step.guideline}
             </p>
-          </div>
+          </GlassCard>
         )}
 
         <Button
@@ -312,7 +426,7 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
         </div>
       </div>
 
-      <div className="flex flex-row items-center gap-8">
+      <div className="flex flex-row items-center gap-8 mt-8">
         <Button
           onClick={onNext}
           className={cn(

@@ -18,6 +18,7 @@ function getAudio(filename: string): HTMLAudioElement {
 
 // Semua narasi yang dipreload sekali di awal supaya play pertama tanpa jeda.
 export const BACKEND_AUDIO_FILES = [
+  'mulai.mp3',
   'selamatDatang.mp3',
   'pilihJumlahCetak.mp3',
   'pembayaranDiproses.mp3',
@@ -25,10 +26,10 @@ export const BACKEND_AUDIO_FILES = [
   'pembayaranGagal.mp3',
   'intro.mp3',
   'keselamatan.mp3',
-  'preset.mp3',
+  'presetSlow.mp3',
   'inisiasi.mp3',
   'presetTerkonfirmasi.mp3',
-  'GestureTerdeteksi.mp3',
+  'tahan.mp3',
   'unlock.mp3',
   'satu.mp3',
   'dua.mp3',
