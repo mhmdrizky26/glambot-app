@@ -82,7 +82,7 @@ export default function InstructionPage() {
         break;
       case 'gesture-controls':
         // Kartu gesture punya gating sendiri, tombol tak ditahan audio di sini.
-        playBackendAudio('preset.mp3');
+        playBackendAudio('presetSlow.mp3');
         break;
     }
     return () => {

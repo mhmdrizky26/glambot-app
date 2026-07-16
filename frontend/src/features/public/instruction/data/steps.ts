@@ -1,9 +1,12 @@
 export interface ActivityItem {
   label: string;
+  description?: string;
 }
 
 export interface RuleItem {
   text: string;
+  // Kunci ikon (dipetakan ke komponen lucide di InstructionCards).
+  icon?: string;
 }
 
 export interface GestureItem {
@@ -30,13 +33,11 @@ export const instructionSteps: InstructionStep[] = [
     id: 1,
     type: 'get-ready',
     heading: 'Get Ready!',
-    subheading: 'session',
     sessionDuration: 5,
     activities: [
       { label: 'Use gestures' },
       { label: 'Camera moves' },
       { label: 'Strike a pose' },
-      { label: 'session' },
     ],
   },
   {
@@ -44,16 +45,16 @@ export const instructionSteps: InstructionStep[] = [
     type: 'safety',
     heading: 'Safety & Rules',
     doRules: [
-      { text: 'Stay 2m away from the robot' },
-      { text: 'Stay in detection area' },
-      { text: 'Use clear hand gestures' },
-      { text: 'Have fun and be creative!' },
+      { text: 'Stay 2m away from the robot', icon: 'ruler' },
+      { text: 'Stay in detection area', icon: 'zone' },
+      { text: 'Use clear hand gestures', icon: 'hand' },
+      { text: 'Have fun and be creative!', icon: 'fun' },
     ],
     dontRules: [
-      { text: 'Don’t get too close' },
-      { text: 'Don’t touch the robot' },
-      { text: 'Don’t block the sensor' },
-      { text: 'No food or drinks nearby' },
+      { text: 'Don’t get too close', icon: 'close' },
+      { text: 'Don’t touch the robot', icon: 'touch' },
+      { text: 'Don’t block the sensor', icon: 'sensor' },
+      { text: 'No food or drinks nearby', icon: 'food' },
     ],
     guideline:
       'Only one person’s hand should be used at a time',
