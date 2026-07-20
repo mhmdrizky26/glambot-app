@@ -43,6 +43,12 @@ export default function PhotoEditorPage() {
   const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('original');
   const [activeTab, setActiveTab] = useState<TabType>('frame');
+  // Foto yang dipilih di panel kiri untuk ditempatkan (touchscreen tap-to-place,
+  // menggantikan drag & drop). null = belum ada yang dipilih.
+  const [armedPhoto, setArmedPhoto] = useState<{
+    photoId: string;
+    photoUrl: string;
+  } | null>(null);
   // Slot foto yang sedang dipilih di canvas (dilaporkan PreviewArea) → toolbar
   // adjust dirender di baris bawah, sejajar Confirm Print (tidak menutupi preview).
   const [activeSlotId, setActiveSlotId] = useState<string | null>(null);
@@ -176,13 +182,23 @@ export default function PhotoEditorPage() {
     setActiveTab(tab);
   };
 
-  // Handle photo dropped into slot
-  const handlePhotoDropped = (
+  // Tap foto di panel kiri → "arm" untuk ditempatkan (tap lagi = batal pilih).
+  const handlePhotoTap = (photo: { id: string; url: string }) => {
+    setArmedPhoto((prev) =>
+      prev?.photoId === photo.id
+        ? null
+        : { photoId: photo.id, photoUrl: photo.url },
+    );
+  };
+
+  // Foto ditempatkan ke slot (via tap) → catat di komposisi & lepas pilihan.
+  const handlePhotoPlaced = (
     slotId: string,
     photoId: string,
     photoUrl: string,
   ) => {
     addPhotoToSlot(slotId, photoId, photoUrl);
+    setArmedPhoto(null);
   };
 
   // Confirm Print logic
@@ -311,7 +327,12 @@ export default function PhotoEditorPage() {
         <div className="flex-1 flex items-stretch gap-3 min-h-0">
           {/* Left Panel */}
           <div className="w-84.25 shrink-0">
-            <PhotoSelectionPanel photos={photos} isLoading={photosLoading} />
+            <PhotoSelectionPanel
+              photos={photos}
+              isLoading={photosLoading}
+              armedPhotoId={armedPhoto?.photoId ?? null}
+              onPhotoTap={handlePhotoTap}
+            />
           </div>
 
           {/* Center Panel */}
@@ -319,7 +340,8 @@ export default function PhotoEditorPage() {
             <PreviewArea
               selectedFrame={selectedFrame}
               selectedFilter={selectedFilter}
-              onPhotoDropped={handlePhotoDropped}
+              armedPhoto={armedPhoto}
+              onPhotoPlaced={handlePhotoPlaced}
               onActiveSlotChange={setActiveSlotId}
               onCanvasReady={(canvas) => {
                 fabricCanvasRef.current = canvas;

@@ -34,6 +34,13 @@ Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis
 
 Ringkasan perubahan terbaru (per Juli 2026):
 
+### UI Touchscreen — keyboard on-screen, tap-to-place editor, home animasi (baru)
+Penyesuaian UX untuk kiosk **layar sentuh** (tanpa mouse/keyboard fisik):
+- **Home** ([`HomePage.tsx`](frontend/src/features/public/home/pages/HomePage.tsx)) — tombol "Tap to Start" dihapus (seluruh halaman memang sudah bisa di-tap). Diganti indikator sentuh animatif: cincin riak memuai (`tapRing`) + titik inti berdenyut, judul "GLAMBOT" diperbesar & mengambang halus (`floatY`), plus teks "TAP ANYWHERE TO START" dengan glow lembut redup-terang (`softGlow`).
+- **Voucher keyboard on-screen** ([`OnScreenKeyboard.tsx`](frontend/src/components/shared/OnScreenKeyboard.tsx)) — input voucher di `/payment/summary` kini `readOnly`; menyentuhnya memunculkan keyboard alfanumerik bertema (senada GlassCard) yang **slide masuk dari kanan** sembari kartu ringkasan bergeser halus ke kiri.
+- **Photo editor tap-to-place** ([`PreviewArea.tsx`](frontend/src/features/public/photo-editor/components/PreviewArea.tsx) + [`PhotoSelectionPanel.tsx`](frontend/src/features/public/photo-editor/components/PhotoSelectionPanel.tsx)) — **drag & drop diganti tap**: tap foto (armed) → tap slot untuk menempatkannya. Tiap slot diberi **nomor**; mengganti foto slot cukup tap foto lain lalu tap slotnya (tanpa drag). Reposisi dalam slot & toolbar zoom/rotate tetap.
+- **Kartu unlock gesture** ([`PhotoSessionPage.tsx`](frontend/src/features/public/photo-session/pages/PhotoSessionPage.tsx)) — fase locked kini punya pengingat "Only one person's hand at a time" + gambar telapak lebih besar, layout dirapikan.
+
 ### Gesture Detection live + tuning robot dari admin (baru)
 - Panel **Gesture Detection** di `/photo-session` (dan Monitor 2 `/photo-session/control`) kini menampilkan **data nyata** dari service dobot: liveview kamera deteksi tangan (MJPEG `/video_feed`) + state FSM lock/unlock + progress bar, di-poll dari `GET {robot}/detection` tiap 150ms (lihat [`getRobotDetection.ts`](frontend/src/features/public/photo-session/api/getRobotDetection.ts)).
 - **Robot & Gesture Tuning** di halaman admin `/settings` — atur speed/akselerasi robot + timing gesture/safety (7 field). Disimpan di `app_settings`, diteruskan **live** ke dobot (`POST {robot}/config/runtime`) tanpa restart, plus dibaca dobot saat start via `GET /api/robot-settings`.
@@ -540,7 +547,7 @@ glambot-app/
 │   │   │   └── not-found.tsx
 │   │   ├── assets/                # Local fixed assets (loading.json Lottie)
 │   │   ├── components/
-│   │   │   ├── shared/            # GlassCard, Timer, StatusAnimation, Spinner
+│   │   │   ├── shared/            # GlassCard, Timer, StatusAnimation, Spinner, OnScreenKeyboard (touchscreen)
 │   │   │   └── ui/                # Button, Dialog, Input (Radix wrappers)
 │   │   ├── features/
 │   │   │   └── public/
@@ -565,7 +572,8 @@ glambot-app/
 │   │   ├── shared/
 │   │   │   └── api/session.ts     # createSession, getSession, patchSessionStatus
 │   │   └── styles/
-│   │       └── globals.css        # Tailwind base + keyframes (countdownPop, slideUp, etc.)
+│   │       ├── public.css         # Kiosk theme + keyframes (slideUp, tapRing, floatY, softGlow, slideInRight, etc.)
+│   │       └── admin.css          # Dashboard admin theme
 │   ├── .env.example
 │   ├── next.config.ts             # allowedDevOrigins, remotePatterns
 │   ├── package.json
@@ -740,7 +748,7 @@ Diskon code.
 [ /package ]
     │
     ↓ Lanjut bayar
-[ /payment/summary ]   ← Voucher input (auto uppercase)
+[ /payment/summary ]   ← Voucher input (keyboard on-screen, auto uppercase)
     │
     ↓ Konfirmasi
 [ /payment/pay ]       ← QRIS scan (120s timer)
@@ -760,7 +768,7 @@ Diskon code.
 [ /photo-editor ]                [ /session-end ]
   Select & Edit                    ← 30s timer
   (2 menit timer)                    QR code dynamic
-  Drag photo ke slot                 (per-session URL)
+  Tap foto → tap slot (nomor)        (per-session URL)
   Pilih frame + filter
   Confirm Print → save               ↓ 30s
     ↓                            [ DoneScreen ]
@@ -885,7 +893,7 @@ Narasi suara (voice-over Bahasa Indonesia) menemani **seluruh alur kiosk** — t
 
 | File | Trigger | Lokasi kode |
 |---|---|---|
-| `selamatDatang.mp3` | Tap "Tap to Start" di Home (sekaligus meng-unlock autoplay browser) | `HomePage.tsx` |
+| `selamatDatang.mp3` | Tap di mana saja di Home (sekaligus meng-unlock autoplay browser) | `HomePage.tsx` |
 | `pilihJumlahCetak.mp3` | Buka modal jumlah cetak (paket Print) | `PrintQuantityModal.tsx` |
 | `pembayaranDiproses.mp3` | Status pembayaran → `processing` | `PaymentStatus.tsx` |
 | `pembayaranBerhasil.mp3` | Status pembayaran → `success` | `PaymentStatus.tsx` |
@@ -1087,8 +1095,8 @@ Kamera Canon-only via digiCamControl — kalau preview kosong:
 - **Sudah fixed:** effect render kini memakai instance canvas hidup via `getFabricCanvas()` (ref), bukan closure basi. Pastikan pakai versi terbaru `PreviewArea.tsx` + `useCanvasRenderer.ts`.
 
 ### "Pilih 3 foto dulu" saat klik Confirm di photo-editor
-- Slot belum terisi semua (kurang dari 3). Frontend block submit supaya tidak hit error 400 backend
-- Drop sisa foto dari panel kiri ke slot kosong di canvas tengah
+- Slot belum terisi semua (kurang dari jumlah slot frame). Frontend block submit supaya tidak hit error 400 backend
+- Tap foto di panel kiri (foto ter-"armed"), lalu tap slot bernomor yang masih kosong di canvas tengah
 - Kalau timer 2 menit habis dengan slot belum penuh, otomatis skip save dan navigate ke `/session-end`
 
 ---

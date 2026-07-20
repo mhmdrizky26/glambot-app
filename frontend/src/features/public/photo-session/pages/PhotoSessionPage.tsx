@@ -525,15 +525,19 @@ export function PhotoSessionPage() {
                 >
                 {isLockedPhase ? (
                   /* Belum unlock → hanya gesture unlock (telapak terbuka) besar,
-                     tanpa label preset. */
-                  <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-10 text-center">
+                     tanpa label preset. Di atas gambar ada pengingat "satu tangan
+                     saja" (samakan dengan guideline di halaman intro). */
+                  <div className="flex min-h-0 flex-1 flex-col items-center justify-between px-6 py-8 text-center">
+                    <p className="text-2xl 2xl:text-3xl font-semibold text-white/85">
+                      Only one person’s hand at a time
+                    </p>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={PRESET_GESTURES[4]?.icon ?? '/finger/STOP.svg'}
                       alt="Open palm to unlock"
-                      className="h-44 w-44 2xl:h-52 2xl:w-52 object-contain"
+                      className="h-56 w-56 2xl:h-64 2xl:w-64 object-contain"
                     />
-                    <p className="text-xl 2xl:text-2xl font-semibold text-white/85">
+                    <p className="text-2xl 2xl:text-3xl font-semibold text-white/85">
                       Show this gesture to unlock
                     </p>
                   </div>

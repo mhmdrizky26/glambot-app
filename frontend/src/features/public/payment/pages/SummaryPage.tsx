@@ -1,11 +1,12 @@
 'use client';
 
 import { useSearchParams, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useGetSession } from '@/shared/api/session';
 import { useVoucher } from '../hooks/useVoucher';
 import { formatRupiah } from '@/lib/formats';
 import GlassCard from '@/components/shared/GlassCard';
+import OnScreenKeyboard from '@/components/shared/OnScreenKeyboard';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,6 +14,7 @@ import { TicketIcon, Timer as TimerIcon } from 'lucide-react';
 import Timer from '@/components/shared/Timer';
 import BackButton from '@/components/shared/BackButton';
 import { useAppConfig } from '@/shared/api/config';
+import { cn } from '@/lib/utils';
 
 export default function SummaryPage() {
   const searchParams = useSearchParams();
@@ -41,6 +43,10 @@ export default function SummaryPage() {
 
   const { code, setCode, message, isValid, loading, applyVoucher } =
     useVoucher(sessionId);
+
+  // Keyboard on-screen (touchscreen): terbuka saat user menyentuh input voucher.
+  // Kartu bergeser ke kiri & keyboard muncul di kanan (lihat layout di bawah).
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
 
   const { data: appConfig } = useAppConfig();
 
@@ -85,15 +91,21 @@ export default function SummaryPage() {
   const finalPrice = session?.finalPrice ?? 0;
 
   return (
-    <main className="flex flex-col items-center justify-center min-h-full px-4">
+    <main className="flex items-center justify-center min-h-full px-4 overflow-hidden">
       {appConfig && <Timer duration={appConfig.summaryTimeoutSecs} />}
       <BackButton onClick={() => router.push('/package')} />
+
+      {/* Kartu + keyboard sebagai satu grup yang di-center. Keyboard selalu
+          ter-mount (saat voucher belum valid) tapi lebarnya dianimasikan 0 →
+          720px. Karena grup di-center, kartu ikut bergeser HALUS ke kiri sembari
+          keyboard slide masuk dari kanan. */}
+      <div className="flex w-full items-center justify-center">
       {/* Lebar dipersempit (~560px, dari ~699px) supaya isi tidak terlihat
           terlalu kosong di tengah. Tombol Proceed dibuat w-full agar ikut
           menyesuaikan lebar kartu. */}
       <GlassCard
         maxWidth="max-w-[560px]"
-        className="px-13.5 pb-[56.59px] pt-[54.92px]"
+        className="shrink-0 px-13.5 pb-[56.59px] pt-[54.92px]"
       >
         {/* Title */}
         <h1 className="text-[48.46px] leading-[72.7px] font-bold text-white text-center mb-10.75">
@@ -147,7 +159,8 @@ export default function SummaryPage() {
           </div>
         </div>
 
-        {/* Voucher Input */}
+        {/* Voucher Input — read-only: input diisi lewat keyboard on-screen
+            (touchscreen), bukan keyboard OS. Menyentuh input membuka keyboard. */}
         <div className="flex gap-4 mb-8">
           <div className="flex-1 relative">
             <TicketIcon
@@ -158,13 +171,13 @@ export default function SummaryPage() {
               type="text"
               placeholder="Voucher code"
               value={code}
-              onChange={(e) => setCode(e.target.value.toUpperCase())}
-              onKeyDown={(e) => e.key === 'Enter' && applyVoucher()}
+              readOnly
+              onFocus={() => !isValid && setKeyboardOpen(true)}
+              onClick={() => !isValid && setKeyboardOpen(true)}
               disabled={isValid}
-              className="pl-16 uppercase"
-              autoCapitalize="characters"
-              autoCorrect="off"
-              spellCheck={false}
+              className={`pl-16 uppercase cursor-pointer ${
+                keyboardOpen ? 'border-white/60 ring-2 ring-white/20' : ''
+              }`}
             />
           </div>
           <Button
@@ -198,6 +211,33 @@ export default function SummaryPage() {
           Proceed to Payment
         </Button>
       </GlassCard>
+
+        {/* Wrapper lebar-animasi: 0 (tertutup) → 720px + gap (terbuka). `min-w-0`
+            (bukan overflow-hidden) supaya lebar bisa menyusut ke 0 di dalam flex
+            TAPI shadow lembut keyboard tidak ter-clip jadi kotak. Saat tertutup,
+            keyboard (720px, opacity-0) meluber ke kanan — di-clip oleh
+            `overflow-hidden` di <main>, jadi tak bikin scroll horizontal. */}
+        {!isValid && (
+          <div
+            className={cn(
+              'min-w-0 transition-all duration-500 ease-out',
+              keyboardOpen
+                ? 'w-[720px] ml-6 opacity-100'
+                : 'w-0 ml-0 opacity-0 pointer-events-none',
+            )}
+          >
+            <OnScreenKeyboard
+              title="Type in the voucher"
+              enterLabel="Apply"
+              onKeyPress={(char) => setCode((code + char).toUpperCase())}
+              onBackspace={() => setCode(code.slice(0, -1))}
+              onClear={() => setCode('')}
+              onEnter={applyVoucher}
+              onClose={() => setKeyboardOpen(false)}
+            />
+          </div>
+        )}
+      </div>
     </main>
   );
 }

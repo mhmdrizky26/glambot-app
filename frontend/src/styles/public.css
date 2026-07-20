@@ -53,6 +53,14 @@
      membesar sedikit ala tombol "Tap to Start", tapi lebih cepat + glow merah
      supaya terbaca sebagai peringatan. */
   --animate-timer-urgent: timerUrgent 1s ease-in-out infinite;
+
+  /* Home page (touchscreen): tidak ada lagi tombol "Tap to Start". Sebagai
+     gantinya ada target sentuh — cincin riak yang memuai (tapRing) dan judul
+     yang mengambang halus (floatY). */
+  --animate-tap-ring: tapRing 2.4s ease-out infinite;
+  --animate-float-y: floatY 4s ease-in-out infinite;
+  /* "TAP ANYWHERE TO START": redup lalu nyala pelan-pelan (bukan kedip cepat). */
+  --animate-soft-glow: softGlow 3.2s ease-in-out infinite;
 }
 
 @layer utilities {
@@ -183,5 +191,46 @@
   50% {
     transform: scale(1.08);
     text-shadow: 0 0 18px rgba(255, 82, 82, 0.6);
+  }
+}
+
+/* Cincin riak yang memuai keluar dari titik sentuh (dipakai berlapis dengan
+   animation-delay berbeda supaya terlihat mengalir terus-menerus). */
+@keyframes tapRing {
+  0% {
+    transform: scale(0.35);
+    opacity: 0.55;
+  }
+  80% {
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+
+/* Ambang halus untuk judul/konten home supaya terasa hidup. */
+@keyframes floatY {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+/* Nyala lembut & redup: dari sangat samar ke separuh terang saja (tidak sampai
+   menyala penuh), supaya tulisan tidak terlalu mencolok. */
+@keyframes softGlow {
+  0%,
+  100% {
+    opacity: 0.18;
+    text-shadow: 0 0 0 rgba(17, 45, 78, 0);
+  }
+  50% {
+    opacity: 0.55;
+    text-shadow: 0 0 14px rgba(17, 45, 78, 0.18);
   }
 }
