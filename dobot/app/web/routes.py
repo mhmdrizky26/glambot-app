@@ -85,6 +85,18 @@ def create_app(runtime):
             },
         })
 
+    @app.route("/presence")
+    def api_presence():
+        # Sinyal ringan untuk layar Home: ada gerakan di depan kamera dalam
+        # `presence_hold_sec` terakhir? Home hanya butuh 1 boolean ini (bukan
+        # seluruh payload /detection), jadi poll-nya murah. motion_ratio disertakan
+        # untuk kalibrasi ambang di lokasi.
+        det = runtime.detector
+        return jsonify({
+            "present":      bool(det.presence) if det else False,
+            "motion_ratio": round(getattr(det, "_motion_ratio", 0.0), 2) if det else 0.0,
+        })
+
     @app.route("/status")
     def api_status():
         return jsonify({
@@ -141,6 +153,7 @@ def create_app(runtime):
         # buka session supaya FSM (lock/unlock + preset) bisa dites dari Monitor 2.
         if runtime.dry_run:
             runtime.session_active = True
+            runtime.notify_session_started()
             print("  [SESSION] ✓ Started (dry-run)")
             return jsonify({"status": "enabled", "message": "Dry-run session active"})
 
@@ -153,6 +166,9 @@ def create_app(runtime):
             if runtime.robot.initialize():
                 runtime.robot.enabled = True
                 runtime.session_active = True
+                # Stamp awal LOCKED sekarang (bukan setelah home) supaya grace juga
+                # menahan deteksi unlock selama robot masih bergerak ke initial pose.
+                runtime.notify_session_started()
                 print("  [ROBOT] Moving to initial pose after enable...")
                 runtime.robot.move_to_initial_pose(runtime.presets)
                 runtime.robot.wait_until_idle(timeout=runtime.config.safety_timeout)  # [BARU] tunggu idle, bukan delay buta

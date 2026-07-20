@@ -19,6 +19,27 @@ def _get_float(key: str) -> float:
 def _get_optional(key: str, default: str = "") -> str:
     return os.getenv(key, default).strip()
 
+def _get_float_default(key: str, default: float) -> float:
+    """Float dari env dengan fallback default — aman kalau key hilang / kosong /
+    rusak (tidak crash). Dipakai untuk parameter yang punya default masuk akal."""
+    raw = os.getenv(key)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return float(raw)
+    except ValueError:
+        return default
+
+def _get_int_default(key: str, default: int) -> int:
+    """Int dari env dengan fallback default — aman kalau key hilang/kosong/rusak."""
+    raw = os.getenv(key)
+    if raw is None or raw.strip() == "":
+        return default
+    try:
+        return int(float(raw))
+    except ValueError:
+        return default
+
 
 @dataclass
 class Config:
@@ -51,6 +72,23 @@ class Config:
     preset_debounce_frames: int
     post_action_delay: float
     cooldown_after_capture: float
+
+    # "Jendela dengar" — tahan deteksi gesture selama narasi audio masih diputar,
+    # supaya user menyimak dulu sebelum gesturenya mulai dihitung. Nilai default =
+    # panjang file audio + margin skew poll/network (unlock.mp3 ±3.0s, inisiasi.mp3
+    # ±2.4s). unlock: tahan pengenalan preset setelah UNLOCKED. locked: tahan mulai
+    # unlock (gesture 5) di loop pertama inisiasi tiap masuk LOCKED.
+    unlock_announce_sec: float
+    locked_announce_sec: float
+
+    # Presence (motion frame-diff) — dipakai layar Home agar loop suara "mulai"
+    # hanya berbunyi saat ada gerakan di depan kamera (bukan di ruangan kosong).
+    # motion_threshold: ambang beda per-piksel (0-255). area_pct: min % frame yang
+    # berubah supaya dihitung "gerakan". hold_sec: berapa lama tetap "ada orang"
+    # setelah gerakan terakhir (hysteresis biar audio tidak kedip).
+    presence_motion_threshold: int
+    presence_area_pct: float
+    presence_hold_sec: float
 
     backend_url: str
 
@@ -86,6 +124,13 @@ def load_config() -> Config:
         preset_debounce_frames=_get_int("PRESET_DEBOUNCE_FRAMES"),
         post_action_delay=_get_float("POST_ACTION_DELAY"),
         cooldown_after_capture=_get_float("COOLDOWN_AFTER_CAPTURE"),
+
+        unlock_announce_sec=_get_float_default("UNLOCK_ANNOUNCE_SEC", 3.5),
+        locked_announce_sec=_get_float_default("LOCKED_ANNOUNCE_SEC", 2.8),
+
+        presence_motion_threshold=_get_int_default("PRESENCE_MOTION_THRESHOLD", 25),
+        presence_area_pct=_get_float_default("PRESENCE_AREA_PCT", 0.8),
+        presence_hold_sec=_get_float_default("PRESENCE_HOLD_SEC", 15.0),
 
         backend_url=_get_optional("BACKEND_URL"),
     )

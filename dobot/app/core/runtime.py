@@ -78,6 +78,7 @@ class Runtime:
 
         self._unlock_start_time    = 0.0
         self._unlocked_at          = 0.0
+        self._locked_at            = 0.0
         self._confirm_counter      = 0
         self._confirm_gesture      = None
         self._selected_preset      = None
@@ -246,6 +247,10 @@ class Runtime:
         self._fsm_state            = "LOCKED"
         self._unlock_start_time    = 0.0
         self._unlocked_at          = 0.0
+        # Stamp waktu masuk LOCKED → dasar "grace dengar inisiasi" (locked_announce_sec).
+        # Kena tiap balik LOCKED (mis. setelah foto), jadi hanya loop PERTAMA inisiasi
+        # yang menahan unlock; retrigger 5s berikutnya sudah lewat window.
+        self._locked_at            = time.time()
         self._confirm_counter      = 0
         self._confirm_gesture      = None
         self._selected_preset      = None
@@ -267,6 +272,14 @@ class Runtime:
             if self.robot and self.robot.connected and self.robot.enabled:
                 self.robot.stop()
             print("  [TRACKING] ■ Stopped")
+
+    def notify_session_started(self):
+        """Dipanggil backend saat sesi mulai (robot enabled, session_active True).
+        Stamp waktu masuk LOCKED supaya grace "dengar inisiasi dulu" juga berlaku
+        di awal sesi — bukan hanya saat balik LOCKED setelah foto. Sekaligus menahan
+        deteksi unlock selama robot masih homing ke initial pose."""
+        with self._fsm_lock:
+            self._locked_at = time.time()
 
     # ─────────────────────────────────────────────────────────────
     #  Manual trigger
@@ -309,6 +322,16 @@ class Runtime:
             state = self._fsm_state
 
             if state in ("LOCKED", "UNLOCKING"):
+                # Grace "dengarkan inisiasi dulu": selama loop pertama inisiasi
+                # masih diputar setelah masuk LOCKED, jangan mulai proses unlock
+                # walau telapak buka (gesture 5) sudah terlihat. Reset progress &
+                # tetap di LOCKED supaya tidak ada bar unlock yang jalan duluan.
+                if time.time() - self._locked_at < self.config.locked_announce_sec:
+                    self._unlock_start_time = 0.0
+                    if state == "UNLOCKING":
+                        self._fsm_state = "LOCKED"
+                    return None
+
                 if gesture_id == 5:
                     if self._unlock_start_time == 0.0:
                         self._unlock_start_time = time.time()
@@ -328,9 +351,19 @@ class Runtime:
                 return None
 
             if state in ("UNLOCKED", "CONFIRMING"):
-                if time.time() - self._unlocked_at > self.config.safety_timeout:
+                # Auto-lock ditunda selama window "dengar unlock" supaya jatah waktu
+                # memilih preset (safety_timeout) tidak terpotong oleh grace di bawah.
+                if time.time() - self._unlocked_at > self.config.safety_timeout + self.config.unlock_announce_sec:
                     print("  [FSM] Auto-lock (timeout)")
                     self._reset_to_locked()
+                    return None
+
+                # Grace "dengarkan konfirmasi unlock dulu": selama unlock.mp3 masih
+                # diputar, tahan pengenalan gesture preset (jangan akumulasi counter)
+                # supaya user menyimak dulu. Return sebelum logika confirm/grace-gesture.
+                if time.time() - self._unlocked_at < self.config.unlock_announce_sec:
+                    self._confirm_counter = 0
+                    self._confirm_gesture = None
                     return None
 
                 if gesture_id is None:
@@ -405,7 +438,7 @@ class Runtime:
             "unlocked":       self._fsm_state not in ("LOCKED", "UNLOCKING"),
             "hold_sec":       (time.time() - self._unlock_start_time) if self._unlock_start_time > 0 else 0.0,
             "hold_total":     self.config.safety_hold_sec,
-            "timeout_left":   max(0.0, self.config.safety_timeout - (time.time() - self._unlocked_at))
+            "timeout_left":   max(0.0, self.config.safety_timeout + self.config.unlock_announce_sec - (time.time() - self._unlocked_at))
                               if self._fsm_state in ("UNLOCKED", "CONFIRMING") else 0.0,
             "timeout_total":  self.config.safety_timeout,
             "presets":        self.presets,

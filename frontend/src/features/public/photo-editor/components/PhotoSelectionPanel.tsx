@@ -1,52 +1,37 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { Check } from 'lucide-react';
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import GlassCard from '@/components/shared/GlassCard';
 import type { Photo } from '../api/getPhotos';
 
-// Left panel displaying scrollable grid of session photos
+// Left panel displaying scrollable grid of session photos. Touchscreen: foto
+// dipilih dengan TAP (bukan drag). Foto terpilih ("armed") lalu di-tap ke slot
+// pada preview untuk ditempatkan.
 interface PhotoSelectionPanelProps {
   photos: Photo[];
   isLoading: boolean;
+  armedPhotoId: string | null;
+  onPhotoTap: (photo: Photo) => void;
 }
 
 interface PhotoItemProps {
   photo: Photo;
+  isArmed: boolean;
+  onTap: () => void;
 }
 
-function PhotoItem({ photo }: PhotoItemProps) {
-  const [isDragging, setIsDragging] = useState(false);
-
-  const handleDragStart = useCallback(
-    (e: React.DragEvent) => {
-      e.dataTransfer.effectAllowed = 'copy';
-      e.dataTransfer.setData(
-        'application/json',
-        JSON.stringify({
-          photoId: photo.id,
-          photoUrl: photo.url,
-        }),
-      );
-      setIsDragging(true);
-    },
-    [photo.id, photo.url],
-  );
-
-  const handleDragEnd = useCallback(() => {
-    setIsDragging(false);
-  }, []);
-
+function PhotoItem({ photo, isArmed, onTap }: PhotoItemProps) {
   return (
-    <div
+    <button
+      type="button"
       data-testid={`photo-thumbnail-${photo.id}`}
-      draggable
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      className={`relative aspect-square w-full rounded-xl overflow-hidden transition-all duration-150 shadow-md cursor-grab active:cursor-grabbing ${
-        isDragging
-          ? 'opacity-50 scale-95'
-          : 'opacity-100 hover:scale-[1.03] hover:shadow-lg'
+      onClick={onTap}
+      aria-pressed={isArmed}
+      className={`relative aspect-square w-full rounded-xl overflow-hidden transition-all duration-150 shadow-md touch-manipulation ${
+        isArmed
+          ? 'ring-4 ring-[#3F72AF] scale-[1.03] shadow-lg'
+          : 'ring-0 hover:scale-[1.03] hover:shadow-lg active:scale-95'
       }`}
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -56,13 +41,21 @@ function PhotoItem({ photo }: PhotoItemProps) {
         draggable={false}
         className="w-full h-full object-cover pointer-events-none select-none"
       />
-    </div>
+      {/* Badge saat foto sedang dipilih untuk ditempatkan. */}
+      {isArmed && (
+        <span className="absolute top-1.5 right-1.5 flex items-center justify-center w-7 h-7 rounded-full bg-[#3F72AF] text-white shadow-md">
+          <Check size={16} strokeWidth={3} />
+        </span>
+      )}
+    </button>
   );
 }
 
 export default function PhotoSelectionPanel({
   photos,
   isLoading,
+  armedPhotoId,
+  onPhotoTap,
 }: PhotoSelectionPanelProps) {
   if (isLoading) {
     return (
@@ -92,10 +85,17 @@ export default function PhotoSelectionPanel({
   return (
     <GlassCard className="flex flex-col shadow-none h-full max-w-none rounded-[19.28px]">
       <div className="flex-1 overflow-y-auto min-h-0 p-3 scrollbar-none">
-        <p className="text-[#ffff]/40 text-[13px] pl-3">SELECT PHOTO</p>
+        <p className="text-[#ffff]/40 text-[13px] pl-3">
+          {armedPhotoId ? 'TAP A SLOT TO PLACE' : 'TAP A PHOTO'}
+        </p>
         <div data-testid="photo-gallery" className="grid grid-cols-2 gap-2 p-2">
           {photos.map((photo) => (
-            <PhotoItem key={photo.id} photo={photo} />
+            <PhotoItem
+              key={photo.id}
+              photo={photo}
+              isArmed={armedPhotoId === photo.id}
+              onTap={() => onPhotoTap(photo)}
+            />
           ))}
         </div>
       </div>
