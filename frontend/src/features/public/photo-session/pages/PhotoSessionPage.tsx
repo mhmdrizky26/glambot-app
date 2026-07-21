@@ -15,6 +15,7 @@ import { useRobotConfig } from '../api/getRobotConfig';
 import { useRobotDetection } from '../api/getRobotDetection';
 import { apiClient } from '@/lib/api-client';
 import { playBackendAudio, stopBackendAudio } from '@/lib/audio';
+import { playAnnounce } from '../lib/announceAudio';
 import { usePersistedCountdown } from '@/lib/usePersistedCountdown';
 import { cn } from '@/lib/utils';
 
@@ -45,7 +46,7 @@ export function PhotoSessionPage() {
 
   // Play inisiasi.mp3 sekali saat halaman foto terbuka
   useEffect(() => {
-    if (sessionId) playBackendAudio('inisiasi.mp3');
+    if (sessionId) playAnnounce('inisiasi.mp3');
   }, [sessionId]);
 
   const { data: session, isFetching: isSessionFetching } = useGetSession({
@@ -171,13 +172,13 @@ export function PhotoSessionPage() {
         playBackendAudio('tahan.mp3');
       } else if (robotFsmState === 'UNLOCKED') {
         // Kunci terbuka — robot siap menerima gesture preset.
-        playBackendAudio('unlock.mp3');
+        playAnnounce('unlock.mp3');
       } else if (robotFsmState === 'LOCKED') {
         // Robot kembali terkunci (mis. setelah foto) — ingatkan user untuk
         // menunjukkan telapak buka lagi. LOCKED awal (mount) ditangani effect
         // inisiasi terpisah, jadi tidak dobel di sini (prevFsmRef mulai dari
         // 'LOCKED').
-        playBackendAudio('inisiasi.mp3');
+        playAnnounce('inisiasi.mp3');
       }
     }
     prevFsmRef.current = robotFsmState;
@@ -206,7 +207,7 @@ export function PhotoSessionPage() {
       }
       if (count >= 3) return;
       count += 1;
-      playBackendAudio('inisiasi.mp3');
+      playAnnounce('inisiasi.mp3');
     }, 5000);
     return () => clearInterval(id);
   }, [robotFsmState]);

@@ -85,6 +85,11 @@ class Runtime:
         self._unlock_grace_gesture = None
         self._capture_in_progress  = False
 
+        # Hold deteksi yang di-set FRONTEND tiap kali narasi (inisiasi/unlock)
+        # diputar — termasuk putaran ke-2/ke-3 loop inisiasi yang jadwalnya cuma
+        # diketahui frontend. Robot hanya menghormati deadline-nya.
+        self._detection_hold_until = 0.0
+
     # ─────────────────────────────────────────────────────────────
     #  Runtime tuning (dari admin lewat backend)
     # ─────────────────────────────────────────────────────────────
@@ -247,9 +252,9 @@ class Runtime:
         self._fsm_state            = "LOCKED"
         self._unlock_start_time    = 0.0
         self._unlocked_at          = 0.0
-        # Stamp waktu masuk LOCKED → dasar "grace dengar inisiasi" (locked_announce_sec).
-        # Kena tiap balik LOCKED (mis. setelah foto), jadi hanya loop PERTAMA inisiasi
-        # yang menahan unlock; retrigger 5s berikutnya sudah lewat window.
+        # Stamp waktu masuk LOCKED → jaring pengaman "grace dengar inisiasi" untuk
+        # putaran PERTAMA (locked_announce_sec), tanpa bergantung jaringan. Putaran
+        # berikutnya ditutup oleh hold yang dikirim frontend tiap kali narasi diputar.
         self._locked_at            = time.time()
         self._confirm_counter      = 0
         self._confirm_gesture      = None
@@ -268,6 +273,8 @@ class Runtime:
             self.tracking_active = False
             with self._fsm_lock:
                 self._reset_to_locked()
+                # Jangan sisakan hold narasi yang menggantung ke sesi berikutnya.
+                self._detection_hold_until = 0.0
             self._capture_in_progress = False
             if self.robot and self.robot.connected and self.robot.enabled:
                 self.robot.stop()
@@ -280,6 +287,28 @@ class Runtime:
         deteksi unlock selama robot masih homing ke initial pose."""
         with self._fsm_lock:
             self._locked_at = time.time()
+
+    # Batas atas hold — pengaman kalau payload frontend rusak/kebesaran supaya
+    # deteksi tidak bisa dibekukan lama.
+    MAX_DETECTION_HOLD_SEC = 10.0
+
+    def hold_detection(self, seconds: float) -> float:
+        """Tahan pengenalan gesture selama `seconds` ke depan. Dipanggil frontend
+        SETIAP kali narasi inisiasi/unlock diputar (termasuk putaran ke-2/ke-3 loop
+        inisiasi, yang jadwalnya hanya diketahui frontend) supaya user menyimak dulu.
+        Hold yang masuk saat masih ada hold aktif diambil yang paling jauh."""
+        try:
+            secs = float(seconds)
+        except (TypeError, ValueError):
+            return 0.0
+        secs = max(0.0, min(self.MAX_DETECTION_HOLD_SEC, secs))
+        with self._fsm_lock:
+            self._detection_hold_until = max(self._detection_hold_until, time.time() + secs)
+            return max(0.0, self._detection_hold_until - time.time())
+
+    def _in_announce_hold(self) -> bool:
+        """True selama narasi masih diputar (hold dari frontend belum lewat)."""
+        return time.time() < self._detection_hold_until
 
     # ─────────────────────────────────────────────────────────────
     #  Manual trigger
@@ -322,14 +351,22 @@ class Runtime:
             state = self._fsm_state
 
             if state in ("LOCKED", "UNLOCKING"):
-                # Grace "dengarkan inisiasi dulu": selama loop pertama inisiasi
-                # masih diputar setelah masuk LOCKED, jangan mulai proses unlock
-                # walau telapak buka (gesture 5) sudah terlihat. Reset progress &
-                # tetap di LOCKED supaya tidak ada bar unlock yang jalan duluan.
-                if time.time() - self._locked_at < self.config.locked_announce_sec:
+                # Grace "dengarkan inisiasi dulu": jangan MULAI proses unlock walau
+                # telapak buka (gesture 5) sudah terlihat, supaya tidak ada bar unlock
+                # yang jalan sebelum narasinya selesai. Aktif saat:
+                #   (a) hold dari frontend — berlaku untuk SETIAP putaran inisiasi, dan
+                #   (b) window sejak masuk LOCKED — jaring pengaman tanpa gantung
+                #       jaringan, menutup putaran pertama walau POST hold gagal.
+                #
+                # Sengaja HANYA saat state LOCKED: unlock yang SUDAH berjalan
+                # (UNLOCKING) tidak boleh dibatalkan narasi. Tanpa syarat ini, tick
+                # re-prompt yang telat (handDetectedRef frontend baru update tiap poll
+                # 150ms) bisa mereset progress telapak user yang sedang ditahan.
+                if state == "LOCKED" and (
+                    self._in_announce_hold()
+                    or time.time() - self._locked_at < self.config.locked_announce_sec
+                ):
                     self._unlock_start_time = 0.0
-                    if state == "UNLOCKING":
-                        self._fsm_state = "LOCKED"
                     return None
 
                 if gesture_id == 5:
@@ -361,7 +398,16 @@ class Runtime:
                 # Grace "dengarkan konfirmasi unlock dulu": selama unlock.mp3 masih
                 # diputar, tahan pengenalan gesture preset (jangan akumulasi counter)
                 # supaya user menyimak dulu. Return sebelum logika confirm/grace-gesture.
-                if time.time() - self._unlocked_at < self.config.unlock_announce_sec:
+                # Hold frontend ikut dihormati; window sejak UNLOCKED jadi pengamannya.
+                #
+                # Sama seperti cabang LOCKED: HANYA saat state UNLOCKED. Pengenalan
+                # preset yang sudah berjalan (CONFIRMING) tidak dibatalkan narasi yang
+                # datang telat. Window tetap efektif karena selama ia aktif state tak
+                # pernah sempat naik ke CONFIRMING.
+                if state == "UNLOCKED" and (
+                    self._in_announce_hold()
+                    or time.time() - self._unlocked_at < self.config.unlock_announce_sec
+                ):
                     self._confirm_counter = 0
                     self._confirm_gesture = None
                     return None
