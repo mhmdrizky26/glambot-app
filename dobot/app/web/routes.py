@@ -85,6 +85,16 @@ def create_app(runtime):
             },
         })
 
+    @app.route("/detection/hold", methods=["POST"])
+    def api_detection_hold():
+        # Frontend memberi tahu "narasi sedang diputar, tahan deteksi sekian detik".
+        # Dipakai untuk SETIAP putaran inisiasi/unlock — jadwal loop-nya hanya
+        # diketahui frontend, jadi robot cukup menghormati deadline yang dikirim.
+        data    = request.get_json(silent=True) or {}
+        seconds = data.get("seconds", runtime.config.locked_announce_sec)
+        left    = runtime.hold_detection(seconds)
+        return jsonify({"holding": left > 0, "seconds_left": round(left, 2)})
+
     @app.route("/presence")
     def api_presence():
         # Sinyal ringan untuk layar Home: ada gerakan di depan kamera dalam
