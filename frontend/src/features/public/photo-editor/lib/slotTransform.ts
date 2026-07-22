@@ -84,20 +84,37 @@ export const clampPhotoToSlot = (obj: fabric.Object): void => {
   }
 };
 
+/**
+ * Batas skala foto pada sudut saat ini:
+ * - min = skala cover (jangan biarkan sudut slot bocor)
+ * - max = MAX_SCALE_RATIO × skala cover awal
+ */
+export const scaleBounds = (obj: fabric.Object): { min: number; max: number } => {
+  const base = getData(obj).baseScale ?? obj.scaleX ?? 1;
+  return {
+    min: Math.max(base, minCoverScale(obj, obj.angle ?? 0)),
+    max: base * MAX_SCALE_RATIO,
+  };
+};
+
+/** Set skala foto ke nilai absolut (di-clamp ke batas cover/zoom), lalu clamp posisi. */
+export const setPhotoScale = (obj: fabric.Object, scale: number): void => {
+  const { min, max } = scaleBounds(obj);
+  obj.scale(Math.max(min, Math.min(max, scale)));
+  clampPhotoToSlot(obj);
+};
+
+/** Geser foto sebesar (dx, dy) di ruang koordinat canvas, lalu clamp cover. */
+export const movePhotoBy = (obj: fabric.Object, dx: number, dy: number): void => {
+  obj.left = (obj.left ?? 0) + dx;
+  obj.top = (obj.top ?? 0) + dy;
+  clampPhotoToSlot(obj);
+};
+
 /** Zoom foto aktif. dir > 0 = perbesar, dir < 0 = perkecil. */
 export const zoomPhoto = (obj: fabric.Object, dir: 1 | -1): void => {
-  const d = getData(obj);
-  const base = d.baseScale ?? obj.scaleX ?? 1;
   const factor = dir > 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
-
-  // Batas bawah = skala cover untuk sudut saat ini (jangan biarkan slot bocor).
-  const minScale = Math.max(base, minCoverScale(obj, obj.angle ?? 0));
-  const maxScale = base * MAX_SCALE_RATIO;
-
-  let next = (obj.scaleX ?? base) * factor;
-  next = Math.max(minScale, Math.min(maxScale, next));
-  obj.scale(next);
-  clampPhotoToSlot(obj);
+  setPhotoScale(obj, (obj.scaleX ?? 1) * factor);
 };
 
 /** Putar foto aktif. dir = 1 (searah jarum jam) atau -1. */

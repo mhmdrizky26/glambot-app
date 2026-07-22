@@ -30,7 +30,7 @@ export default function Home() {
     let lastPlay = 0;
 
     const play = () => {
-      playBackendAudio('mulai.mp3');
+      playBackendAudio('mulaiNew.mp3');
       lastPlay = Date.now();
     };
     const playThrottled = () => {

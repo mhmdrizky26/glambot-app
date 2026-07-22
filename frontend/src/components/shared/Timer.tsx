@@ -21,6 +21,9 @@ interface TimerProps {
   // menipis). Sengaja opt-in supaya HANYA dipakai di sesi foto & edit foto,
   // bukan di layar lain (mis. get-photos).
   urgentWhenLow?: boolean;
+  // Dipanggil saat status "urgent" (<=15 dtk) berubah — parent bisa memunculkan
+  // efek tambahan (mis. aura merah full-screen di editor foto).
+  onUrgentChange?: (urgent: boolean) => void;
 }
 
 export default function Timer({
@@ -28,6 +31,7 @@ export default function Timer({
   onTimeUp,
   storageKey = null,
   urgentWhenLow = false,
+  onUrgentChange,
 }: TimerProps) {
   const { timeLeft, clear } = usePersistedCountdown(storageKey, duration);
   const router = useRouter();
@@ -54,6 +58,15 @@ export default function Timer({
   }, [timeLeft, router, clear]);
 
   const isUrgent = urgentWhenLow && timeLeft <= URGENT_THRESHOLD_SEC;
+
+  // Laporkan perubahan status urgent ke parent (via effect, bukan saat render).
+  const onUrgentChangeRef = useRef(onUrgentChange);
+  useEffect(() => {
+    onUrgentChangeRef.current = onUrgentChange;
+  }, [onUrgentChange]);
+  useEffect(() => {
+    onUrgentChangeRef.current?.(isUrgent);
+  }, [isUrgent]);
 
   return (
     <div className="fixed p-8 top-4 right-4 z-50 pointer-events-none">

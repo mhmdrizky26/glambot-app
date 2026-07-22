@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { playBackendAudio } from '@/lib/audio';
+import { playBackendAudioForce } from '@/lib/audio';
 import { useRobotConfig } from '../api/getRobotConfig';
 
 // Countdown shutter (3-2-1) → file audio. Semua sudah dipreload global
@@ -96,7 +96,9 @@ export function CameraPreview({
   useEffect(() => {
     // Robot just started moving to a new preset (transition 0 → N or N → M)
     if (currentPreset > 0 && currentPreset !== prevPresetRef.current) {
-      playBackendAudio('presetTerkonfirmasi.mp3');
+      // Force: rangkaian jepret foto lebih penting dari narasi prioritas
+      // (peringatan waktu) — lihat playBackendAudioForce di lib/audio.
+      playBackendAudioForce('presetTerkonfirmasi.mp3');
     }
     prevPresetRef.current = currentPreset;
   }, [currentPreset]);
@@ -110,8 +112,9 @@ export function CameraPreview({
           playedRef.current.add(seconds);
           // Lewat channel narasi bersama (bukan Audio terpisah) supaya countdown
           // ikut aturan "satu suara": tiap angka menghentikan yang sebelumnya
-          // dan menghentikan voice FSM yang mungkin masih menyisa.
-          playBackendAudio(COUNTDOWN_AUDIO[seconds]);
+          // dan menghentikan voice FSM yang mungkin masih menyisa. Force supaya
+          // aba-aba jepret tetap terdengar walau ada narasi prioritas berbunyi.
+          playBackendAudioForce(COUNTDOWN_AUDIO[seconds]);
         }
       }
       wasActiveRef.current = true;

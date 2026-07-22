@@ -25,7 +25,14 @@ const ANNOUNCE_HOLD_SEC: Record<string, number> = {
  * bikin counter kereset terus sehingga preset tak pernah terkonfirmasi.
  */
 export function playAnnounce(filename: string): void {
-  playBackendAudio(filename);
+  const played = playBackendAudio(filename);
+
+  // Narasi dilewati (ada narasi PRIORITAS yang sedang dilindungi, mis.
+  // "waktu foto hampir habis") → JANGAN bekukan deteksi. Hold di sini hanya
+  // masuk akal sebagai "tunggu narasinya selesai"; kalau narasinya tidak jadi
+  // berbunyi, hold-nya cuma membuat gesture user berhenti terbaca tanpa sebab
+  // yang terlihat maupun terdengar.
+  if (!played) return;
 
   const seconds = ANNOUNCE_HOLD_SEC[filename];
   if (!seconds) return;

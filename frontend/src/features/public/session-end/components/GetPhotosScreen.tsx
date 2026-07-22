@@ -15,6 +15,13 @@ import { useAppConfig } from '@/shared/api/config';
 import { playBackendAudio, playBackendAudioAfterCurrent } from '@/lib/audio';
 import { toAbsoluteUrl } from '@/lib/api-client';
 
+// Timing tunggu preview strip (live GIF / framed) sebelum layar QR dibuka.
+// Berjenjang: poll sumber → preload sumbernya → jaring pengaman terakhir.
+const STRIP_POLL_MS = 1200; // interval cek framed strip / ketersediaan GIF
+const STRIP_WAIT_MS = 15000; // berhenti menunggu sumber, lanjut apa adanya
+const STRIP_PRELOAD_CAP_MS = 20000; // batas menunggu gambar/GIF selesai load
+const STRIP_HARD_CAP_MS = 32000; // jaring pengaman paling luar
+
 interface GetPhotosScreenProps {
   onComplete: () => void;
   sessionId: string;
@@ -63,10 +70,37 @@ export function GetPhotosScreen({
   // Strip preview: pakai hasil sesi yang sebenarnya, bukan gambar statis.
   // Prioritas: Live Strip GIF (animasi, paling menarik) → strip framed final →
   // fallback ke ilustrasi statis kalau keduanya belum ada.
-  const { data: framedPhotos } = useFramedPhotos({ sessionId });
-  const { data: liveGifAvailability } = useLiveGifAvailability({ sessionId });
+  //
+  // PENTING: layar ini dibuka TEPAT setelah compose, jadi saat mount backend
+  // biasanya BELUM selesai menulis framed strip / menyiapkan live GIF. Kalau
+  // kedua query cuma di-fetch sekali, keduanya balas "belum ada" → sumber
+  // preview dianggap tidak ada → loading langsung selesai → QR tampil, lalu
+  // beberapa detik kemudian GIF baru muncul & berputar loading di dalam kartu.
+  // Karena itu keduanya di-POLL sampai sumbernya benar-benar ada (atau menyerah
+  // setelah STRIP_WAIT_MS), baru preview di-preload dan halaman dibuka.
+  const [stripReady, setStripReady] = useState(false);
+  const [stripWaitExpired, setStripWaitExpired] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setStripWaitExpired(true), STRIP_WAIT_MS);
+    return () => clearTimeout(t);
+  }, []);
+
+  const stopPolling = stripReady || stripWaitExpired;
+  const { data: framedPhotos } = useFramedPhotos({
+    sessionId,
+    queryConfig: { refetchInterval: stopPolling ? false : STRIP_POLL_MS },
+  });
+  const { data: liveGifAvailability } = useLiveGifAvailability({
+    sessionId,
+    queryConfig: { refetchInterval: stopPolling ? false : STRIP_POLL_MS },
+  });
   const framedStrip = framedPhotos?.[0];
   const isLiveStripAvailable = liveGifAvailability?.available ?? false;
+
+  // Sumber preview sudah pasti — live GIF siap, atau framed strip sudah ada,
+  // atau kita sudah menunggu terlalu lama dan lanjut dengan apa adanya.
+  const stripSourceResolved =
+    isLiveStripAvailable || !!framedStrip || stripWaitExpired;
 
   // Batas aman: kalau link Drive belum siap setelah 45 detik (mis. upload gagal
   // / sangat lambat), jangan biarkan loading menggantung — lanjut ke QR dengan
@@ -86,14 +120,14 @@ export function GetPhotosScreen({
 
   // Pre-load preview strip (GIF live / framed) SEBELUM QR hasil tampil, supaya
   // saat halaman muncul preview sudah siap — bukan spinner di dalam kartu.
-  // GIF live di-generate backend (pre-gen goroutine saat compose); preload ini
-  // memicu/menunggu generasi selesai sehingga onload = GIF benar-benar siap.
-  const [stripReady, setStripReady] = useState(false);
+  // Untuk live GIF, request preload inilah yang memicu/menunggu generasi di
+  // backend, jadi onload = GIF benar-benar siap dan sudah masuk cache browser
+  // (URL-nya identik dengan yang dipakai GIFPreview, Cache-Control 60s).
   const stripPreloadRef = useRef(false);
-  // Jaring pengaman lepas dari state query: kalau availability/framed tak
-  // kunjung resolve (mis. error), jangan biarkan loading menggantung selamanya.
+  // Jaring pengaman lepas dari state query: kalau sumber/preload tak kunjung
+  // selesai, jangan biarkan loading menggantung selamanya.
   useEffect(() => {
-    const t = setTimeout(() => setStripReady(true), 20000);
+    const t = setTimeout(() => setStripReady(true), STRIP_HARD_CAP_MS);
     return () => clearTimeout(t);
   }, []);
   useEffect(() => {
@@ -101,6 +135,9 @@ export function GetPhotosScreen({
     // Tunggu status ketersediaan diketahui dulu agar sumber yang dipilih benar
     // (live strip vs framed vs statis). undefined = query belum selesai.
     if (liveGifAvailability === undefined || framedPhotos === undefined) return;
+    // Masih mungkin berubah (backend belum selesai menulis strip / GIF) →
+    // biarkan polling jalan dulu, jangan putuskan sumbernya sekarang.
+    if (!stripSourceResolved) return;
     stripPreloadRef.current = true;
 
     let src: string | null = null;
@@ -126,11 +163,12 @@ export function GetPhotosScreen({
     img.onload = finish;
     img.onerror = finish; // jangan hang kalau GIF gagal — biar GIFPreview handle
     img.src = src;
-    // Hard-cap: GIF live bisa perlu beberapa detik saat generate; setelah 15s
-    // tetap lanjut supaya loading tidak menggantung.
-    const t = setTimeout(finish, 15000);
+    // Hard-cap: GIF live bisa perlu beberapa detik saat generate; setelah
+    // batas ini tetap lanjut supaya loading tidak menggantung.
+    const t = setTimeout(finish, STRIP_PRELOAD_CAP_MS);
     return () => clearTimeout(t);
   }, [
+    stripSourceResolved,
     liveGifAvailability,
     framedPhotos,
     isLiveStripAvailable,

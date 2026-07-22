@@ -94,6 +94,30 @@
   .scrollbar-none::-webkit-scrollbar {
     display: none; /* Chrome, Safari and Opera */
   }
+
+  /* Aura merah full-screen (editor foto, 15 detik terakhir). Lembut tapi tetap
+     terbaca: semburat mulai agak jauh dari tepi (48%) supaya area merahnya
+     cukup lebar, dengan denyut pelan. Nilai alfa di sini sengaja di tengah —
+     versi 0.62 terlalu menyilaukan, versi 0.16 praktis tak terlihat. */
+  .animate-urgent-vignette {
+    background: radial-gradient(
+      ellipse at center,
+      transparent 48%,
+      rgba(255, 85, 85, 0.16) 78%,
+      rgba(255, 65, 65, 0.34) 100%
+    );
+    animation: urgentVignette 2s ease-in-out infinite;
+  }
+}
+
+@keyframes urgentVignette {
+  0%,
+  100% {
+    opacity: 0.45;
+  }
+  50% {
+    opacity: 0.85;
+  }
 }
 
 /* ─── Glambot Animations ─── */

@@ -1,6 +1,9 @@
 'use client';
 
-import { SessionHeader } from '../components/SessionHeader';
+import {
+  SessionHeader,
+  URGENT_THRESHOLD_SEC,
+} from '../components/SessionHeader';
 import { CameraPreview } from '../components/CameraPreview';
 import EndSessionButton from '../components/EndSessionButton';
 import { GestureDetectionPanel } from '../components/GestureDetectionPanel';
@@ -14,7 +17,11 @@ import { useLiveStream } from '../api/getLivePreview';
 import { useRobotConfig } from '../api/getRobotConfig';
 import { useRobotDetection } from '../api/getRobotDetection';
 import { apiClient } from '@/lib/api-client';
-import { playBackendAudio, stopBackendAudio } from '@/lib/audio';
+import {
+  playBackendAudio,
+  playBackendAudioPriority,
+  stopBackendAudio,
+} from '@/lib/audio';
 import { playAnnounce } from '../lib/announceAudio';
 import { usePersistedCountdown } from '@/lib/usePersistedCountdown';
 import { cn } from '@/lib/utils';
@@ -275,6 +282,31 @@ export function PhotoSessionPage() {
         clearTimeout(captureReleaseTimerRef.current);
     };
   }, []);
+
+  // Narasi "waktu foto hampir habis" — sekali saja, saat masuk 20 detik
+  // terakhir (ambang yang sama dengan timer merah di SessionHeader).
+  //
+  // Aturannya: narasi ini PRIORITAS, tidak boleh dipotong cue apa pun (unlock,
+  // inisiasi, tahan, preset terkonfirmasi) — itu diurus playBackendAudioPriority.
+  // Satu-satunya pengecualian adalah rangkaian auto-capture:
+  //  • Kalau saat ambang tercapai robot SEDANG capture/countdown (captureActive),
+  //    effect ini menunggu — begitu capture beres, ia jalan lagi & baru bunyi.
+  //  • Kalau countdown menyela di tengah narasi, onInterrupted membuka lagi
+  //    latch-nya sehingga narasi diulang setelah capture selesai.
+  // Sengaja playBackendAudio*, BUKAN playAnnounce, supaya tidak ikut menahan
+  // deteksi gesture — user mungkin sedang bersiap pose.
+  const lowTimeAudioFiredRef = useRef(false);
+  useEffect(() => {
+    if (lowTimeAudioFiredRef.current) return;
+    if (sessionTimeLeft > URGENT_THRESHOLD_SEC || sessionTimeLeft <= 0) return;
+    if (captureActive) return; // sedang countdown/jepret → tunda
+    lowTimeAudioFiredRef.current = true;
+    playBackendAudioPriority('waktuHabisFoto.mp3', {
+      onInterrupted: () => {
+        lowTimeAudioFiredRef.current = false;
+      },
+    });
+  }, [sessionTimeLeft, captureActive]);
 
   // Grace counter (detik) saat sessionTimeLeft sudah 0 tapi robot masih busy.
   // Dipakai untuk tampilkan timer negatif (-1, -2, ...) sebagai indikator

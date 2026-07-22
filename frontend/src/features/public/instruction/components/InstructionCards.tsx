@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
 import type { InstructionStep } from '../data/steps';
 import {
-  Camera,
   Hand,
   Ruler,
   LayoutGrid,
@@ -17,6 +17,11 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+// Arm 3D memakai WebGL (react-three-fiber) — harus client-only, tidak boleh
+// ikut di-render saat SSR. Dimuat lazy supaya bundle instruction page tidak
+// membawa three.js untuk step 1 & 2 yang tidak memakainya.
+const RobotArm3D = dynamic(() => import('./RobotArm3D'), { ssr: false });
 
 // Pemetaan kunci ikon (dari data steps) ke komponen lucide.
 const RULE_ICONS: Record<string, LucideIcon> = {
@@ -305,138 +310,123 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
     return () => clearInterval(interval);
   }, [step.gestures]);
 
-  // Posisi kamera per preset — mencerminkan pose ABSOLUT robot asli (lihat
-  // GambarPresetDobot), bukan gerakan relatif. Tiap preset = kombinasi
-  // translate (kiri/kanan + atas/bawah), scale (maju=besar/mundur=kecil), dan
-  // rotate (POV nunduk/nengadah). Indeks 0 = Preset 1, dst. Ikon beranimasi
-  // halus dari pose sebelumnya ke pose berikutnya via transition-transform.
-  const getPresetTransform = () => {
-    switch (activeIndex) {
-      case 0: // Preset 1 — Netral, di tengah, hadap lurus
-        return 'translate(0px, 0px) scale(1) rotate(0deg)';
-      case 1: // Preset 2 — Tinggi ke atas, hadap lurus (paling tinggi)
-        return 'translate(0px, -62px) scale(1) rotate(0deg)';
-      case 2: // Preset 3 — Kiri atas, hadap lurus
-        return 'translate(-120px, -40px) scale(1) rotate(0deg)';
-      case 3: // Preset 4 — Kanan atas, hadap lurus
-        return 'translate(120px, -40px) scale(1) rotate(0deg)';
-      case 4: // Preset 5 — Tengah agak atas, agak maju, POV ke bawah
-        return 'translate(0px, -34px) scale(1.15) rotate(12deg)';
-      case 5: // Preset 6 — Tengah agak bawah, agak maju, POV ke atas
-        return 'translate(0px, 22px) scale(1.15) rotate(-12deg)';
-      case 6: // Preset 7 — Kanan bawah, hadap lurus
-        return 'translate(120px, 40px) scale(1) rotate(0deg)';
-      case 7: // Preset 8 — Kiri bawah, hadap lurus
-        return 'translate(-120px, 40px) scale(1) rotate(0deg)';
-      case 8: // Preset 9 — Tengah agak atas, agak mundur, POV ke bawah
-        return 'translate(0px, -46px) scale(0.85) rotate(12deg)';
-      case 9: // Preset 10 — Netral di tengah, ke depan, hadap agak ke bawah
-        return 'translate(0px, 4px) scale(1.18) rotate(8deg)';
-      default:
-        return 'translate(0px, 0px) scale(1) rotate(0deg)';
-    }
-  };
+  // Pose robot per preset ada di ../lib/armKinematics.ts (PRESET_POSES).
 
   return (
-    <div className="flex flex-col items-center">
-      <div className="flex flex-row gap-6 w-full max-w-318.75 justify-center mb-6">
-        <div className="w-118.25 shrink-0">
-          <GlassCard
-            maxWidth="max-w-full"
-            className="h-full p-8 flex flex-col items-center text-center relative overflow-hidden"
-          >
-            <div className="w-full flex flex-col items-center mt-4">
-              <h3 className="text-white text-[40px] font-bold leading-15 mb-3">
-                Camera Movement
-              </h3>
-              <p className="text-white/35 text-base leading-6">
-                Camera movement based on hand gestures
-              </p>
-            </div>
+    // Lebar dikunci ke lebar container publik (max-w-360) dengan padding
+    // simetris, jadi margin kiri & kanan kartu selalu sama.
+    <div className="flex w-full max-w-360 flex-row items-stretch gap-7 px-10">
+      {/* Kiri — panggung 3D robot + kamera */}
+      <GlassCard
+        maxWidth="max-w-none"
+        className="flex w-[560px] shrink-0 flex-col p-9"
+      >
+        <h3 className="text-[36px] font-bold leading-[1.15] text-white">
+          Camera Movement
+        </h3>
 
-            {/* Camera icon centred over horizontal line */}
-            <div className="w-full flex justify-center items-center flex-1 relative min-h-35">
-              <div className="absolute w-full h-px bg-white/20" />
-              <div
-                className="relative z-10 w-16 h-12 bg-blue-100 rounded-xl flex items-center justify-center shadow-lg transition-transform duration-[800ms] ease-in-out"
-                style={{ transform: getPresetTransform() }}
+        {/* Robot arm 3D dengan DSLR terpasang di flange-nya. Kamera ikut
+            bergerak karena memang menempel di ujung arm — bukan dua
+            animasi terpisah.
+
+            Panggung sengaja diperbesar (kartu 500→560px, min-h 280→360px) untuk
+            membesarkan arm TANPA menggeser kamera: memperbesar kanvas menaikkan
+            ukuran piksel arm sambil membiarkan framing NDC apa adanya, jadi
+            tidak ada risiko preset terpotong seperti kalau jarak kamera
+            dipendekkan (lihat catatan cameraPosition di bawah). */}
+        <div className="relative mt-7 min-h-90 flex-1 overflow-hidden rounded-2xl border border-white/10 bg-white/5">
+          {/* Panggung di sini nyaris persegi, bukan lanskap seperti versi lama,
+              jadi FOV horizontalnya jauh lebih sempit. Jarak bukan kira-kira:
+              memproyeksikan seluruh titik joint kesepuluh preset lewat matriks
+              pandang ini memberi |NDC| terburuk 1,18 pada jarak 2,1 (terpotong)
+              dan 0,91 pada 2,6 — memusatkan ulang pandangan tidak membantu
+              karena sapuan arm memang sudah terpusat di basis.
+
+              Setelah subjudul dihapus, panggung tumbuh lebih tinggi daripada
+              lebar (rasio ±1,01 → ±0,96), sehingga FOV horizontal menyempit dan
+              |NDC| naik ±5% — pada 2,46 itu menyerempet 1,0 alias mulai
+              terpotong. Karena itu jaraknya dimundurkan ke 2,55: arm tetap
+              tampil ±15% lebih besar (kanvasnya jauh lebih tinggi) tanpa ada
+              preset yang kena crop. */}
+          <RobotArm3D
+            presetIndex={activeIndex}
+            cameraPosition={[0.67, 0.4, 2.55]}
+            className="absolute inset-0"
+          />
+          <span className="absolute bottom-4 left-4 rounded-full bg-black/40 px-3.5 py-1.5 text-sm font-semibold text-white/80 backdrop-blur-sm">
+            Preset {activeIndex + 1}
+          </span>
+        </div>
+      </GlassCard>
+
+      {/* Kanan — grid gesture + tombol lanjut */}
+      <GlassCard maxWidth="max-w-none" className="flex flex-1 flex-col p-9">
+        <div className="text-center">
+          <h2 className="text-[44px] font-bold leading-tight text-white">
+            {step.heading}
+          </h2>
+          <p className="mt-2 text-[18px] leading-7 text-white/40">
+            {step.subheading}
+          </p>
+        </div>
+
+        <div className="mt-8 grid grid-cols-5 gap-4">
+          {step.gestures?.map((gesture, i) => {
+            const isActive = i === activeIndex;
+
+            return (
+              <GlassCard
+                key={i}
+                variant="secondary"
+                className={cn(
+                  'flex h-[150px] flex-col items-center justify-center rounded-2xl border px-2 py-4 text-center transition-all duration-300',
+                  isActive
+                    ? 'scale-[1.04] border-white/15 bg-[#3f72af]/65 shadow-lg'
+                    : 'border-transparent',
+                )}
               >
-                <Camera className="text-primary" size={24} />
-                <div className="absolute -top-1.5 -right-1.5 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white" />
-              </div>
-            </div>
-          </GlassCard>
-        </div>
-
-        <div className="w-3xl shrink-0">
-          <GlassCard maxWidth="max-w-full" className="py-6 px-8 flex flex-col">
-            <div className="text-center mb-5">
-              <h2 className="text-[48px] font-bold text-white mb-1.5 leading-14">
-                {step.heading}
-              </h2>
-              <p className="text-white/35 text-[17px] leading-6">
-                {step.subheading}
-              </p>
-            </div>
-
-            <div className="grid grid-cols-5 gap-3">
-              {step.gestures?.map((gesture, i) => {
-                const isActive = i === activeIndex;
-
-                return (
-                  <GlassCard
-                    key={i}
-                    variant="secondary"
+                {gesture.icon ? (
+                  /* eslint-disable-next-line @next/next/no-img-element */
+                  <img
+                    src={gesture.icon}
+                    alt={`Preset ${i + 1}`}
+                    width={58}
+                    height={58}
                     className={cn(
-                      'flex h-38 w-31.25 flex-col items-center justify-center rounded-2xl px-2 py-3 text-center transition-all duration-300',
-                      isActive
-                        ? 'scale-[1.04] border-white/10 bg-[#3f72af]/65 shadow-md'
-                        : 'border-transparent',
+                      'object-contain',
+                      // Preset 6 (Move Left) — gambar diputar 100° ke kanan
+                      // supaya jempol menghadap ke atas.
+                      gesture.icon?.includes('MOVELEFT') && 'rotate-[100deg]',
                     )}
-                  >
-                    <div className="flex items-center justify-center">
-                      {gesture.icon ? (
-                        /* eslint-disable-next-line @next/next/no-img-element */
-                        <img
-                          src={gesture.icon}
-                          alt={`Preset ${i + 1}`}
-                          width={55}
-                          height={55}
-                          className={cn(
-                            'object-contain',
-                            // Preset 6 (Move Left) — gambar diputar 100° ke
-                            // kanan supaya jempol menghadap ke atas.
-                            gesture.icon?.includes('MOVELEFT') &&
-                              'rotate-[100deg]',
-                          )}
-                        />
-                      ) : (
-                        <span className="inline-block h-14 w-14" />
-                      )}
-                    </div>
+                  />
+                ) : (
+                  <span className="inline-block h-14 w-14" />
+                )}
 
-                    <span className="mt-3 text-base font-semibold text-white">
-                      Preset {i + 1}
-                    </span>
-                  </GlassCard>
-                );
-              })}
-            </div>
-          </GlassCard>
+                <span className="mt-3 text-base font-semibold text-white">
+                  Preset {i + 1}
+                </span>
+              </GlassCard>
+            );
+          })}
         </div>
-      </div>
 
-      <div className="flex flex-row items-center gap-8 mt-8">
-        <Button
-          onClick={onNext}
-          className={cn(
-            'rounded-full px-8 py-6 text-xl bg-primary hover:bg-primary/90 text-white border-0 shadow-[0_4px_20px_rgba(17,45,78,0.5)] transition-opacity duration-300',
-            !hasCompletedFirstLoop && 'opacity-0 pointer-events-none',
-          )}
-        >
-          {buttonLabel}
-        </Button>
-      </div>
+        {/* Bar bawah — tombol lanjut. Tanpa kartu latar (tombolnya langsung di
+            atas kartu induk), tapi tinggi barisnya tetap dipesan lewat padding
+            supaya layout tidak melompat saat tombol masih tersembunyi
+            (menunggu satu putaran penuh animasi). */}
+        <div className="mt-7 flex items-center justify-center px-6 py-4">
+          <Button
+            onClick={onNext}
+            className={cn(
+              'rounded-full bg-primary px-8 py-6 text-xl text-white shadow-[0_4px_20px_rgba(17,45,78,0.5)] transition-opacity duration-300 hover:bg-primary/90',
+              !hasCompletedFirstLoop && 'pointer-events-none opacity-0',
+            )}
+          >
+            {buttonLabel}
+          </Button>
+        </div>
+      </GlassCard>
     </div>
   );
 }
