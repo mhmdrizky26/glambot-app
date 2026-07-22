@@ -6,10 +6,7 @@ from app.detector.helpers    import draw_landmarks_manual
 
 def draw_overlay(frame, det, full, *,
                  tracking_active=True,
-                 detection_paused=False,
-                 robot=None,
-                 dry_run=False,
-                 safety_state=None):
+                 detection_paused=False):
     out = frame.copy()
     fw, fh = frame.shape[1], frame.shape[0]
 
@@ -30,8 +27,7 @@ def draw_overlay(frame, det, full, *,
     # tangan — supaya mudah melihat tangan mana yang terdeteksi dan gesture
     # apa. Overlay status lain (safety gate + hold bar, teks gesture besar di
     # pojok, status PRESET/READY, indikator TRACKING, dan status ROBOT) DIHAPUS
-    # agar tampilan bersih. Param robot/dry_run/safety_state dibiarkan di
-    # signature untuk kompatibilitas pemanggil, meski tak lagi digambar.
+    # agar tampilan bersih.
     if not detection_paused:
         # ── Hand skeleton ────────────────────────────────────────────
         if full.get("hand_detected") and "landmarks_raw" in full:

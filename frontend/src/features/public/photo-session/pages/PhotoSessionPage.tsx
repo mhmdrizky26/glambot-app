@@ -21,6 +21,8 @@ import {
   playBackendAudio,
   playBackendAudioPriority,
   stopBackendAudio,
+  isVoiceBusy,
+  isPriorityAudioPlaying,
 } from '@/lib/audio';
 import { playAnnounce } from '../lib/announceAudio';
 import { usePersistedCountdown } from '@/lib/usePersistedCountdown';
@@ -29,6 +31,13 @@ import { cn } from '@/lib/utils';
 // Hard cap untuk grace period setelah timer 0: kalau robot stuck atau webhook
 // /done tidak fire, paksa end sesi setelah ini supaya kiosk tidak hang.
 const MAX_GRACE_SEC = 30;
+
+// Floor untuk narasi "waktu foto hampir habis": ia di-arm di URGENT_THRESHOLD_SEC
+// (30 dtk, sama dengan ambang timer merah) tapi WAJIB sempat bunyi selagi sisa
+// waktu > floor ini. Kalau tak ketemu celah bersih sebelum floor, sengaja di-drop
+// (peringatan yang telat tak berguna). Window 30→10 selebar 20 dtk — pasti memuat
+// minimal satu siklus gerakan, jadi hampir selalu ada celah bersih.
+const LOW_TIME_FLOOR_SEC = 10;
 
 // Daftar gesture preset 1–10 — pakai sumber yang SAMA dengan halaman Instruction
 // supaya nomor preset konsisten di kedua halaman (dan urutannya cocok dengan
@@ -207,6 +216,11 @@ export function PhotoSessionPage() {
       // Sesi sedang berakhir → hentikan re-prompt supaya tak ada suara sesi
       // yang menyambung ke layar loading.
       if (endingRef.current) return;
+      // Peringatan "waktu hampir habis" sedang berbunyi → JANGAN re-prompt.
+      // inisiasi sekarang force (menembus priority), jadi tanpa guard ini re-prompt
+      // bisa memotong peringatan di tengah. Skip TANPA menaikkan count (cuma tunda,
+      // bukan hangus) → peringatan sempat selesai utuh, lalu re-prompt lanjut normal.
+      if (isPriorityAudioPlaying()) return;
       // Tangan muncul → reset hitungan, tunggu diam lagi.
       if (handDetectedRef.current) {
         count = 0;
@@ -283,23 +297,38 @@ export function PhotoSessionPage() {
     };
   }, []);
 
-  // Narasi "waktu foto hampir habis" — sekali saja, saat masuk 20 detik
-  // terakhir (ambang yang sama dengan timer merah di SessionHeader).
+  // Narasi "waktu foto hampir habis" — sekali saja, dijamin terdengar dengan lead
+  // waktu yang berguna. Di-arm saat masuk URGENT_THRESHOLD_SEC (30 dtk, ambang
+  // yang SAMA dengan timer merah) dan wajib sempat bunyi selagi sisa > FLOOR (10).
   //
-  // Aturannya: narasi ini PRIORITAS, tidak boleh dipotong cue apa pun (unlock,
-  // inisiasi, tahan, preset terkonfirmasi) — itu diurus playBackendAudioPriority.
-  // Satu-satunya pengecualian adalah rangkaian auto-capture:
-  //  • Kalau saat ambang tercapai robot SEDANG capture/countdown (captureActive),
-  //    effect ini menunggu — begitu capture beres, ia jalan lagi & baru bunyi.
-  //  • Kalau countdown menyela di tengah narasi, onInterrupted membuka lagi
-  //    latch-nya sehingga narasi diulang setelah capture selesai.
-  // Sengaja playBackendAudio*, BUKAN playAnnounce, supaya tidak ikut menahan
-  // deteksi gesture — user mungkin sedang bersiap pose.
+  // Aturannya: narasi ini PRIORITAS terhadap cue robot BIASA (tahan), tapi
+  // MENGALAH pada dua hal yang lebih penting:
+  //  • Jepret (presetTerkonfirmasi + countdown 3-2-1) = playBackendAudioForce.
+  //  • Instruksi (unlock/inisiasi) = playAnnounce → juga force sekarang, supaya
+  //    instruksi tak pernah ke-skip ("unlock dulu, baru peringatan").
+  // Kalau salah satunya menembus, onInterrupted membuka latch → peringatan diulang
+  // di celah bersih berikutnya.
+  //
+  // Supaya peringatan tidak (a) mulai lalu langsung dipotong, atau (b) memotong
+  // instruksi yang sedang/menjelang berbunyi, ia hanya mulai saat robot TIDAK
+  // engaged (captureActive false — di luar seluruh rangkaian unlock→jepret) DAN
+  // channel narasi senyap (isVoiceBusy false — mis. inisiasi LOCKED belum kelar).
+  // Window 30→10 cukup lebar untuk memuat satu siklus gerakan (<20s), jadi hampir
+  // selalu ada celah idle-senyap sebelum floor.
+  //
+  // Sengaja playBackendAudioPriority, BUKAN playAnnounce — jadi TIDAK membekukan
+  // deteksi gesture di robot; user tetap bisa gesture selagi peringatan berbunyi.
   const lowTimeAudioFiredRef = useRef(false);
   useEffect(() => {
     if (lowTimeAudioFiredRef.current) return;
-    if (sessionTimeLeft > URGENT_THRESHOLD_SEC || sessionTimeLeft <= 0) return;
-    if (captureActive) return; // sedang countdown/jepret → tunda
+    if (
+      sessionTimeLeft > URGENT_THRESHOLD_SEC ||
+      sessionTimeLeft <= LOW_TIME_FLOOR_SEC
+    )
+      return;
+    // Engaged (unlock→jepret) atau ada narasi lain sedang bunyi → tunda, biar
+    // instruksi menang & tak ada penggalan sebelum unlock.
+    if (captureActive || isVoiceBusy()) return;
     lowTimeAudioFiredRef.current = true;
     playBackendAudioPriority('waktuHabisFoto.mp3', {
       onInterrupted: () => {
@@ -395,6 +424,10 @@ export function PhotoSessionPage() {
       ? `/photo-editor?sessionId=${sessionId}`
       : `/session-end?sessionId=${sessionId}`;
 
+    // Tampilkan loader transisi saat sesi berakhir — bagian dari rangkaian
+    // side-effect akhir sesi (audio stop, broadcast, robot disable, navigasi),
+    // jadi setState sinkron di sini disengaja.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setShowTransition(true);
 
     // Tampilkan dulu loading screen "Preparing…" sejenak sebelum pindah ke

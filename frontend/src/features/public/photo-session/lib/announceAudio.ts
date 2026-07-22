@@ -1,5 +1,5 @@
 import { resolveRobotUrl } from '@/lib/api-client';
-import { playBackendAudio } from '@/lib/audio';
+import { playBackendAudioForce } from '@/lib/audio';
 
 /**
  * Lama hold deteksi per narasi (detik) = panjang file audio + margin skew
@@ -25,14 +25,13 @@ const ANNOUNCE_HOLD_SEC: Record<string, number> = {
  * bikin counter kereset terus sehingga preset tak pernah terkonfirmasi.
  */
 export function playAnnounce(filename: string): void {
-  const played = playBackendAudio(filename);
-
-  // Narasi dilewati (ada narasi PRIORITAS yang sedang dilindungi, mis.
-  // "waktu foto hampir habis") → JANGAN bekukan deteksi. Hold di sini hanya
-  // masuk akal sebagai "tunggu narasinya selesai"; kalau narasinya tidak jadi
-  // berbunyi, hold-nya cuma membuat gesture user berhenti terbaca tanpa sebab
-  // yang terlihat maupun terdengar.
-  if (!played) return;
+  // Instruksi (inisiasi/unlock) OUTRANK peringatan "waktu hampir habis": pakai
+  // force supaya SELALU berbunyi & menembus narasi prioritas kalau kebetulan
+  // sedang diputar. Peringatan yang tertembus lalu arm-ulang sendiri (lewat
+  // onInterrupted-nya) dan menyusul di celah bersih berikutnya. Jadi instruksi
+  // tak pernah ke-skip — user selalu dengar "unlock" dulu, peringatan belakangan.
+  // Karena force selalu benar-benar memutar, hold deteksi juga selalu dikirim.
+  playBackendAudioForce(filename);
 
   const seconds = ANNOUNCE_HOLD_SEC[filename];
   if (!seconds) return;

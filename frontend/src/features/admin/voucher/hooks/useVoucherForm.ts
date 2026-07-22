@@ -3,6 +3,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { voucherSchema, VoucherFormData } from '../forms/voucher';
 import { Voucher } from '../api/types';
+import { withFormErrorLogging } from '@/lib/formSubmit';
 
 type VoucherFormInput = z.input<typeof voucherSchema>;
 
@@ -31,19 +32,11 @@ export const useVoucherForm = ({
     },
   });
 
-  const handleSubmit = async (data: VoucherFormData) => {
-    try {
-      await onSubmit(data);
-    } catch (error) {
-      console.error('Form submission error:', error);
-    }
-  };
-
-  const handleFormSubmit = form.handleSubmit(handleSubmit);
+  const handleSubmit = withFormErrorLogging(onSubmit);
 
   return {
     form,
-    onSubmit: handleFormSubmit,
+    onSubmit: form.handleSubmit(handleSubmit),
     isLoading: form.formState.isSubmitting,
   };
 };

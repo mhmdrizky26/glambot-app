@@ -211,15 +211,7 @@ class GestureDetector:
 
         det = detect_mediapipe(frame, self._hands_detector)
         if det is None:
-            det = {
-                "hand_detected": False,
-                "gesture_id":    None,
-                "gesture_name":  "None",
-                "confidence":    0.0,
-                "class_id":      None,
-                "bbox":          None,
-                "method":        "none",
-            }
+            det = self._empty_detection()
 
         raw_gid = det.get("gesture_id") if det.get("hand_detected") else None
         self._gesture_buffer.append(raw_gid)

@@ -213,5 +213,3 @@ export const CAMERA_MODEL = {
  * Murni rotasi tampilan; sudut joint tidak tersentuh.
  */
 export const SCENE_YAW = (105.9 * Math.PI) / 180;
-
-export const ALL_ARM_URLS = ARM_LINKS.map((l) => l.url);

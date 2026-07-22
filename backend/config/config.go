@@ -22,7 +22,6 @@ type Config struct {
 	AppEnv               string
 	DatabaseURL          string
 	MidtransServerKey    string
-	MidtransClientKey    string
 	MidtransEnv          string
 	StoragePath          string
 	DigiCamBaseURL       string
@@ -63,7 +62,6 @@ func Load() {
 		AppEnv:               getEnv("APP_ENV", "development"),
 		DatabaseURL:          getEnv("DATABASE_URL", "postgres://postgres:postgres@localhost:5432/photobooth?sslmode=disable"),
 		MidtransServerKey:    getEnv("MIDTRANS_SERVER_KEY", ""),
-		MidtransClientKey:    getEnv("MIDTRANS_CLIENT_KEY", ""),
 		MidtransEnv:          getEnv("MIDTRANS_ENV", "sandbox"),
 		StoragePath:          getEnv("STORAGE_PATH", "./storage"),
 		DigiCamBaseURL:       getEnv("DIGICAM_BASE_URL", "http://localhost:5513/api"),

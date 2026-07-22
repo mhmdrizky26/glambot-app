@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { playBackendAudio } from '@/lib/audio';
+import { playBackendAudio, stopBackendAudio } from '@/lib/audio';
 import { resolveRobotUrl } from '@/lib/api-client';
 
 // Cadence ulang ajakan "mulai" (ms).
@@ -68,6 +68,9 @@ export default function Home() {
   // tap — interaksi user ini sekaligus meng-"unlock" autoplay browser untuk
   // suara di halaman berikutnya.
   const handleStart = () => {
+    // Hentikan undangan "mulai" yang mungkin sedang loop dulu, supaya salam
+    // tidak menabrak potongan kata undangan (transisi suara bersih).
+    stopBackendAudio();
     playBackendAudio('selamatDatang.mp3');
     router.push('/package');
   };
@@ -92,9 +95,12 @@ export default function Home() {
       {/* Target sentuh menggantikan tombol "Tap to Start": cincin riak yang
           memuai keluar dari titik inti. Seluruh halaman tetap bisa di-tap, ini
           murni petunjuk visual (pointer-events-none). */}
-      <div className="mt-10 flex flex-col items-center gap-6 pointer-events-none">
+      <div className="mt-10 flex flex-col items-center pointer-events-none">
         <div className="relative flex items-center justify-center w-44 h-44">
-          {/* Cincin riak berlapis — delay berbeda supaya mengalir terus. */}
+          {/* Cincin riak berlapis — delay berbeda supaya mengalir terus. Ring
+              yang masih menunggu delay TIDAK lagi tampil pekat/solid di awal:
+              animasi pakai fill-mode `backwards` (lihat --animate-tap-ring),
+              jadi selama delay ring mengikuti keyframe 0% (opacity 0). */}
           {[0, 0.8, 1.6].map((delay) => (
             <span
               key={delay}
@@ -106,10 +112,6 @@ export default function Home() {
           {/* Titik inti yang berdenyut halus. */}
           <div className="w-18 h-18 rounded-full gradient-primary shadow-[0_0_40px_10px_rgba(17,45,78,0.25)] animate-pulse-glow" />
         </div>
-
-        <p className="text-primary text-[34px] font-semibold tracking-[6px] animate-soft-glow">
-          TAP ANYWHERE TO START
-        </p>
       </div>
     </main>
   );

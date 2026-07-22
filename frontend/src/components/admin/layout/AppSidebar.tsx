@@ -72,11 +72,6 @@ const navItems: NavItem[] = [
     url: '/devices',
     iconKey: 'monitor',
   },
-  // {
-  //   title: 'Filter',
-  //   url: '/filter',
-  //   iconKey: 'filter',
-  // },
   {
     title: 'Settings',
     url: '/settings',

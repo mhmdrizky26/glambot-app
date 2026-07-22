@@ -16,7 +16,6 @@ import (
 	"photobooth/config"
 	"regexp"
 	"strings"
-	"time"
 
 	xdraw "golang.org/x/image/draw"
 )
@@ -528,35 +527,9 @@ func buildFrameOverlay(framed *image.RGBA, slotRects []image.Rectangle, slotShap
 }
 
 func liveStripCacheValid(outPath string, opts LiveStripOptions) bool {
-	stat, err := os.Stat(outPath)
-	if err != nil {
-		return false
-	}
-	outMod := stat.ModTime()
-	check := func(p string) bool {
-		if p == "" {
-			return true
-		}
-		s, err := os.Stat(p)
-		if err != nil {
-			return true
-		}
-		return s.ModTime().Before(outMod) || s.ModTime().Equal(outMod)
-	}
-	if !check(opts.FramedImagePath) {
-		return false
-	}
-	if !check(opts.FrameSVGPath) {
-		return false
-	}
+	sources := []string{opts.FramedImagePath, opts.FrameSVGPath}
 	for _, ph := range opts.Photos {
-		for _, p := range ph.BurstFrames {
-			if !check(p) {
-				return false
-			}
-		}
+		sources = append(sources, ph.BurstFrames...)
 	}
-	// Jangan langsung trust cache yang umurnya 0 detik (kemungkinan baru
-	// ditulis di request paralel yang belum selesai).
-	return time.Since(outMod) >= 100*time.Millisecond
+	return cacheUpToDate(outPath, sources...)
 }

@@ -111,10 +111,15 @@ export function usePersistedCountdown(
     setState(initialState(key, duration));
   }
 
-  // Tick — recompute dari startedAt tiap detik supaya tidak drift saat tab
-  // di-throttle atau perangkat ter-suspend. Pakai functional update biar
-  // interval bisa berhenti otomatis saat timeLeft sampai 0 tanpa perlu
-  // include `state.timeLeft` di deps (yang akan recreate interval tiap detik).
+  // Tick — recompute dari startedAt supaya tidak drift saat tab di-throttle atau
+  // perangkat ter-suspend. Pakai functional update biar interval bisa berhenti
+  // otomatis saat timeLeft sampai 0 tanpa perlu include `state.timeLeft` di deps.
+  //
+  // Interval 250ms (bukan 1000ms): karena `next === prev.timeLeft` mem-bail-out
+  // render, display TETAP update sekali per detik — tapi PERPINDAHAN detiknya
+  // terdeteksi dalam ~250ms dari batas sebenarnya, bukan meleset sampai ~1 detik
+  // akibat fase interval yang acak. Ini yang bikin narasi "waktu hampir habis"
+  // (dipicu saat timeLeft menyentuh ambang urgent) berbunyi tepat waktu.
   useEffect(() => {
     if (state.startedAt === null) return;
 
@@ -126,7 +131,7 @@ export function usePersistedCountdown(
         if (next === prev.timeLeft) return prev;
         return { ...prev, timeLeft: next };
       });
-    }, 1000);
+    }, 250);
 
     // Avoid lint warning: startedAt unused; used hanya untuk dep tracking.
     void startedAt;

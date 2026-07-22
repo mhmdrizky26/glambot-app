@@ -107,6 +107,9 @@ export function CameraPreview({
     if (active) {
       const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
       if (seconds >= 1 && seconds <= 3) {
+        // Countdown digerakkan oleh state robot real-time (poll React Query);
+        // menyinkronkannya di effect memang disengaja, bukan state turunan.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setCountdown(seconds);
         if (!playedRef.current.has(seconds)) {
           playedRef.current.add(seconds);

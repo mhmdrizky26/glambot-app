@@ -97,6 +97,16 @@ export function isPriorityAudioPlaying(): boolean {
 }
 
 /**
+ * Apakah ADA narasi apa pun yang sedang berbunyi di channel? Dipakai pemanggil
+ * yang ingin menyelipkan narasi "boleh mengalah" (mis. peringatan waktu) HANYA
+ * saat channel senyap — supaya tidak memotong instruksi (unlock/inisiasi) yang
+ * sedang diputar. Beda dari isPriorityAudioPlaying: ini melihat suara aktual.
+ */
+export function isVoiceBusy(): boolean {
+  return !!currentVoice && !currentVoice.paused && !currentVoice.ended;
+}
+
+/**
  * Play an audio file served from backend `/storage/audio/`.
  * Caches the Audio element across calls so repeated plays don't re-fetch.
  * Silently fails on autoplay block / missing file.

@@ -57,7 +57,7 @@
   /* Home page (touchscreen): tidak ada lagi tombol "Tap to Start". Sebagai
      gantinya ada target sentuh — cincin riak yang memuai (tapRing) dan judul
      yang mengambang halus (floatY). */
-  --animate-tap-ring: tapRing 2.4s ease-out infinite;
+  --animate-tap-ring: tapRing 2.4s ease-out infinite backwards;
   --animate-float-y: floatY 4s ease-in-out infinite;
   /* "TAP ANYWHERE TO START": redup lalu nyala pelan-pelan (bukan kedip cepat). */
   --animate-soft-glow: softGlow 3.2s ease-in-out infinite;
@@ -223,6 +223,9 @@
 @keyframes tapRing {
   0% {
     transform: scale(0.35);
+    opacity: 0;
+  }
+  20% {
     opacity: 0.55;
   }
   80% {

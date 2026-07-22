@@ -145,25 +145,46 @@ export default function PhotoEditorPage() {
     ].filter((u): u is string => !!u);
 
     if (urls.length === 0) {
+      // Tak ada aset untuk di-preload → langsung siap. Sinkron di dalam effect
+      // preload ini disengaja (bukan state turunan), aman dari cascading render
+      // karena effect di-guard sekali jalan (preloadFiredRef).
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAssetsReady(true);
       return;
     }
 
     let cancelled = false;
-    const preloadOne = (url: string) =>
+    // Preload satu aset. Kalau gagal — mis. thumbnail BELUM sempat ditulis backend
+    // sesaat setelah sesi berakhir — coba lagi beberapa kali dengan jeda pendek
+    // sebelum menyerah, supaya editor BENAR-BENAR menunggu foto hasil siap, bukan
+    // reveal dengan gambar yang masih 404 lalu "pop-in". URL retry dibiarkan SAMA
+    // (bukan cache-bust) supaya begitu berhasil, <img> di grid menyajikannya dari
+    // cache secara instan.
+    const RETRY_MAX = 4;
+    const RETRY_DELAY_MS = 700;
+    const preloadOne = (url: string, attempt = 0): Promise<void> =>
       new Promise<void>((resolve) => {
+        if (cancelled) return resolve();
         const img = new Image();
         img.onload = () => resolve();
-        img.onerror = () => resolve(); // jangan blok reveal karena 1 aset gagal
+        img.onerror = () => {
+          if (cancelled || attempt >= RETRY_MAX) return resolve();
+          setTimeout(
+            () => preloadOne(url, attempt + 1).then(resolve),
+            RETRY_DELAY_MS,
+          );
+        };
         img.src = url;
       });
 
-    // Hard-cap 4s: kalau ada satu URL yang lambat/gagal senyap, editor tetap
-    // muncul dan tidak stuck selamanya di load screen.
-    const timeout = new Promise<void>((resolve) => setTimeout(resolve, 4000));
-    Promise.race([Promise.all(urls.map(preloadOne)), timeout]).then(() => {
-      if (!cancelled) setAssetsReady(true);
-    });
+    // Hard-cap 6s: jaring pengaman terakhir kalau ada aset yang tetap gagal/lambat
+    // di luar retry — editor tetap muncul, tidak stuck selamanya di load screen.
+    const timeout = new Promise<void>((resolve) => setTimeout(resolve, 6000));
+    Promise.race([Promise.all(urls.map((u) => preloadOne(u))), timeout]).then(
+      () => {
+        if (!cancelled) setAssetsReady(true);
+      },
+    );
 
     return () => {
       cancelled = true;
@@ -186,11 +207,16 @@ export default function PhotoEditorPage() {
   // halaman menampilkan spinner sembari router.replace('/package') jalan,
   // BUKAN return null lebih awal yang melanggar Rules of Hooks.
   if (!sessionId || photosLoading || framesLoading || !appConfig || !assetsReady) {
+    // Loader ini menyambung MULUS dari transisi "Preparing your photos..." di
+    // PhotoSessionPage — animasi + teks sengaja disamakan supaya terasa SATU
+    // loading kontinu, bukan "loading beres lalu nunggu lagi". Gate ini menahan
+    // editor sampai thumbnail foto + gambar frame benar-benar ter-decode
+    // (assetsReady), jadi begitu editor tampil, foto hasil langsung ada.
     return (
       <div className="flex flex-col items-center justify-center min-h-full gap-4">
-        <StatusAnimation status="waiting" className="w-24 h-24" />
+        <StatusAnimation status="processing" className="w-24 h-24" />
         <p className="text-primary font-medium text-lg animate-pulse">
-          Preparing your editor...
+          Preparing your photos...
         </p>
       </div>
     );
