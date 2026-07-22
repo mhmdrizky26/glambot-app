@@ -14,10 +14,8 @@ import (
 var midtransClient coreapi.Client
 
 type QRISResult struct {
-	OrderID string
 	QRISUrl string
 	QRISRaw string
-	Status  string
 }
 
 // InitMidtrans dipanggil sekali saat main.go start
@@ -52,8 +50,6 @@ func CreateQRISPayment(orderID string, amount int, sessionID string) (*QRISResul
 	}
 
 	result := &QRISResult{
-		OrderID: resp.OrderID,
-		Status:  resp.TransactionStatus,
 		QRISRaw: resp.QRString,
 	}
 

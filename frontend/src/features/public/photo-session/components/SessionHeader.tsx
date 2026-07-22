@@ -6,11 +6,12 @@ interface SessionHeaderProps {
   sessionTimeLeft?: number;
 }
 
-// Ambang "waktu menipis": mulai 20 detik terakhir dan TERUS berlaku saat timer
+// Ambang "waktu menipis": mulai 30 detik terakhir dan TERUS berlaku saat timer
 // sudah minus (overtime menunggu robot merampungkan capture). Di-export supaya
 // narasi "waktuHabisFoto.mp3" di PhotoSessionPage memakai ambang yang SAMA —
-// timer merah & suara peringatan selalu muncul bersamaan.
-export const URGENT_THRESHOLD_SEC = 20;
+// timer merah & peringatan suara di-arm bersamaan (audio punya floor sendiri,
+// LOW_TIME_FLOOR_SEC, agar tetap bunyi selagi sisa waktu masih berguna).
+export const URGENT_THRESHOLD_SEC = 30;
 
 export function SessionHeader({ sessionTimeLeft = 60 }: SessionHeaderProps) {
   const formattedTime = formatTimeMMSS(sessionTimeLeft);
@@ -28,7 +29,7 @@ export function SessionHeader({ sessionTimeLeft = 60 }: SessionHeaderProps) {
         </span>
       </div>
 
-      {/* Right: timer — 15 detik terakhir (dan seterusnya saat minus/overtime)
+      {/* Right: timer — 30 detik terakhir (dan seterusnya saat minus/overtime)
           berubah merah + denyut membesar sedikit, seperti tombol "Tap to Start". */}
       <div
         className={cn(

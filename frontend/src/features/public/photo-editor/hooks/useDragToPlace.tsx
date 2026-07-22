@@ -43,10 +43,13 @@ interface UseDragToPlaceOptions {
   onTap?: (photo: DragPhoto) => void;
 }
 
-// Ambang gerak (px, ruang layar) untuk membedakan niat.
-const ACTIVATE_DIST = 8; // total gerak yang memicu pengangkatan
+// Ambang gerak (px, ruang layar) untuk membedakan niat. Dibuat responsif supaya
+// foto terasa "gampang diangkat": jarak aktivasi kecil + long-press pendek, tapi
+// SCROLL_LOCK tetap sedikit lebih besar dari ACTIVATE_DIST agar scroll list
+// vertikal tidak keburu ke-angkat jadi drag.
+const ACTIVATE_DIST = 6; // total gerak yang memicu pengangkatan
 const SCROLL_LOCK_DIST = 10; // gerak tegak dominan → dianggap scroll, batalkan
-const HOLD_MS = 160; // tahan-diam untuk mengangkat
+const HOLD_MS = 120; // tahan-diam untuk mengangkat
 
 export function useDragToPlace({ onDrop, onTap }: UseDragToPlaceOptions) {
   // Info drag aktif untuk merender ghost (null = tidak sedang drag).

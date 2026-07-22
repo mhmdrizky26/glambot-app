@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { packageSchema, PackageFormData } from '../forms/package';
 import { type Package, type PackageCode } from '../api/types';
+import { withFormErrorLogging } from '@/lib/formSubmit';
 
 interface UsePackageFormProps {
   defaultValues?: Partial<Package>;
@@ -27,13 +28,7 @@ export const usePackageForm = ({
     },
   });
 
-  const handleSubmit = async (data: PackageFormData) => {
-    try {
-      await onSubmit(data);
-    } catch (error) {
-      console.error('Form submission error:', error);
-    }
-  };
+  const handleSubmit = withFormErrorLogging(onSubmit);
 
   return {
     form,

@@ -479,21 +479,6 @@ class Runtime:
     def capture_in_progress(self):
         return self._capture_in_progress
 
-    def safety_snapshot(self):
-        return {
-            "unlocked":       self._fsm_state not in ("LOCKED", "UNLOCKING"),
-            "hold_sec":       (time.time() - self._unlock_start_time) if self._unlock_start_time > 0 else 0.0,
-            "hold_total":     self.config.safety_hold_sec,
-            "timeout_left":   max(0.0, self.config.safety_timeout + self.config.unlock_announce_sec - (time.time() - self._unlocked_at))
-                              if self._fsm_state in ("UNLOCKED", "CONFIRMING") else 0.0,
-            "timeout_total":  self.config.safety_timeout,
-            "presets":        self.presets,
-            "gesture_map":    self.gesture_map,
-            "debounce_ratio": self._confirm_counter / self.config.preset_debounce_frames
-                              if self.config.preset_debounce_frames > 0 else 0.0,
-            "debounce_gid":   self._confirm_gesture,
-        }
-
     def recognition_progress(self):
         now = time.time()
         cfg = self.config

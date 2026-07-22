@@ -41,9 +41,6 @@ def create_app(runtime):
                     frame = runtime.detector.render_annotated(
                         tracking_active=runtime.tracking_active,
                         detection_paused=runtime.fsm_state in _CAPTURE_STATES,
-                        robot=runtime.robot,
-                        dry_run=runtime.dry_run,
-                        safety_state=runtime.safety_snapshot(),
                     )
                     if frame is not None:
                         _, buf = cv2.imencode(

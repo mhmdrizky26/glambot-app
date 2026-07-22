@@ -227,28 +227,32 @@ func standardPalette() color.Palette {
 	return standardPaletteCache
 }
 
-// upToDate cek apakah GIF cache masih valid (lebih baru dari semua source).
-func upToDate(outPath string, opts GenerateAnimationOptions) bool {
+// cacheUpToDate cek apakah file cache di outPath masih valid: ada, dan lebih
+// baru (atau sama) dari setiap source path. Path kosong / yang gagal di-stat
+// diabaikan. Cache berumur <100ms dianggap belum stabil (kemungkinan baru
+// ditulis salah / oleh request paralel yang belum selesai).
+func cacheUpToDate(outPath string, sourcePaths ...string) bool {
 	stat, err := os.Stat(outPath)
 	if err != nil {
 		return false
 	}
 	outMod := stat.ModTime()
-	check := func(p string) bool {
+	for _, p := range sourcePaths {
 		if p == "" {
-			return true
+			continue
 		}
 		s, err := os.Stat(p)
 		if err != nil {
-			return true
+			continue
 		}
-		return s.ModTime().Before(outMod) || s.ModTime().Equal(outMod)
-	}
-	for _, p := range opts.SelectedRawPaths {
-		if !check(p) {
+		if s.ModTime().After(outMod) {
 			return false
 		}
 	}
-	// Jangan langsung trust cache yang umurnya 0 detik (kemungkinan baru ditulis salah)
 	return time.Since(outMod) >= 100*time.Millisecond
+}
+
+// upToDate cek apakah GIF cache masih valid (lebih baru dari semua source).
+func upToDate(outPath string, opts GenerateAnimationOptions) bool {
+	return cacheUpToDate(outPath, opts.SelectedRawPaths...)
 }

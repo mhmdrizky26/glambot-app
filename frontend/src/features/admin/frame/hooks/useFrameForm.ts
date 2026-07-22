@@ -2,6 +2,7 @@ import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { frameSchema, FrameFormData } from '../forms/frame';
 import { Frame } from '../api/types';
+import { withFormErrorLogging } from '@/lib/formSubmit';
 
 interface UseFrameFormProps {
   defaultValues?: Partial<Frame>;
@@ -27,19 +28,11 @@ export const useFrameForm = ({
     },
   });
 
-  const handleSubmit = async (data: FrameFormData) => {
-    try {
-      await onSubmit(data);
-    } catch (error) {
-      console.error('Form submission error:', error);
-    }
-  };
-
-  const handleFormSubmit = form.handleSubmit(handleSubmit);
+  const handleSubmit = withFormErrorLogging(onSubmit);
 
   return {
     form,
-    onSubmit: handleFormSubmit,
+    onSubmit: form.handleSubmit(handleSubmit),
     isLoading: form.formState.isSubmitting,
   };
 };

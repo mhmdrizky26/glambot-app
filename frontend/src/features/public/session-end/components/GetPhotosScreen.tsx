@@ -148,6 +148,9 @@ export function GetPhotosScreen({
     }
     // Fallback statis (tidak ada strip nyata) → tak perlu ditunggu.
     if (!src) {
+      // Sinkron di dalam effect preload ini disengaja; effect di-guard sekali
+      // jalan (stripPreloadRef) jadi tidak memicu cascading render.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStripReady(true);
       return;
     }

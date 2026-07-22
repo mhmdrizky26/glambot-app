@@ -348,9 +348,19 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
               terpotong. Karena itu jaraknya dimundurkan ke 2,55: arm tetap
               tampil ±15% lebih besar (kanvasnya jauh lebih tinggi) tanpa ada
               preset yang kena crop. */}
+          {/* Alas/penopang: "card" beda warna menutup bagian bawah panggung
+              supaya arm terlihat BERDIRI di atas dudukan (mengikuti penopang
+              aslinya), bukan mengambang. Ditaruh SEBELUM kanvas 3D (di belakang)
+              jadi arm tetap tampil penuh di depannya. Tinggi ±30%: tepi atas card
+              jatuh pas di sekitar dudukan/base arm. Angkanya gampang di-tweak. */}
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-[30%] rounded-b-2xl border-t border-white/15 bg-gradient-to-b from-[#173a63]/80 to-[#0c1d34]/92" />
           <RobotArm3D
             presetIndex={activeIndex}
-            cameraPosition={[0.67, 0.4, 2.55]}
+            // Kamera memandang lurus ke −Z (tanpa orbit), jadi menaikkan X = pan
+            // murni: framing bergeser sedikit ke KIRI tanpa mengubah sudut
+            // head-on ("lurus ke depan"). 0.67 → 0.70 = geseran kecil; jangan
+            // terlalu besar supaya preset terkiri tidak menyerempet tepi.
+            cameraPosition={[0.7, 0.4, 2.55]}
             className="absolute inset-0"
           />
           <span className="absolute bottom-4 left-4 rounded-full bg-black/40 px-3.5 py-1.5 text-sm font-semibold text-white/80 backdrop-blur-sm">

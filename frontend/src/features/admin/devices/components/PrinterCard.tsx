@@ -2,7 +2,6 @@
 
 import * as React from 'react';
 import { PrinterIcon, WifiIcon, WifiOffIcon } from 'lucide-react';
-// import { Progress } from '@/components/admin/ui/progress'; // dipakai oleh stat konsumabel yang di-nonaktifkan sementara
 
 interface PrinterInfo {
   id: string;
@@ -26,14 +25,8 @@ interface PrinterCardProps {
 }
 
 export function PrinterCard({ data }: PrinterCardProps) {
-  // Konsumabel (kertas/ribbon/total print) tidak bisa dibaca dari OS print
-  // spooler generik, jadi stat-nya di-nonaktifkan sementara (lihat JSX di bawah).
-  // const hasPaperInfo = data.paperTotal > 0;
-  // const hasRibbonInfo = data.ribbonRemaining > 0;
-  // const paperPct = hasPaperInfo
-  //   ? Math.round((data.paperRemaining / data.paperTotal) * 100)
-  //   : 0;
-
+  // Konsumabel (kertas/ribbon/total print) tidak ditampilkan karena tidak bisa
+  // dibaca dari OS print spooler generik.
   return (
     <div className="bg-card flex flex-col gap-4 rounded-xl border p-6 shadow-sm">
       {/* Header */}
