@@ -1,10 +1,18 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import {
+  useEffect,
+  useState,
+  useRef,
+  useImperativeHandle,
+  forwardRef,
+  useCallback,
+} from 'react';
 import { fabric } from 'fabric';
 import type { Frame, FrameSlot } from '../api/getFrames';
 import type { FilterType } from '../pages/PhotoEditorPage';
 import { useCanvasRenderer } from '../hooks/useCanvasRenderer';
+import { usePinchZoom } from '../hooks/usePinchZoom';
 import {
   loadFrameImage,
   removePhotoBySlotId,
@@ -19,6 +27,25 @@ import { cn } from '@/lib/utils';
 const DEFAULT_CANVAS_W = 464;
 const DEFAULT_CANVAS_H = 696;
 
+/** API imperatif untuk parent: drag & drop + auto-isi slot saat waktu habis. */
+export interface PreviewAreaHandle {
+  /**
+   * Tempatkan foto ke slot; resolve setelah gambar benar-benar ter-render.
+   * `select: false` dipakai saat auto-isi (waktu habis) supaya tidak ada foto
+   * yang tiba-tiba terpilih/muncul toolbar di detik terakhir.
+   */
+  placePhotoInSlotById: (
+    slotId: string,
+    photoId: string,
+    photoUrl: string,
+    options?: { select?: boolean },
+  ) => Promise<void>;
+  /** Id slot yang belum terisi foto, URUT sesuai urutan slot pada frame. */
+  getEmptySlotIds: () => string[];
+  /** Id frame yang gambarnya SUDAH selesai dimuat ke canvas (null = belum). */
+  getReadyFrameId: () => string | null;
+}
+
 interface PreviewAreaProps {
   selectedFrame: Frame | null;
   selectedFilter: FilterType;
@@ -30,16 +57,26 @@ interface PreviewAreaProps {
   // Notifikasi slot foto yang sedang dipilih (null = tidak ada). Parent memakai
   // ini untuk menampilkan toolbar adjust di luar area preview.
   onActiveSlotChange?: (slotId: string | null) => void;
+  // True saat user sedang men-drag foto dari panel kiri → slot overlay diaktifkan
+  // sebagai drop target (pointer-events on) & diberi highlight.
+  isDragging?: boolean;
+  // Slot yang sedang di-hover ghost drag (untuk highlight target drop).
+  dragOverSlotId?: string | null;
 }
 
-export default function PreviewArea({
-  selectedFrame,
-  selectedFilter,
-  armedPhoto,
-  onPhotoPlaced,
-  onCanvasReady,
-  onActiveSlotChange,
-}: PreviewAreaProps) {
+function PreviewAreaInner(
+  {
+    selectedFrame,
+    selectedFilter,
+    armedPhoto,
+    onPhotoPlaced,
+    onCanvasReady,
+    onActiveSlotChange,
+    isDragging = false,
+    dragOverSlotId = null,
+  }: PreviewAreaProps,
+  ref: React.Ref<PreviewAreaHandle>,
+) {
   // Render di ruang koordinat asli frame (sama dengan slot disimpan di admin).
   // Server-side GIF & print sudah canvas-aware, jadi cukup samakan di sini.
   const CANVAS_W = selectedFrame?.canvasWidth || DEFAULT_CANVAS_W;
@@ -52,7 +89,12 @@ export default function PreviewArea({
 
   const loadedSlotsRef = useRef<Set<string>>(new Set());
   const loadedFrameIdRef = useRef<string | null>(null);
+  // Id frame yang gambarnya SELESAI dimuat (loadedFrameIdRef di-set sebelum
+  // load mulai, jadi tidak bisa dipakai sebagai tanda "canvas siap").
+  const frameReadyIdRef = useRef<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Box (persis seukuran canvas ter-scale) tempat listener pinch dipasang.
+  const canvasBoxRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   // Slot yang sudah terisi foto — dipakai untuk render overlay (reactive; ref
   // loadedSlotsRef tidak memicu re-render, jadi butuh state terpisah).
@@ -107,6 +149,7 @@ export default function PreviewArea({
       canvas.clear();
       loadedSlotsRef.current.clear();
       loadedFrameIdRef.current = null;
+      frameReadyIdRef.current = null;
       return;
     }
 
@@ -116,10 +159,12 @@ export default function PreviewArea({
     canvas.clear();
     loadedSlotsRef.current.clear();
     loadedFrameIdRef.current = frameId;
+    frameReadyIdRef.current = null;
 
     loadFrameImage(canvas, selectedFrame.imageUrl)
       .then(() => {
         organizeCanvasLayers(canvas);
+        frameReadyIdRef.current = frameId;
       })
       .catch((err) => {
         console.error('Failed to load frame:', err);
@@ -174,58 +219,104 @@ export default function PreviewArea({
     onActiveSlotChange?.(activeSlotId);
   }, [activeSlotId, onActiveSlotChange]);
 
-  // Tap slot → tempatkan foto yang sedang "armed". Menggantikan drag & drop:
-  // user tap foto di panel kiri, lalu tap slot ini. Kalau slot sudah terisi,
-  // foto lama diganti.
-  const placePhotoInSlot = (slot: FrameSlot) => {
-    const canvas = getFabricCanvas();
-    if (!canvas || !armedPhoto) return;
+  // Tempatkan foto ke slot (dipakai oleh drag-drop maupun tap-to-place). Kalau
+  // slot sudah terisi, foto lama diganti. Foto baru langsung dipilih → toolbar
+  // adjust + pinch-zoom aktif untuknya.
+  const placePhoto = useCallback(
+    async (
+      slot: FrameSlot,
+      photoId: string,
+      photoUrl: string,
+      // Auto-isi (waktu habis) tidak perlu memilih foto & memunculkan toolbar.
+      options: { select?: boolean } = {},
+    ): Promise<void> => {
+      const { select = true } = options;
+      const canvas = getFabricCanvas();
+      if (!canvas) return;
 
-    if (loadedSlotsRef.current.has(slot.id)) {
-      removePhotoBySlotId(canvas, slot.id);
-      loadedSlotsRef.current.delete(slot.id);
-    }
+      if (loadedSlotsRef.current.has(slot.id)) {
+        removePhotoBySlotId(canvas, slot.id);
+        loadedSlotsRef.current.delete(slot.id);
+      }
 
-    fitPhotoToSlot(armedPhoto.photoUrl, slot, canvas)
-      .then((img) => {
+      try {
+        const img = await fitPhotoToSlot(photoUrl, slot, canvas);
         loadedSlotsRef.current.add(slot.id);
         setFilledSlots((prev) => new Set(prev).add(slot.id));
         organizeCanvasLayers(canvas);
-        // Langsung pilih foto yang baru ditempatkan → toolbar adjust muncul.
-        canvas.setActiveObject(img);
-        setActiveSlotId(slot.id);
+        if (select) {
+          canvas.setActiveObject(img);
+          setActiveSlotId(slot.id);
+        }
         canvas.requestRenderAll();
-        onPhotoPlaced?.(slot.id, armedPhoto.photoId, armedPhoto.photoUrl);
-      })
-      .catch((err) => {
+        onPhotoPlaced?.(slot.id, photoId, photoUrl);
+      } catch (err) {
         console.error('Failed to load photo:', err);
-      });
+      }
+    },
+    [getFabricCanvas, onPhotoPlaced],
+  );
+
+  // Tap slot saat ada foto "armed" (fallback tap-to-place).
+  const placeArmedInSlot = (slot: FrameSlot) => {
+    if (!armedPhoto) return;
+    placePhoto(slot, armedPhoto.photoId, armedPhoto.photoUrl);
   };
 
-  // Overlay tiap slot: menampilkan nomor + jadi target tap. Saat ada foto armed,
-  // overlay aktif (bisa di-tap untuk menempatkan). Saat tidak, overlay
-  // pointer-events-none supaya tap tembus ke foto di canvas (untuk pilih/adjust).
+  // API imperatif untuk parent: drop foto (drag & drop) + auto-isi saat timeout.
+  useImperativeHandle(
+    ref,
+    () => ({
+      placePhotoInSlotById: async (slotId, photoId, photoUrl, options) => {
+        const slot = selectedFrame?.slots.find((s) => s.id === slotId);
+        if (slot) await placePhoto(slot, photoId, photoUrl, options);
+      },
+      getEmptySlotIds: () =>
+        (selectedFrame?.slots ?? [])
+          .filter((s) => !loadedSlotsRef.current.has(s.id))
+          .map((s) => s.id),
+      getReadyFrameId: () => frameReadyIdRef.current,
+    }),
+    [selectedFrame, placePhoto],
+  );
+
+  // Pinch-to-zoom + two-finger pan langsung di atas foto (touchscreen).
+  usePinchZoom(canvasBoxRef, getFabricCanvas, scale, setActiveSlotId);
+
+  // Overlay tiap slot: menampilkan nomor + jadi target DROP (drag) / TAP (armed).
+  // - Saat men-drag dari panel (isDragging) → overlay jadi drop target
+  //   (data-drop-slot dibaca elementFromPoint) & disorot saat di-hover ghost.
+  // - Saat ada foto armed → overlay bisa di-tap untuk menempatkan.
+  // - Selain itu pointer-events-none supaya sentuhan tembus ke foto di canvas
+  //   (untuk pilih/geser/pinch).
   const renderSlotOverlays = () => {
     if (!selectedFrame?.slots) return null;
+
+    const interactive = isDragging || !!armedPhoto;
 
     return selectedFrame.slots.map((slot, i) => {
       const number = i + 1;
       const filled = filledSlots.has(slot.id);
-      const prominent = !!armedPhoto || !filled; // nomor menonjol di tengah
+      const prominent = interactive || !filled; // nomor menonjol di tengah
+      const isDropTarget = isDragging && dragOverSlotId === slot.id;
 
       return (
         <button
           key={slot.id}
           type="button"
+          data-drop-slot={slot.id}
           disabled={!armedPhoto}
-          onClick={() => placePhotoInSlot(slot)}
+          onClick={() => placeArmedInSlot(slot)}
           className={cn(
             'absolute flex items-center justify-center rounded-md transition-all duration-150',
-            // Tanpa garis tepi pada frame — hanya nomor slot. Saat ada foto armed,
-            // slot bisa di-tap (feedback tipis saat ditekan).
-            armedPhoto
-              ? 'pointer-events-auto cursor-pointer active:bg-[#3F72AF]/25'
+            interactive
+              ? 'pointer-events-auto cursor-pointer'
               : 'pointer-events-none',
+            armedPhoto && !isDragging && 'active:bg-[#3F72AF]/25',
+            // Highlight saat ghost drag berada di atas slot ini.
+            isDropTarget
+              ? 'bg-[#3F72AF]/35 ring-4 ring-[#3F72AF] scale-[1.02]'
+              : isDragging && 'ring-2 ring-[#3F72AF]/40 ring-dashed',
           )}
           style={{
             left: slot.x * scale,
@@ -240,6 +331,7 @@ export default function PreviewArea({
               prominent
                 ? 'w-11 h-11 text-2xl bg-primary/80 shadow-lg'
                 : 'absolute top-1 left-1 w-6 h-6 text-xs bg-primary/70',
+              isDropTarget && 'scale-110 bg-[#3F72AF]',
             )}
           >
             {number}
@@ -252,7 +344,11 @@ export default function PreviewArea({
   return (
     <div className="relative h-full w-full flex flex-col p-2">
       <p className="gradient-text text-center text-[16px] leading-5 tracking[1.33px] mb-3">
-        {armedPhoto ? 'Tap a slot to place your photo' : 'Preview'}
+        {isDragging
+          ? 'Drop onto a slot'
+          : armedPhoto
+            ? 'Tap a slot to place your photo'
+            : 'Drag a photo in — pinch to zoom'}
       </p>
 
       <div
@@ -275,11 +371,14 @@ export default function PreviewArea({
         )}
 
         <div
+          ref={canvasBoxRef}
           className="relative"
           style={{
             width: CANVAS_W * scale,
             height: CANVAS_H * scale,
             display: selectedFrame ? 'block' : 'none',
+            // Cegah browser zoom/scroll saat pinch dua jari di atas foto.
+            touchAction: 'none',
           }}
         >
           <div
@@ -298,3 +397,10 @@ export default function PreviewArea({
     </div>
   );
 }
+
+const PreviewArea = forwardRef<PreviewAreaHandle, PreviewAreaProps>(
+  PreviewAreaInner,
+);
+PreviewArea.displayName = 'PreviewArea';
+
+export default PreviewArea;
