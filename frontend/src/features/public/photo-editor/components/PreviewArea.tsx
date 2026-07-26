@@ -313,10 +313,8 @@ function PreviewAreaInner(
               ? 'pointer-events-auto cursor-pointer'
               : 'pointer-events-none',
             armedPhoto && !isDragging && 'active:bg-[#3F72AF]/25',
-            // Highlight saat ghost drag berada di atas slot ini.
-            isDropTarget
-              ? 'bg-[#3F72AF]/35 ring-4 ring-[#3F72AF] scale-[1.02]'
-              : isDragging && 'ring-2 ring-[#3F72AF]/40 ring-dashed',
+            // Highlight saat ghost drag berada di atas slot ini (tanpa ring border).
+            isDropTarget && 'scale-[1.02]',
           )}
           style={{
             left: slot.x * scale,

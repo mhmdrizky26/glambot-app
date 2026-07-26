@@ -91,6 +91,7 @@ function initialState(key: string | null, duration: number): CountdownState {
 export function usePersistedCountdown(
   key: string | null,
   duration: number,
+  paused = false,
 ): PersistedCountdown {
   // Lazy init: hitung startedAt + sisa waktu sebelum first paint supaya
   // tidak ada flash dari durasi penuh ke nilai sebenarnya.
@@ -111,6 +112,22 @@ export function usePersistedCountdown(
     setState(initialState(key, duration));
   }
 
+  // Freeze time tick saat paused = true (geser startedAt maju agar elapsed time diam).
+  useEffect(() => {
+    if (!paused) return;
+
+    const pauseInterval = setInterval(() => {
+      setState((prev) => {
+        if (!prev.startedAt) return prev;
+        const newStartedAt = prev.startedAt + 250;
+        if (key) writeStored(key, { startedAt: newStartedAt, duration });
+        return { ...prev, startedAt: newStartedAt };
+      });
+    }, 250);
+
+    return () => clearInterval(pauseInterval);
+  }, [paused, key, duration]);
+
   // Tick — recompute dari startedAt supaya tidak drift saat tab di-throttle atau
   // perangkat ter-suspend. Pakai functional update biar interval bisa berhenti
   // otomatis saat timeLeft sampai 0 tanpa perlu include `state.timeLeft` di deps.
@@ -121,7 +138,7 @@ export function usePersistedCountdown(
   // akibat fase interval yang acak. Ini yang bikin narasi "waktu hampir habis"
   // (dipicu saat timeLeft menyentuh ambang urgent) berbunyi tepat waktu.
   useEffect(() => {
-    if (state.startedAt === null) return;
+    if (state.startedAt === null || paused) return;
 
     const startedAt = state.startedAt;
     const tick = setInterval(() => {
@@ -136,7 +153,7 @@ export function usePersistedCountdown(
     // Avoid lint warning: startedAt unused; used hanya untuk dep tracking.
     void startedAt;
     return () => clearInterval(tick);
-  }, [duration, state.startedAt]);
+  }, [duration, state.startedAt, paused]);
 
   // Stabilkan referensi `clear` lewat useCallback. Tanpa ini, parent yang
   // menaruh `clear` di deps useEffect ikut re-run sia-sia tiap render.

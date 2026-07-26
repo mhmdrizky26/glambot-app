@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { fabric } from 'fabric';
+import { HelpCircle } from 'lucide-react';
 
 import { StatusAnimation } from '@/components/shared/StatusAnimation';
 import Timer from '@/components/shared/Timer';
@@ -11,6 +12,7 @@ import PreviewArea, { type PreviewAreaHandle } from '../components/PreviewArea';
 import FrameSelectionPanel from '../components/FrameSelectionPanel';
 import ConfirmPrintButton from '../components/ConfirmPrintButton';
 import SlotAdjustToolbar from '../components/SlotAdjustToolbar';
+import PhotoEditorOnboarding from '../components/PhotoEditorOnboarding';
 import { zoomPhoto, rotatePhoto, resetPhoto } from '../lib/slotTransform';
 import { useDragToPlace, DragGhost } from '../hooks/useDragToPlace';
 
@@ -41,6 +43,7 @@ export default function PhotoEditorPage() {
   }, [sessionId, router]);
 
   // State
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(true);
   const [selectedFrame, setSelectedFrame] = useState<Frame | null>(null);
   const [selectedFilter, setSelectedFilter] = useState<FilterType>('original');
   const [activeTab, setActiveTab] = useState<TabType>('frame');
@@ -457,11 +460,12 @@ export default function PhotoEditorPage() {
     <div className="h-full w-full flex flex-col overflow-hidden">
       {/* 2 menit untuk pilih frame + foto, lalu auto ke session-end */}
       <Timer
-        duration={appConfig.photoEditorTimeoutSecs}
+        duration={appConfig?.photoEditorTimeoutSecs ?? 120}
         onTimeUp={handleTimeUp}
         storageKey={sessionId ? `photo-editor:${sessionId}` : null}
         urgentWhenLow
         onUrgentChange={handleUrgentChange}
+        paused={isOnboardingOpen}
       />
 
       {/* Semburat merah tipis di tepi layar saat waktu <15 detik — isyarat halus
@@ -471,10 +475,18 @@ export default function PhotoEditorPage() {
       )}
 
       {/* Header */}
-      <div className="w-full text-center py-1 shrink-0">
+      <div className="w-full text-center py-1 shrink-0 relative flex items-center justify-center px-6">
         <h1 className="text-primary text-[60px] font-bold tracking-tight">
           Select & Edit
         </h1>
+        <button
+          onClick={() => setIsOnboardingOpen(true)}
+          className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition font-semibold text-sm shadow-sm active:scale-95 cursor-pointer"
+          title="How to Use"
+        >
+          <HelpCircle className="w-4 h-4 text-primary" />
+          <span>How to Use</span>
+        </button>
       </div>
 
       {/* Main Content - 3 panels + confirm button */}
@@ -560,6 +572,11 @@ export default function PhotoEditorPage() {
           </div>
         </div>
       )}
+
+      <PhotoEditorOnboarding
+        isOpen={isOnboardingOpen}
+        onClose={() => setIsOnboardingOpen(false)}
+      />
     </div>
   );
 }

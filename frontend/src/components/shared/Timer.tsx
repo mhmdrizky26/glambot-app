@@ -24,6 +24,8 @@ interface TimerProps {
   // Dipanggil saat status "urgent" (<=15 dtk) berubah — parent bisa memunculkan
   // efek tambahan (mis. aura merah full-screen di editor foto).
   onUrgentChange?: (urgent: boolean) => void;
+  // Pause countdown (mis. saat modal onboarding / petunjuk terbuka).
+  paused?: boolean;
 }
 
 export default function Timer({
@@ -32,8 +34,13 @@ export default function Timer({
   storageKey = null,
   urgentWhenLow = false,
   onUrgentChange,
+  paused = false,
 }: TimerProps) {
-  const { timeLeft, clear } = usePersistedCountdown(storageKey, duration);
+  const { timeLeft, clear } = usePersistedCountdown(
+    storageKey,
+    duration,
+    paused,
+  );
   const router = useRouter();
   // Pastikan onTimeUp / fallback router.push hanya fire SEKALI walaupun
   // efek re-run akibat onTimeUp ref berubah saat parent re-render (misal
