@@ -479,14 +479,6 @@ export default function PhotoEditorPage() {
         <h1 className="text-primary text-[60px] font-bold tracking-tight">
           Select & Edit
         </h1>
-        <button
-          onClick={() => setIsOnboardingOpen(true)}
-          className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 transition font-semibold text-sm shadow-sm active:scale-95 cursor-pointer"
-          title="How to Use"
-        >
-          <HelpCircle className="w-4 h-4 text-primary" />
-          <span>How to Use</span>
-        </button>
       </div>
 
       {/* Main Content - 3 panels + confirm button */}
@@ -535,12 +527,17 @@ export default function PhotoEditorPage() {
           </div>
         </div>
 
-        {/* Baris bawah: toolbar adjust (tengah, sejajar kolom preview) +
-            Confirm Print (kanan). Toolbar di sini, BUKAN di atas preview,
-            supaya tidak menutupi foto. */}
         <div className="flex items-center gap-3">
-          {/* spacer selebar panel kiri agar toolbar pas di bawah preview */}
-          <div className="w-84.25 shrink-0" />
+          <div className="w-84.25 shrink-0">
+            <button
+              onClick={() => setIsOnboardingOpen(true)}
+              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 transition font-semibold text-sm shadow-md active:scale-95 cursor-pointer"
+              title="How to Use"
+            >
+              <HelpCircle className="w-4 h-4 text-white" />
+              <span>How to Use</span>
+            </button>
+          </div>
           <div className="flex-1 min-w-0 flex justify-center">
             {activeSlotId && (
               <SlotAdjustToolbar

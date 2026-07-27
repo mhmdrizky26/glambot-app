@@ -1,5 +1,6 @@
 import React from 'react';
 import Image from 'next/image';
+import { Star } from 'lucide-react';
 import { Badge } from '@/components/admin/ui/badge';
 import { type Package, type PackageStatus } from '../api/types';
 import { formatIDR as formatCurrency } from '@/lib/formats';
@@ -51,7 +52,7 @@ const formatDate = (iso: string) =>
 export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
   if (!pkg) return null;
 
-  const statusConfig = STATUS_CONFIG[pkg.status];
+  const statusConfig = STATUS_CONFIG[pkg.status] || STATUS_CONFIG.draft;
   const soldCount = getSoldCount(pkg.id);
   const dateCreated = getDateCreated(pkg.id);
   const lastModified = getLastModified(pkg.id);
@@ -60,15 +61,24 @@ export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
     <div className="hidden shrink-0 flex-col gap-4 lg:flex lg:w-80 xl:w-md">
       <div className="text-lg font-semibold">Details</div>
 
-      {/* Status + Image */}
+      {/* Status + Badges + Image */}
       <div className="bg-card flex flex-col gap-4 rounded-xl border p-6 shadow-sm">
-        <div className="flex justify-center">
+        <div className="flex flex-wrap items-center justify-center gap-2">
           <Badge
             variant="secondary"
-            className={`px-4 py-1 ${statusConfig.className}`}
+            className={`px-3 py-1 ${statusConfig.className}`}
           >
             {statusConfig.label}
           </Badge>
+          {pkg.isPopular && (
+            <Badge
+              variant="secondary"
+              className="bg-amber-100 text-amber-800 hover:bg-amber-100/80 flex items-center gap-1 px-3 py-1"
+            >
+              <Star className="size-3 fill-amber-500 text-amber-500" />
+              Popular
+            </Badge>
+          )}
         </div>
 
         <div className="bg-muted relative mx-auto aspect-65/80 w-full max-w-48 overflow-hidden rounded-lg border">
@@ -90,8 +100,8 @@ export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
         <div className="text-center">
           <div className="font-semibold">{pkg.name}</div>
           {pkg.code && (
-            <div className="text-muted-foreground text-xs capitalize">
-              {pkg.code}
+            <div className="text-muted-foreground text-xs uppercase font-mono mt-0.5">
+              Code: {pkg.code}
             </div>
           )}
         </div>
@@ -100,22 +110,61 @@ export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
       {/* Information */}
       <div className="bg-card flex flex-col gap-3 rounded-xl border p-6 text-sm shadow-sm">
         <div className="text-base font-semibold">Information</div>
+
+        <div className="flex justify-between border-b pb-2">
+          <span className="text-muted-foreground">Code</span>
+          <span className="text-right font-mono font-medium uppercase">
+            {pkg.code || '-'}
+          </span>
+        </div>
+
         <div className="flex justify-between border-b pb-2">
           <span className="text-muted-foreground">Price</span>
           <span className="text-right font-medium">
             {formatCurrency(pkg.price)}
           </span>
         </div>
+
+        <div className="flex justify-between border-b pb-2">
+          <span className="text-muted-foreground">Duration</span>
+          <span className="text-right font-medium">
+            {pkg.durationMins} mins ({pkg.durationSecs}s)
+          </span>
+        </div>
+
+        <div className="flex justify-between border-b pb-2">
+          <span className="text-muted-foreground">Print Count</span>
+          <span className="text-right font-medium">
+            {pkg.printCount > 0 ? `${pkg.printCount} prints` : '0 (Digital)'}
+          </span>
+        </div>
+
+        <div className="flex justify-between border-b pb-2">
+          <span className="text-muted-foreground">Print Unit Price</span>
+          <span className="text-right font-medium">
+            {formatCurrency(pkg.printUnitPrice)}
+          </span>
+        </div>
+
+        <div className="flex justify-between border-b pb-2">
+          <span className="text-muted-foreground">Popular Package</span>
+          <span className="text-right font-medium">
+            {pkg.isPopular ? 'Yes' : 'No'}
+          </span>
+        </div>
+
         <div className="flex justify-between border-b pb-2">
           <span className="text-muted-foreground">Sold</span>
           <span className="text-right font-medium">{soldCount}</span>
         </div>
+
         <div className="flex justify-between border-b pb-2">
           <span className="text-muted-foreground">Date Created</span>
           <span className="text-right font-medium">
             {formatDate(dateCreated)}
           </span>
         </div>
+
         <div className="flex justify-between">
           <span className="text-muted-foreground">Last Modified</span>
           <span className="text-right font-medium">
@@ -134,3 +183,4 @@ export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
     </div>
   );
 }
+

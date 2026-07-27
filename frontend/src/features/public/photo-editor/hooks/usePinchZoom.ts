@@ -63,10 +63,10 @@ export function usePinchZoom(
       const canvas = getCanvas();
       if (!canvas) return;
 
-      const active = canvas.getActiveObject();
       const m = mid(e.touches);
-      target =
-        active?.data?.isPhoto ? active : photoAt(m.x, m.y);
+      const touched = photoAt(m.x, m.y);
+      const active = canvas.getActiveObject();
+      target = touched ?? (active?.data?.isPhoto ? active : null);
       if (!target) return;
 
       // Jadikan target aktif → toolbar adjust muncul & tersorot.
