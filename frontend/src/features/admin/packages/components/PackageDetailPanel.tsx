@@ -1,6 +1,4 @@
 import React from 'react';
-import Image from 'next/image';
-import { Star } from 'lucide-react';
 import { Badge } from '@/components/admin/ui/badge';
 import { type Package, type PackageStatus } from '../api/types';
 import { formatIDR as formatCurrency } from '@/lib/formats';
@@ -58,58 +56,22 @@ export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
   const lastModified = getLastModified(pkg.id);
 
   return (
-    <div className="hidden shrink-0 flex-col gap-4 lg:flex lg:w-80 xl:w-md">
-      <div className="text-lg font-semibold">Details</div>
-
-      {/* Status + Badges + Image */}
-      <div className="bg-card flex flex-col gap-4 rounded-xl border p-6 shadow-sm">
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          <Badge
-            variant="secondary"
-            className={`px-3 py-1 ${statusConfig.className}`}
-          >
-            {statusConfig.label}
-          </Badge>
-          {pkg.isPopular && (
-            <Badge
-              variant="secondary"
-              className="bg-amber-100 text-amber-800 hover:bg-amber-100/80 flex items-center gap-1 px-3 py-1"
-            >
-              <Star className="size-3 fill-amber-500 text-amber-500" />
-              Popular
-            </Badge>
-          )}
-        </div>
-
-        <div className="bg-muted relative mx-auto aspect-65/80 w-full max-w-48 overflow-hidden rounded-lg border">
-          {pkg.imageSrc ? (
-            <Image
-              src={pkg.imageSrc}
-              alt={pkg.name}
-              fill
-              className="object-cover"
-              unoptimized
-            />
-          ) : (
-            <div className="text-muted-foreground flex h-full w-full items-center justify-center text-sm">
-              No Image
-            </div>
-          )}
-        </div>
-
-        <div className="text-center">
-          <div className="font-semibold">{pkg.name}</div>
-          {pkg.code && (
-            <div className="text-muted-foreground text-xs uppercase font-mono mt-0.5">
-              Code: {pkg.code}
-            </div>
-          )}
-        </div>
-      </div>
+    <div className="relative hidden shrink-0 flex-col gap-4 lg:flex lg:w-80 xl:w-md">
+      <div className="absolute -top-8 left-0 text-lg font-semibold">Details</div>
 
       {/* Information */}
       <div className="bg-card flex flex-col gap-3 rounded-xl border p-6 text-sm shadow-sm">
         <div className="text-base font-semibold">Information</div>
+
+        <div className="flex justify-between items-center border-b pb-2">
+          <span className="text-muted-foreground">Status</span>
+          <Badge
+            variant="secondary"
+            className={`px-2.5 py-0.5 text-xs font-medium ${statusConfig.className}`}
+          >
+            {statusConfig.label}
+          </Badge>
+        </div>
 
         <div className="flex justify-between border-b pb-2">
           <span className="text-muted-foreground">Code</span>
@@ -172,15 +134,9 @@ export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
           </span>
         </div>
       </div>
-
-      {/* Package Content */}
-      <div className="bg-card flex flex-col gap-3 rounded-xl border p-6 text-sm shadow-sm">
-        <div className="text-base font-semibold">Package Content</div>
-        <p className="text-muted-foreground leading-relaxed whitespace-pre-line">
-          {pkg.description || 'No description available.'}
-        </p>
-      </div>
     </div>
   );
 }
+
+
 
