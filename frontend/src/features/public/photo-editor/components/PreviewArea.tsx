@@ -213,6 +213,40 @@ function PreviewAreaInner(
     };
   }, [fabricCanvas]);
 
+  // Override penemuan target Fabric agar 100% presisi berbasis area slot.
+  // Mencegah bounding box foto ter-scale di satu slot menutupi/mengganggu
+  // seleksi & gesture pada foto di slot lain (seperti kasus slot 2 & slot 4).
+  useEffect(() => {
+    const canvas = fabricCanvas;
+    if (!canvas) return;
+
+    // eslint-disable-next-line @typescript-eslint/unbound-method
+    const origFindTarget = canvas.findTarget;
+
+    canvas.findTarget = function (e: MouseEvent | TouchEvent, skipGroup: boolean = false) {
+      const pointer = canvas.getPointer(e);
+      const photos = canvas.getObjects().filter((o) => o.data?.isPhoto);
+      for (let i = photos.length - 1; i >= 0; i--) {
+        const photo = photos[i];
+        const s = photo.data?.slot;
+        if (
+          s &&
+          pointer.x >= s.x &&
+          pointer.x <= s.x + s.width &&
+          pointer.y >= s.y &&
+          pointer.y <= s.y + s.height
+        ) {
+          return photo;
+        }
+      }
+      return origFindTarget.call(this, e, skipGroup);
+    };
+
+    return () => {
+      canvas.findTarget = origFindTarget;
+    };
+  }, [fabricCanvas]);
+
   // Beri tahu parent slot aktif berubah → parent render toolbar adjust di luar
   // area preview (sejajar tombol Confirm, agar tidak menutupi foto).
   useEffect(() => {
