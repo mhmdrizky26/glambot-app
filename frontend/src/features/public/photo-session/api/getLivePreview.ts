@@ -7,13 +7,20 @@ export const useLiveStream = () => {
 
   const baseUrl = useMemo(() => resolveBaseUrl(), []);
 
-  // Canon-only: preview memakai stream MJPEG backend (satu koneksi, ~10 fps)
-  // alih-alih polling JPEG per frame. `retry` memaksa koneksi baru saat user
-  // menekan "Try again"; CameraPreview menambah nonce-nya sendiri saat
-  // reconnect otomatis.
+  // Canon-only: live preview di-polling sebagai JPEG dari backend
+  // (/api/robot/liveview, sumber digiCamControl). Tidak ada lagi mode webcam
+  // laptop (builtin). Cache-buster cukup dari retryCount — CameraPreview
+  // menambahkan timestamp-nya sendiri per frame saat polling.
+  //
+  // SENGAJA polling per frame, BUKAN satu koneksi MJPEG
+  // (`/api/robot/liveview/stream`). Versi MJPEG sempat dipakai dan bikin
+  // preview blank hitam setelah jepretan pertama: koneksi panjangnya mati saat
+  // digiCam sibuk menjepret, lalu tidak pernah pulih. Dengan polling, tiap
+  // frame adalah request yang berdiri sendiri — yang gagal cukup dilewati dan
+  // frame berikutnya jalan lagi seperti biasa.
   const frameUrl = useMemo(() => {
     if (hasError) return null;
-    return `${baseUrl}/api/robot/liveview/stream?retry=${retryCount}`;
+    return `${baseUrl}/api/robot/liveview?retry=${retryCount}`;
   }, [hasError, retryCount, baseUrl]);
 
   const handleStreamError = useCallback(() => {

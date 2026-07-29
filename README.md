@@ -34,9 +34,37 @@ Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis
 
 Ringkasan perubahan terbaru (per Juli 2026):
 
-### Tap area penuh di Home + highlight preset aktif (baru)
+### Perbaikan: preview blank hitam setelah jepretan pertama — liveview balik ke polling per frame (baru)
+
+Gejalanya: foto pertama mulus, sesudah itu Preview Camera hitam sampai sesi habis. Penyebabnya penggantian ke **satu koneksi MJPEG** di rilis sebelumnya:
+
+- `StreamLiveView` menutup koneksi setelah "20 kegagalan beruntun" — komentar bilang ±10 detik, tapi itu angka warisan versi lama yang `sleep 500ms`; loop barunya tick 100 ms jadi nyatanya cuma **±2 detik**, lebih pendek dari satu window capture (tunggu file full-res sampai 6 detik). Praktis stream mati di tengah **setiap** jepretan.
+- Setelah 3× reconnect gagal, `useLiveStream` menyetel `hasError` yang mengosongkan `frameUrl` → `<img>` di-unmount → tak ada lagi yang mencoba menyambung. Preview mati permanen sampai user menekan *Try again* — yang di kiosk tidak pernah terjadi.
+
+Perbaikannya: **kembali ke logika liveview `be full 12.5`** yang terbukti jalan normal — polling JPEG per frame `GET /api/robot/liveview` (~10 fps) yang digambar ke `<canvas>` ([`CameraPreview`](frontend/src/features/public/photo-session/components/CameraPreview.tsx) + [`getLivePreview.ts`](frontend/src/features/public/photo-session/api/getLivePreview.ts)). Bedanya mendasar: tiap frame adalah request yang **berdiri sendiri**, jadi frame yang gagal saat digiCam sibuk menjepret cukup dilewati dan frame berikutnya jalan lagi — tidak ada koneksi panjang yang sekali mati tak bisa pulih. Error UI baru muncul setelah ±20 frame gagal beruntun (~2 detik).
+
+Endpoint `/api/robot/liveview/stream` tetap ada (berguna untuk cek langsung dari browser) dan dikembalikan ke perilaku 12.5: tanpa batas kegagalan, jeda 500 ms saat gagal supaya tidak ikut menghantam digiCam yang sedang sibuk. Kiosk tidak memakainya.
+
+Dua pengaman kecil yang ditambahkan di atas basis 12.5: `isMountedRef` di-set `true` tiap mount (remount StrictMode dulu mematikan timer freeze), dan `pendingRef` ikut dilepas saat loop polling (re-)start — tanpa itu satu frame yang menggantung bikin *Try again* tidak berefek sama sekali.
+
+### Keselamatan enable/disable robot (baru)
+
+Tiga lubang di jalur mode kerja dobot, semuanya bisa meninggalkan lengan **aktif tanpa sesi**:
+
+1. **Urutan tidak dijamin.** Handler `/api/robot/enable` menjalankan `services.EnableRobot()` di goroutine lalu langsung balas `200`. Kalau sesi cepat berakhir (user menekan "Selesai sekarang", atau halaman ditinggalkan), disable bisa mendarat DULUAN dan enable menyusul sesudahnya. Sekarang handler-nya sinkron, plus gerbang [`robotModeMu`](backend/services/robot.go) yang membuat enable/disable/stop berjalan satu per satu — urutan mendarat = urutan permintaan.
+2. **Disable menyerah pada kegagalan pertama.** `DisableRobot` sekarang mencoba **3×** (jeda 700 ms), dan kalau tetap gagal jatuh ke **emergency stop** `/robot/stop` sebelum menyerah. Flag lokal `RobotEnabled` hanya di-set `false` kalau robot benar-benar mengkonfirmasi, supaya `/api/robot/config` tidak melaporkan "mati" untuk robot yang nyatanya masih hidup.
+3. **Frontend menelan errornya.** Cleanup unmount dulu memakai `.catch(() => {})`. Sekarang lewat [`robotPower.ts`](frontend/src/features/public/photo-session/lib/robotPower.ts): gagal disable → coba emergency stop → kalau itu pun gagal, `console.error` yang jelas. Ditambah listener `pagehide` yang memakai `navigator.sendBeacon` — tab kiosk yang ditutup/di-refresh membatalkan XHR yang sedang jalan, beacon tidak.
+
+### Perbaikan: narasi nyasar di sesi foto (baru)
+
+Gejalanya: di tengah sesi foto tiba-tiba terdengar ajakan "sentuh layar untuk memulai". Dua sebab terpisah:
+
+- **Jendela lain yang tertinggal di Home.** Ajakan `mulaiNew.mp3` dipicu presence kamera gesture — dan selama sesi foto user justru berdiri persis di depan kamera itu, jadi presence selalu `true`. Jendela mana pun yang masih terbuka di `/` (mis. monitor kedua yang lupa dipindah ke `/photo-session/control`) akan menyela tiap 5 detik. Perbaikannya: halaman sesi foto memancarkan **heartbeat** `SESSION_START` tiap `SESSION_HEARTBEAT_MS` (3 detik) lewat BroadcastChannel, dan Home bisu selama heartbeat itu terdengar. Dipakai heartbeat, bukan sekali kirim, supaya jendela yang dibuka/di-reload di TENGAH sesi ikut tahu — ini juga menyembuhkan Monitor 2 yang nyangkut di "Standby" kalau di-reload di tengah sesi. Flag `enabled` robot sengaja TIDAK dipakai sebagai penanda sesi: `ROBOT_ENABLED` bisa di-set `true` sejak startup.
+- **Timer `playBackendAudioAfterCurrent` yang bocor.** `setTimeout` pengamannya tidak pernah dibatalkan, jadi narasi halaman sebelumnya (mis. `intro.mp3` dari instruction) bisa menyusul beberapa detik kemudian di halaman sesi foto. Sekarang jadwalnya disimpan di modul dan dibatalkan oleh narasi baru mana pun atau `stopBackendAudio()`.
+
+### Tap area penuh di Home + highlight preset aktif
 - **Home** ([`HomePage.tsx`](frontend/src/features/public/home/pages/HomePage.tsx)) — `<main>` dipindah ke `fixed inset-0`. Sebelumnya `min-h-full` di dalam container `max-w-360` layout publik bikin ada pita mati kiri-kanan di layar kiosk >1440px yang tidak memicu tap, padahal konsepnya "tap anywhere to start".
-- **Grid Gesture Controls** ([`PhotoSessionPage.tsx`](frontend/src/features/public/photo-session/pages/PhotoSessionPage.tsx)) — kartu preset kini punya state "ter-select" untuk preset yang gesture-nya SEDANG dibaca robot, jadi user tahu preset mana yang akan dikonfirmasi selagi bar progress terisi. Highlight dipetakan dari `gesture_id` (1-10, sejajar `Preset N`), **bukan** `robot_preset` — panel kanan disembunyikan saat robot bergerak (`showGuide = !robotBusy`) sehingga highlight berbasis `robot_preset` praktis tak pernah terlihat. Highlight "preset terakhir dipakai" di grid dihapus (kartu *Previous Preset* di atas grid tetap ada).
+- **Grid Gesture Controls** ([`PhotoSessionPage.tsx`](frontend/src/features/public/photo-session/pages/PhotoSessionPage.tsx)) — kartu preset kini punya state "ter-select" untuk preset yang gesture-nya SEDANG dibaca robot, jadi user tahu preset mana yang akan dikonfirmasi selagi bar progress terisi. Highlight dipetakan dari `gesture_id` (1-10, sejajar `Preset N`), **bukan** `robot_preset` — panel kanan disembunyikan saat robot bergerak (`showGuide = !robotBusy`) sehingga highlight berbasis `robot_preset` praktis tak pernah terlihat. Highlight "preset terakhir dipakai" di grid dihapus, begitu juga kartu *Previous Preset* — kolom kanan sekarang tinggal 2 kartu (Gesture Detection + Gesture Controls) supaya grid preset dapat ruang lebih lega.
 
 ### Pembersihan duplikasi lapisan admin (baru)
 Audit blok-kembar otomatis menemukan 12 pasangan duplikat; sisa sekarang 3 dan semuanya bukan duplikasi nyata (blok import yang sama + pemanggilan `DataPagination` yang memang beda argumen). Yang disatukan:
@@ -85,8 +113,7 @@ Offset J1 juga diperbaiki dari `136.5` → **`149.5`** mm. Angka lama berasal da
 > Cara memeriksa perubahan semacam ini tanpa menebak: jalankan `npm run dev`, lalu screenshot `/arm-lab?hud=0&view=front&dist=0.32&target=0,-0.26,0` (Chrome headless pun bisa). Hindari `dist` di bawah ~0,2 — kamera menembus dinding pedestal dan isi bautnya terlihat, itu artefak near-plane, bukan cacat model.
 
 ### Optimalisasi: preview satu koneksi, helper bersama, route dev dipagari (baru)
-- **Live preview kiosk pindah ke MJPEG.** [`CameraPreview`](frontend/src/features/public/photo-session/components/CameraPreview.tsx) dulu menarik JPEG penuh tiap 100 ms (±10 request/detik menembus Go → digiCamControl); sekarang memakai satu koneksi `GET /api/robot/liveview/stream` lewat `<img>`. Freeze instan saat shutter tetap ada — frame di-snapshot dari `<img>` ke canvas sementara (`crossOrigin="anonymous"`, backend sudah mengirim header CORS).
-- **Deteksi gagal ikut dikeraskan** supaya penggantian ini tidak menghilangkan UI *"Stream not available" + Try again*: backend memprobe satu frame **sebelum** menulis header (kamera mati → `503` yang jelas, bukan stream menggantung) dan menutup koneksi setelah 20 kegagalan beruntun (±10 detik); frontend menyambung ulang otomatis maks. 3× (jeda 1,5 detik) plus watchdog 6 detik untuk kasus "tersambung tapi tak pernah ada frame".
+- ~~**Live preview kiosk pindah ke MJPEG.**~~ **DIBATALKAN** — perpindahan ke satu koneksi `GET /api/robot/liveview/stream` bikin preview blank hitam setelah jepretan pertama. Preview kembali ke polling JPEG per frame; lihat *Preview blank hitam setelah jepretan pertama* di bagian atas. Freeze instan saat shutter tetap ada lewat snapshot `<canvas>` (`crossOrigin="anonymous"`, backend sudah mengirim header CORS).
 - **Helper dipakai bersama:** [`lib/pdf.ts`](frontend/src/lib/pdf.ts) baru (palet, header brand, footer, penamaan file) untuk kedua laporan PDF admin; `formatIDR` & `formatDateShort` di [`lib/formats.ts`](frontend/src/lib/formats.ts) menggantikan formatter rupiah/tanggal yang tadinya ditulis ulang di 4 + 7 tempat; `resolveBaseUrl`/`resolveRobotUrl` kini berbagi satu implementasi. Perilaku & tampilan tidak berubah.
 - **`/arm-lab` 404 di produksi.** Halaman kalibrasi lengan 3D tetap bisa dipakai saat `npm run dev`, tapi tidak lagi bisa dibuka dari kiosk yang sudah di-build.
 

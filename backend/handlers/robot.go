@@ -141,70 +141,45 @@ func GetLiveView(w http.ResponseWriter, r *http.Request) {
 	w.Write(frame)
 }
 
-// Stream MJPEG berhenti setelah gagal ambil frame sebanyak ini berturut-turut
-// (±10 detik). Koneksi ditutup supaya <img> di frontend memicu onerror dan bisa
-// reconnect / memunculkan UI retry — bukan menggantung dengan gambar beku.
-const liveStreamMaxFailures = 20
-
 // GET /api/robot/liveview/stream
-// MJPEG ~10 fps untuk live preview di browser. Satu koneksi menggantikan
-// polling per-frame, jadi beban kiosk & backend jauh lebih ringan.
+// Continuous MJPEG stream untuk live preview di browser.
+//
+// CATATAN: kiosk TIDAK memakai endpoint ini. Preview Camera kembali ke polling
+// JPEG per frame lewat `GET /api/robot/liveview` (lihat CameraPreview) karena
+// versi MJPEG-nya bikin preview blank hitam setelah jepretan pertama: satu
+// koneksi panjang yang mati saat digiCam sibuk menjepret tidak pernah pulih,
+// sementara polling per frame tiap request-nya berdiri sendiri — frame yang
+// gagal cukup dilewati. Endpoint ini dibiarkan apa adanya untuk pemakaian lain
+// (mis. debugging langsung dari browser), TANPA batas kegagalan: kalau menyerah
+// duluan, konsumen mana pun kehilangan stream tanpa bisa pulih sendiri.
 func StreamLiveView(w http.ResponseWriter, r *http.Request) {
-	// Probe satu frame SEBELUM header ditulis: kalau kamera mati, balas 503 yang
-	// jelas (frontend langsung tahu) daripada stream kosong yang tak pernah error.
-	first, err := services.GetLiveViewFrame()
-	if err != nil {
-		respondError(w, http.StatusServiceUnavailable, "Live view tidak tersedia")
-		return
-	}
-
 	w.Header().Set("Content-Type", "multipart/x-mixed-replace; boundary=frame")
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 
-	flusher, _ := w.(http.Flusher)
-	writeFrame := func(frame []byte) error {
-		if _, err := fmt.Fprintf(w, "--frame\r\nContent-Type: image/jpeg\r\n\r\n"); err != nil {
-			return err
-		}
-		if _, err := w.Write(frame); err != nil {
-			return err
-		}
-		if _, err := fmt.Fprintf(w, "\r\n"); err != nil {
-			return err
-		}
-		if flusher != nil {
-			flusher.Flush()
-		}
-		return nil
-	}
-
-	if err := writeFrame(first); err != nil {
-		return
-	}
-
-	failures := 0
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		case <-time.After(100 * time.Millisecond): // ~10 fps
-		}
-
-		frame, err := services.GetLiveViewFrame()
-		if err != nil {
-			failures++
-			if failures >= liveStreamMaxFailures {
-				return
+		default:
+			frame, err := services.GetLiveViewFrame()
+			if err != nil {
+				// Jeda lebih panjang saat gagal: digiCam biasanya sedang sibuk
+				// menjepret / transfer file, jangan ikut menghantaminya.
+				time.Sleep(500 * time.Millisecond)
+				continue
 			}
-			continue
-		}
-		failures = 0
 
-		// Error tulis = klien sudah pergi → hentikan goroutine ini.
-		if err := writeFrame(frame); err != nil {
-			return
+			fmt.Fprintf(w, "--frame\r\nContent-Type: image/jpeg\r\n\r\n")
+			w.Write(frame)
+			fmt.Fprintf(w, "\r\n")
+
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+
+			time.Sleep(100 * time.Millisecond) // ~10 fps
 		}
 	}
 }
@@ -218,25 +193,34 @@ func GetRobotSessionPhotos(w http.ResponseWriter, r *http.Request) {
 // ─── Robot Enable / Disable ───────────────────────────────────────────────────
 
 // POST /api/robot/enable
-// Dipanggil manual jika perlu enable robot dari luar payment flow
+// Dipanggil manual jika perlu enable robot dari luar payment flow.
+//
+// SINKRON (dulu dijalankan di goroutine): dengan goroutine, disable yang
+// dikirim tak lama setelahnya — sesi pendek, user langsung menekan "Selesai
+// sekarang", atau halaman ditinggalkan — bisa mendarat DULUAN, lalu enable
+// menyusul dan meninggalkan lengan aktif tanpa sesi. Sinkron + gerbang
+// robotModeMu di services membuat urutan mendarat = urutan permintaan.
+// Pemanggil di frontend memang fire-and-forget, jadi tidak ada UI yang tertahan.
 func EnableRobot(w http.ResponseWriter, r *http.Request) {
-	go func() {
-		if err := services.EnableRobot(); err != nil {
-			log.Printf("⚠️  Robot enable gagal: %v", err)
-		}
-	}()
+	if err := services.EnableRobot(); err != nil {
+		log.Printf("⚠️  Robot enable gagal: %v", err)
+		respondError(w, http.StatusServiceUnavailable, "Gagal aktifkan robot: "+err.Error())
+		return
+	}
 
 	respondJSON(w, http.StatusOK, models.SuccessResponse(map[string]string{
-		"status":  "enabling",
-		"message": "Robot sedang diaktifkan",
+		"status":  "enabled",
+		"message": "Robot berhasil diaktifkan",
 	}))
 }
 
 // POST /api/robot/disable
-// Dipanggil dari frontend saat timer download selesai
+// Dipanggil saat sesi foto berakhir. services.DisableRobot sudah mencoba ulang
+// dan jatuh ke emergency stop sebelum menyerah, jadi 503 di sini berarti robot
+// benar-benar tidak bisa dijangkau — bukan sekadar satu request yang meleset.
 func DisableRobot(w http.ResponseWriter, r *http.Request) {
 	if err := services.DisableRobot(); err != nil {
-		log.Printf("⚠️  Robot disable gagal: %v", err)
+		log.Printf("🚨 Robot disable gagal total: %v", err)
 		respondError(w, http.StatusServiceUnavailable, "Gagal nonaktifkan robot: "+err.Error())
 		return
 	}

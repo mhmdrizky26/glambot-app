@@ -4,11 +4,18 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { playBackendAudio, stopBackendAudio } from '@/lib/audio';
 import { resolveRobotUrl } from '@/lib/api-client';
+import {
+  SESSION_HEARTBEAT_MS,
+  listenSessionBroadcast,
+} from '@/features/public/photo-session/lib/broadcastChannel';
 
 // Cadence ulang ajakan "mulai" (ms).
 const LOOP_INTERVAL_MS = 5_000;
 // Seberapa sering cek presence ke robot (ms). Presence tak perlu serapat gesture.
 const PRESENCE_POLL_MS = 1_000;
+// Sesi dianggap sudah berakhir kalau heartbeat-nya hilang selama ini. Longgar
+// (>2× cadence) supaya satu heartbeat yang telat tidak bikin ajakan menyela.
+const SESSION_HEARTBEAT_TIMEOUT_MS = SESSION_HEARTBEAT_MS * 3;
 
 export default function Home() {
   const router = useRouter();
@@ -23,22 +30,54 @@ export default function Home() {
   //
   // Fail-safe: kalau robot tak terjangkau (proses mati / jaringan putus), jatuh
   // ke perilaku lama (loop terus) supaya kiosk tidak malah BISU karena gangguan.
+  //
+  // BISU SELAMA SESI FOTO. Ini penting: presence membaca kamera gesture, dan
+  // selama sesi foto user justru BERDIRI PERSIS di depan kamera itu — jadi
+  // presence selalu true. Kalau jendela ini masih terbuka di belakang (mis.
+  // monitor kedua yang lupa dipindah ke /photo-session/control, atau tab lama
+  // yang tak ditutup), ajakan "sentuh layar" akan menyela sesi foto tiap 5
+  // detik — persis keluhan "tiba-tiba ada audio mulai di sesi foto".
+  //
+  // Statusnya dibaca dari heartbeat SESSION_START yang dipancarkan halaman
+  // sesi foto tiap beberapa detik (bukan sekali di awal), jadi jendela yang
+  // baru dibuka / di-reload di TENGAH sesi pun ikut bisu. Sesi dianggap habis
+  // saat SESSION_END datang ATAU heartbeat berhenti.
   useEffect(() => {
     const robotUrl = resolveRobotUrl();
     let cancelled = false;
     let busy = false;
     let lastPlay = 0;
+    let lastHeartbeat = 0;
+
+    const sessionActive = () =>
+      lastHeartbeat > 0 &&
+      Date.now() - lastHeartbeat < SESSION_HEARTBEAT_TIMEOUT_MS;
+
+    const unsubscribe = listenSessionBroadcast({
+      onStart: () => {
+        const wasIdle = !sessionActive();
+        lastHeartbeat = Date.now();
+        // Ajakan yang mungkin sedang berbunyi ikut dihentikan, jangan biarkan
+        // penggalannya menimpa narasi sesi foto.
+        if (wasIdle) stopBackendAudio();
+      },
+      onEnd: () => {
+        lastHeartbeat = 0;
+      },
+    });
 
     const play = () => {
       playBackendAudio('mulaiNew.mp3');
       lastPlay = Date.now();
     };
     const playThrottled = () => {
+      if (sessionActive()) return;
       if (Date.now() - lastPlay >= LOOP_INTERVAL_MS) play();
     };
 
     const tick = async () => {
       if (busy) return;
+      if (sessionActive()) return;
       busy = true;
       try {
         const res = await fetch(`${robotUrl}/presence`);
@@ -61,6 +100,7 @@ export default function Home() {
     return () => {
       cancelled = true;
       window.clearInterval(id);
+      unsubscribe();
     };
   }, []);
 
