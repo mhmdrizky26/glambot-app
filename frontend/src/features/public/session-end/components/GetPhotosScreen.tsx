@@ -290,12 +290,12 @@ export function GetPhotosScreen({
           </div>
 
           {/* Link ke halaman download (alternatif kalau tidak scan QR). */}
-          <Link
+          {/* <Link
             href={`/download-photos/${sessionId}`}
             className="text-primary underline text-sm font-medium hover:text-primary/70 transition-colors"
           >
             Open Download Page
-          </Link>
+          </Link> */}
         </div>
       </div>
     </div>

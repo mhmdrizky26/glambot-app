@@ -531,10 +531,10 @@ export default function PhotoEditorPage() {
           <div className="w-84.25 shrink-0">
             <button
               onClick={() => setIsOnboardingOpen(true)}
-              className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl bg-white/10 hover:bg-white/20 text-white border border-white/20 transition font-semibold text-sm shadow-md active:scale-95 cursor-pointer"
+              className="w-full px-8 py-4 rounded-[19.28px] text-[#ffff] border-2 border-white/60 bg-blue-100/34 hover:border-white/80 font-bold text-[22px] flex items-center justify-center gap-6 cursor-pointer transition active:scale-95"
               title="How to Use"
             >
-              <HelpCircle className="w-4 h-4 text-white" />
+              <HelpCircle className="w-6 h-6" />
               <span>How to Use</span>
             </button>
           </div>
