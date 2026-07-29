@@ -40,10 +40,8 @@ type Config struct {
 	AdminEmail    string // kredensial admin default yang di-seed saat startup
 	AdminPassword string
 
-	// ─── Google Drive (upload hasil sesi) ────────────────────────────────────
-	// OAuth2 refresh-token akun Gmail. Lihat cmd/gdrive-token untuk mendapatkan
-	// refresh token. GoogleDriveFolderID opsional: ID folder induk tempat
-	// folder per-sesi dibuat (kosong = root My Drive).
+	// Google Drive — refresh token dari cmd/gdrive-token. FolderID opsional:
+	// induk folder per-sesi (kosong = root My Drive).
 	GoogleClientID      string
 	GoogleClientSecret  string
 	GoogleRefreshToken  string

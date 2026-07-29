@@ -227,10 +227,8 @@ func standardPalette() color.Palette {
 	return standardPaletteCache
 }
 
-// cacheUpToDate cek apakah file cache di outPath masih valid: ada, dan lebih
-// baru (atau sama) dari setiap source path. Path kosong / yang gagal di-stat
-// diabaikan. Cache berumur <100ms dianggap belum stabil (kemungkinan baru
-// ditulis salah / oleh request paralel yang belum selesai).
+// cacheUpToDate: outPath ada & tidak lebih tua dari source mana pun (path
+// kosong/gagal stat diabaikan). Cache <100ms dianggap belum stabil.
 func cacheUpToDate(outPath string, sourcePaths ...string) bool {
 	stat, err := os.Stat(outPath)
 	if err != nil {

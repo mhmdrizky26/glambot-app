@@ -8,14 +8,9 @@ type ChartContainerProps = {
 };
 
 /**
- * Measures its own DOM size via ResizeObserver and only renders children
- * once we have positive width/height. This avoids the recharts warning
- * "The width(-1) and height(-1) of chart should be greater than 0" that
- * fires when ResponsiveContainer renders before the parent is measured.
- *
- * Children receive concrete numeric dimensions and should pass them to the
- * recharts component as `width` and `height` (do not use ResponsiveContainer
- * inside children).
+ * Ukur sendiri via ResizeObserver, baru render children setelah dimensinya
+ * positif — menghindari warning recharts "width(-1)/height(-1)". Children
+ * menerima angka konkret; jangan pakai ResponsiveContainer di dalamnya.
  */
 export function ChartContainer({ className, children }: ChartContainerProps) {
   const ref = React.useRef<HTMLDivElement>(null);

@@ -1,19 +1,13 @@
 'use client';
 
 /**
- * Halaman kalibrasi robot arm 3D — BUKAN bagian dari alur kiosk.
- *
- * Offset link & sudut preset di `armKinematics.ts` diturunkan dari bounding box
- * tiap .glb, jadi bentuk rakitannya benar tapi angka pastinya masih perlu
- * dicocokkan secara visual. Halaman ini menyediakan slider untuk tiap joint dan
- * tiap offset, plus tombol "Copy pose" yang menyalin array sudut siap tempel ke
- * PRESET_POSES.
- *
- * Buka di /arm-lab.
+ * Halaman kalibrasi robot arm 3D di /arm-lab — BUKAN bagian alur kiosk.
+ * Slider per joint & offset untuk mencocokkan angka `armKinematics.ts` secara
+ * visual, plus "Copy pose" yang menyalin array sudut ke PRESET_POSES.
  */
 
 import { useState } from 'react';
-import { useSearchParams } from 'next/navigation';
+import { useSearchParams, notFound } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { OrbitControls, Grid } from '@react-three/drei';
 import {
@@ -30,9 +24,8 @@ const RobotArm3D = dynamic(
 );
 
 /**
- * Sudut pandang tetap untuk pemeriksaan sambungan. `side` melihat lurus dari
- * sumbu X — semua joint pitch tegak lurus layar, jadi celah antar link paling
- * gampang terlihat di sini.
+ * Sudut pandang tetap; `side` lurus dari sumbu X — celah antar link paling
+ * gampang kelihatan dari sini.
  */
 const VIEW_DIRS: Record<string, [number, number, number]> = {
   iso: [0.51, 0.2, 0.84],
@@ -45,7 +38,15 @@ const VIEW_DIRS: Record<string, [number, number, number]> = {
   top: [0.001, 1, 0.001],
 };
 
-export default function ArmLabPage() {
+// Di build produksi route ini 404 — alat kalibrasi tidak perlu (dan tidak
+// boleh) bisa dibuka dari layar kiosk. Pembungkus terpisah supaya guard-nya
+// berjalan sebelum komponen dengan hooks di-render.
+export default function ArmLabRoute() {
+  if (process.env.NODE_ENV === 'production') notFound();
+  return <ArmLabPage />;
+}
+
+function ArmLabPage() {
   const params = useSearchParams();
   // `?pose=0,0,-30,60,...` & `?view=side` & `?hud=0` — dipakai untuk memotret
   // sudut pandang yang sama persis lintas iterasi kalibrasi.
@@ -65,11 +66,18 @@ export default function ArmLabPage() {
     number,
     number,
   ];
-  const view: [number, number, number] = [
-    target[0] + dir[0] * dist,
-    target[1] + dir[1] * dist,
-    target[2] + dir[2] * dist,
-  ];
+  // `?eye=0.49,0.29,1.81` — pakai posisi kamera world apa adanya, menimpa
+  // view/dist/target. Dipakai untuk mereproduksi framing kartu instruction
+  // persis seperti yang dilihat user.
+  const eyeSpec = params.get('eye')?.split(',').map(Number);
+  const view: [number, number, number] =
+    eyeSpec?.length === 3
+      ? (eyeSpec as [number, number, number])
+      : [
+          target[0] + dir[0] * dist,
+          target[1] + dir[1] * dist,
+          target[2] + dir[2] * dist,
+        ];
 
   // `?off=3:378,9.5;4:329.6,12` — timpa offset (Y,Z) link tertentu tanpa perlu
   // mengedit armKinematics.ts, supaya beberapa nilai bisa dibandingkan cepat.
@@ -81,6 +89,11 @@ export default function ArmLabPage() {
     const [y, z] = spec.slice(spec.indexOf(':') + 1).split(',').map(Number);
     return { ...l, offset: [0, y, z] as [number, number, number] };
   });
+
+  // `?yaw=195.3` — timpa yaw scene (derajat) untuk menguji orientasi tampil.
+  const yawSpec = params.get('yaw');
+  const sceneYaw =
+    yawSpec != null && yawSpec !== '' ? (Number(yawSpec) * Math.PI) / 180 : undefined;
 
   // `?cam=-1.4,-46.5,42` — geser posisi DSLR di frame flange (mm).
   const camSpec = params.get('cam');
@@ -104,6 +117,7 @@ export default function ArmLabPage() {
           className="h-full w-full"
           showCamera={params.get('cam') !== '0'}
           cameraOffset={camOffset}
+          sceneYaw={sceneYaw}
         >
           <OrbitControls makeDefault target={target} />
           <Grid

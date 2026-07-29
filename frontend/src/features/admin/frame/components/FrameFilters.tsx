@@ -4,13 +4,7 @@ import * as React from 'react';
 import { useDebouncedSearch } from '@/lib/useDebouncedSearch';
 import { Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/admin/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/admin/ui/select';
+import { FilterSelect } from '@/components/admin/shared/FilterSelect';
 import { type FrameCategory } from '../api/types';
 
 
@@ -55,30 +49,29 @@ export function FrameFilters({
         />
       </div>
 
-      <Select value={status} onValueChange={onStatusChange}>
-        <SelectTrigger className="h-9 w-36 text-sm rounded-[8px]" aria-label="Filter by status">
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all" className="text-sm">Status</SelectItem>
-          <SelectItem value="active" className="text-sm">Active</SelectItem>
-          <SelectItem value="inactive" className="text-sm">Inactive</SelectItem>
-        </SelectContent>
-      </Select>
+      <FilterSelect
+        value={status}
+        onChange={onStatusChange}
+        placeholder="Status"
+        ariaLabel="Filter by status"
+        options={[
+          { value: 'all', label: 'Status' },
+          { value: 'active', label: 'Active' },
+          { value: 'inactive', label: 'Inactive' },
+        ]}
+      />
 
-      <Select value={category} onValueChange={onCategoryChange}>
-        <SelectTrigger className="h-9 w-40 text-sm rounded-[8px]" aria-label="Filter by category">
-          <SelectValue placeholder="Category" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all" className="text-sm">Category</SelectItem>
-          {categoryOptions.map((cat) => (
-            <SelectItem key={cat} value={cat} className="text-sm">
-              {cat}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
+      <FilterSelect
+        value={category}
+        onChange={onCategoryChange}
+        placeholder="Category"
+        ariaLabel="Filter by category"
+        widthClass="w-40"
+        options={[
+          { value: 'all', label: 'Category' },
+          ...categoryOptions.map((cat) => ({ value: cat, label: cat })),
+        ]}
+      />
     </div>
   );
 }

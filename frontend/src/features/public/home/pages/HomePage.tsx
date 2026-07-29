@@ -76,9 +76,15 @@ export default function Home() {
   };
 
   return (
+    // `fixed inset-0` (bukan `min-h-full`) supaya area tap benar-benar seluruh
+    // layar: layout publik membungkus halaman dalam container `max-w-360`
+    // (1440px), jadi di layar kiosk yang lebih lebar ada pita mati di kiri &
+    // kanan yang tidak memicu tap — padahal konsepnya "tap anywhere to start".
+    // Dengan fixed, <main> lepas dari container dan menempel ke viewport (pola
+    // yang sama sudah dipakai PhotoSessionPage).
     <main
       onClick={handleStart}
-      className="flex flex-col items-center justify-center min-h-full cursor-pointer select-none"
+      className="fixed inset-0 flex flex-col items-center justify-center cursor-pointer select-none"
     >
       <div className="flex flex-col items-center animate-float-y">
         <p className="text-primary text-[34px] tracking-[13px]">Experience The</p>

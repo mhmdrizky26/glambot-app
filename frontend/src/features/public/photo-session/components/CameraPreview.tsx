@@ -10,6 +10,17 @@ const COUNTDOWN_AUDIO: Record<number, string> = {
   1: 'satu.mp3',
 };
 
+// Ukuran snapshot freeze (tetap seperti canvas preview lama).
+const SNAPSHOT_W = 1280;
+const SNAPSHOT_H = 720;
+// Stream MJPEG putus / tak pernah mengirim frame → coba sambung ulang beberapa
+// kali dulu sebelum menyerah ke UI "Stream not available" + tombol retry.
+const RECONNECT_DELAY_MS = 1500;
+const MAX_STREAM_RETRIES = 3;
+// Batas menunggu frame pertama. Kalau lewat ini <img> belum punya dimensi,
+// koneksi dianggap gagal (mis. backend menahan tanpa mengirim apa pun).
+const FIRST_FRAME_TIMEOUT_MS = 6000;
+
 interface CameraPreviewProps {
   frameUrl?: string | null;
   streamUrl?: string | null;
@@ -32,13 +43,10 @@ export function CameraPreview({
   errorMessage,
   className,
 }: CameraPreviewProps) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const frameIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const frameCountRef = useRef(0);
-  const pendingRef = useRef(false);
-  // Hitung kegagalan load frame berturut-turut. Baru anggap stream error setelah
-  // ~2 detik gagal terus (bukan 1 frame transient) → hindari flicker error.
-  const errorStreakRef = useRef(0);
+  const imgRef = useRef<HTMLImageElement>(null);
+  // Berapa kali sambung-ulang gagal beruntun; direset tiap frame berhasil.
+  const failCountRef = useRef(0);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const playedRef = useRef<Set<number>>(new Set());
   const wasActiveRef = useRef(false);
   const captureTriggeredRef = useRef(false);
@@ -51,21 +59,33 @@ export function CameraPreview({
   const [captureFired, setCaptureFired] = useState(false);
   const [capturedUrl, setCapturedUrl] = useState<string | null>(null);
   const capturedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Naik tiap kali stream perlu disambung ulang → memaksa <img> memuat koneksi
+  // MJPEG baru (pola yang sama dengan GestureDetectionPanel).
+  const [streamNonce, setStreamNonce] = useState(0);
 
   const displayUrl = frameUrl || streamUrl;
   const hasContent = !!displayUrl;
+  // Nonce reconnect ditempel sebagai query — URL sumber sudah punya `?retry=`,
+  // tapi tetap dijaga kalau suatu saat dilewatkan URL tanpa query.
+  const streamSrc = displayUrl
+    ? `${displayUrl}${displayUrl.includes('?') ? '&' : '?'}k=${streamNonce}`
+    : '';
 
-  // Snapshot frame preview yang SEDANG tampil di canvas menjadi data URL.
-  // Dipakai untuk overlay freeze secara INSTAN saat shutter — tidak menunggu
-  // file full-res DSLR ditransfer dari backend (yang bisa 1-3 detik), jadi
-  // tidak ada jeda. Foto full-res asli tetap disimpan backend & dipakai di
-  // halaman editor. Canvas tidak tainted karena frame di-load
-  // crossOrigin='anonymous' dan backend mengirim header CORS (middleware.CORS),
-  // tapi tetap dijaga try/catch: kalau toDataURL gagal → fallback flash putih.
+  // Snapshot frame preview yang SEDANG tampil menjadi data URL, dipakai overlay
+  // freeze INSTAN saat shutter (tidak menunggu file full-res DSLR yang bisa 1-3
+  // detik). Frame diambil dari elemen <img> stream ke canvas sementara — canvas
+  // tidak tainted karena img pakai crossOrigin='anonymous' dan backend mengirim
+  // header CORS. Tetap dijaga try/catch: gagal → fallback flash putih.
   const captureCanvasSnapshot = useCallback((): string | null => {
-    const canvas = canvasRef.current;
-    if (!canvas) return null;
+    const img = imgRef.current;
+    if (!img || !img.naturalWidth) return null;
     try {
+      const canvas = document.createElement('canvas');
+      canvas.width = SNAPSHOT_W;
+      canvas.height = SNAPSHOT_H;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
       return canvas.toDataURL('image/jpeg', 0.9);
     } catch (err) {
       console.warn(
@@ -76,11 +96,31 @@ export function CameraPreview({
     }
   }, []);
 
-  // Cleanup on unmount
+  // Stream putus / tak kunjung mengirim frame: sambung ulang beberapa kali
+  // (stream MJPEG memang bisa ditutup backend saat kamera ngadat sesaat), baru
+  // lapor ke parent supaya UI "Stream not available" + tombol retry muncul.
+  const handleStreamFailure = useCallback(() => {
+    if (!isMountedRef.current) return;
+    failCountRef.current += 1;
+    if (failCountRef.current >= MAX_STREAM_RETRIES) {
+      onError?.();
+      return;
+    }
+    if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    reconnectTimerRef.current = setTimeout(() => {
+      if (isMountedRef.current) setStreamNonce((n) => n + 1);
+    }, RECONNECT_DELAY_MS);
+  }, [onError]);
+
+  // Cleanup on unmount. Flag di-set true tiap mount — tanpa ini, remount (mis.
+  // StrictMode dev) menyisakan flag false dari cleanup sebelumnya sehingga
+  // callback freeze & reconnect ikut mati.
   useEffect(() => {
+    isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
       if (capturedTimerRef.current) clearTimeout(capturedTimerRef.current);
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
     };
   }, []);
 
@@ -151,61 +191,20 @@ export function CameraPreview({
     playedRef.current.clear();
   }, [active, remainingMs, captureCanvasSnapshot]);
 
-  // Canon mode: polling JPEG frames (backend already returns mirrored)
+  // URL berganti (mis. user menekan "Try again") → mulai lagi dari nol.
   useEffect(() => {
-    if (!displayUrl || hasError) {
-      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
-      return;
-    }
-    // Reset hitungan error tiap kali stream (re-)start, mis. setelah retry.
-    errorStreakRef.current = 0;
+    failCountRef.current = 0;
+  }, [displayUrl]);
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    canvas.width = 1280;
-    canvas.height = 720;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const loadFrame = () => {
-      if (pendingRef.current) return;
-      pendingRef.current = true;
-
-      const baseUrl = displayUrl.split('?')[0];
-      const url = `${baseUrl}?t=${Date.now()}_${++frameCountRef.current}`;
-
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-        pendingRef.current = false;
-        errorStreakRef.current = 0;
-      };
-
-      img.onerror = () => {
-        pendingRef.current = false;
-        errorStreakRef.current += 1;
-        // ~20 frame gagal beruntun (interval 100ms ≈ 2 detik) → laporkan ke
-        // parent supaya UI "Stream not available" + tombol retry muncul.
-        if (errorStreakRef.current === 20) {
-          onError?.();
-        }
-      };
-
-      img.src = url;
-    };
-
-    loadFrame();
-    frameIntervalRef.current = setInterval(loadFrame, 100);
-
-    return () => {
-      if (frameIntervalRef.current) clearInterval(frameIntervalRef.current);
-    };
-  }, [displayUrl, hasError, onError]);
+  // Watchdog frame pertama: <img> yang tersambung tapi tak pernah menerima
+  // frame TIDAK memicu onError sendiri, jadi kondisi itu dijaga di sini.
+  useEffect(() => {
+    if (!displayUrl || hasError) return;
+    const id = setTimeout(() => {
+      if (!imgRef.current?.naturalWidth) handleStreamFailure();
+    }, FIRST_FRAME_TIMEOUT_MS);
+    return () => clearTimeout(id);
+  }, [displayUrl, streamNonce, hasError, handleStreamFailure]);
 
   const showError = hasError || !displayUrl;
 
@@ -230,13 +229,24 @@ export function CameraPreview({
           )}
         </div>
       ) : (
-        <canvas
-          ref={canvasRef}
-          // Mirror preview (selfie-familiar) via CSS, bukan lagi flip JPEG di
-          // backend per frame — hemat decode+re-encode tiap frame di server.
-          // Hasil foto Canon tetap natural (tidak di-mirror), sama seperti dulu.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          ref={imgRef}
+          // Key ikut nonce supaya reconnect benar-benar membuka koneksi baru.
+          key={`${displayUrl}-${streamNonce}`}
+          src={streamSrc}
+          // Wajib supaya snapshot freeze bisa menggambar frame ini ke canvas
+          // tanpa membuatnya tainted (backend mengirim header CORS).
+          crossOrigin="anonymous"
+          alt=""
+          aria-hidden="true"
+          onLoad={() => {
+            failCountRef.current = 0;
+          }}
+          onError={handleStreamFailure}
+          // Mirror preview (selfie-familiar) via CSS. Hasil foto Canon tetap
+          // natural (tidak di-mirror), sama seperti dulu.
           className="absolute inset-0 w-full h-full object-cover -scale-x-100"
-          style={{ display: 'block' }}
         />
       )}
 

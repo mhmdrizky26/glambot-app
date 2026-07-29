@@ -1,13 +1,4 @@
-import {
-  AlertDialog,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/admin/ui/alert-dialog';
-import { Button } from '@/components/admin/ui/button';
+import { ConfirmDeleteDialog } from '@/components/admin/shared/ConfirmDeleteDialog';
 
 interface FrameDeleteDialogProps {
   open: boolean;
@@ -25,30 +16,19 @@ export function FrameDeleteDialog({
   isPending,
 }: FrameDeleteDialogProps) {
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete Frame</AlertDialogTitle>
-          <AlertDialogDescription>
-            Are you sure you want to delete{' '}
-            <span className="text-foreground font-semibold">{frameName}</span>?
-            This action cannot be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={isPending}>Cancel</AlertDialogCancel>
-          <Button
-            variant="destructive"
-            onClick={(e) => {
-              e.preventDefault();
-              onConfirm();
-            }}
-            disabled={isPending}
-          >
-            {isPending ? 'Deleting...' : 'Delete'}
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+    <ConfirmDeleteDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Delete Frame"
+      description={
+        <>
+          Are you sure you want to delete{' '}
+          <span className="text-foreground font-semibold">{frameName}</span>?
+          This action cannot be undone.
+        </>
+      }
+      onConfirm={onConfirm}
+      isPending={isPending}
+    />
   );
 }

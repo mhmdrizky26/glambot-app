@@ -1,14 +1,8 @@
 const API_URL = process.env.NEXT_PUBLIC_API_URL || '';
 
 /**
- * Ubah path aset storage backend menjadi URL absolut ke backend.
- *
- * Backend bisa mengembalikan beragam bentuk:
- *   - "http(s)://..."            → dipakai apa adanya
- *   - "/storage/frames/x.svg"    → API_URL + path
- *   - "storage/frames/x.svg"     → API_URL + "/" + path
- *   - "/foo"                     → API_URL + path
- *   - "frames/x.svg" (relatif)   → API_URL + "/storage/" + path
+ * Jadikan path aset storage absolut. Backend mengembalikan bentuk campur
+ * (absolut, "/storage/...", "storage/...", atau relatif "frames/x.svg").
  */
 export const toStorageUrl = (path: string | undefined | null): string => {
   if (!path) return '';

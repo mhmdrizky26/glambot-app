@@ -147,11 +147,9 @@ func buildTxFilter(r *http.Request) (string, []any) {
 		args = append(args, like, like, like)
 	}
 	if st := queryParam(r, "status"); st != "" {
-		// Filter pakai status EFEKTIF yang sama dengan yang ditampilkan: transaksi
-		// 'pending' pada sesi yang sudah lewat expires_at tampil sebagai 'expired'
-		// (lihat scanTransaction). Maka filter & count juga harus mengikutinya,
-		// supaya filter "Expired"/"Pending", angka total, list, dan badge konsisten.
-		// (Butuh LEFT JOIN sessions s — list/export & count sudah join.)
+		// Filter pakai status EFEKTIF seperti yang ditampilkan (pending pada sesi
+		// lewat expires_at = expired, lihat scanTransaction) supaya list, count,
+		// dan badge konsisten. Butuh LEFT JOIN sessions s.
 		switch txStatusToDB(st) {
 		case "paid":
 			where = append(where, "t.status = 'paid'")

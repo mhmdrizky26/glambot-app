@@ -10,10 +10,8 @@ import (
 	"photobooth/services"
 )
 
-// Bentuk respons mengikuti interface kartu di frontend
-// (features/admin/devices/components/*). Field yang tidak bisa diukur dari OS
-// (mis. sisa kertas/ribbon/total print printer) dikirim sebagai nilai "kosong"
-// dan ditandai N/A di UI — bukan angka palsu.
+// Respons mengikuti kartu di features/admin/devices/components/*. Field yang
+// tak terukur dari OS (sisa kertas/ribbon) dikirim kosong → N/A di UI.
 
 const naValue = "N/A"
 

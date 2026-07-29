@@ -19,21 +19,14 @@ import (
 // goroutine (mis. compose dipanggil ulang).
 var driveInflight sync.Map
 
-// driveFolderLocks: mutex per-sesi untuk pembuatan folder Drive. Upload kini
-// per-capture (beberapa goroutine paralel) — tanpa lock, dua capture pertama
-// bisa sama-sama membuat folder → folder dobel. Lock memastikan folder dibuat
-// SEKALI; goroutine lain menunggu lalu reuse folder yang sama dari DB.
+// Mutex per-sesi supaya folder Drive dibuat SEKALI walau beberapa upload
+// per-capture jalan paralel (tanpa ini folder bisa dobel).
 var driveFolderLocks sync.Map
 
-// Orkestrasi upload aset sesi ke Google Drive.
-//
-// STRATEGI: file besar (foto full-res DSLR) di-upload STREAMING — tiap foto
-// dikirim ke Drive segera setelah di-capture (EnqueueRawPhotoUpload), bukan
-// ditumpuk di akhir. Folder Drive dibuat sekali saat foto pertama masuk, dan
-// link-nya langsung disimpan ke sessions.drive_url (QR siap lebih awal).
-// Di akhir sesi (setelah compose + GIF), UploadSessionToDrive hanya mengirim
-// artefak akhir: strip framed + GIF — plus jaring pengaman untuk foto raw yang
-// upload per-capture-nya sempat gagal.
+// Upload aset sesi ke Drive: foto full-res dikirim streaming per-capture
+// (EnqueueRawPhotoUpload) & folder dibuat saat foto pertama masuk supaya QR
+// siap lebih awal. UploadSessionToDrive di akhir sesi hanya mengirim strip
+// framed + GIF, plus menyusulkan raw yang sempat gagal.
 
 // driveFolderName nama folder Drive per-sesi (dibuat sekali di awal).
 func driveFolderName(sessionID string) string {

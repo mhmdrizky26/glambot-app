@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useListQueryParam } from '@/lib/useListQueryParam';
 import { PlusCircleIcon } from 'lucide-react';
 import { Button } from '@/components/admin/ui/button';
 import { DataPagination } from '@/components/admin/shared/DataPagination';
@@ -31,16 +32,7 @@ export function PackagePage() {
     number | null
   >(null);
 
-  const updateParam = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value && value !== 'all' && value !== '') {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    if (key !== 'page') params.set('page', '1');
-    router.replace(`/packages?${params.toString()}`);
-  };
+  const updateParam = useListQueryParam('/packages');
 
   const { data: packagesResponse, isLoading: isLoadingPackages } =
     useGetPackages({

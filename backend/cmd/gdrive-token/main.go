@@ -1,18 +1,7 @@
-// Command gdrive-token mengambil OAuth2 refresh token untuk akun Google yang
-// dipakai mengunggah hasil sesi ke Google Drive. Jalankan SEKALI dari folder
-// backend:
-//
-//	go run ./cmd/gdrive-token
-//
-// Prasyarat (di Google Cloud Console):
-//  1. Buat OAuth 2.0 Client ID tipe "Web application".
-//  2. Tambahkan Authorized redirect URI: http://localhost:8090/callback
-//  3. Isi GOOGLE_CLIENT_ID & GOOGLE_CLIENT_SECRET di backend/.env
-//  4. Pada OAuth consent screen, tambahkan akun Gmail kamu sebagai Test user
-//     (atau publish app) supaya consent tidak diblok.
-//
-// Program akan mencetak URL consent, menunggu redirect, lalu mencetak
-// GOOGLE_REFRESH_TOKEN untuk ditempel ke backend/.env.
+// Command gdrive-token: ambil OAuth2 refresh token Google Drive, jalankan sekali
+// dari folder backend (`go run ./cmd/gdrive-token`). Prasyarat di Cloud Console:
+// OAuth Client ID "Web application", redirect URI http://localhost:8090/callback,
+// GOOGLE_CLIENT_ID/SECRET terisi di .env, akun ditambahkan sebagai Test user.
 package main
 
 import (

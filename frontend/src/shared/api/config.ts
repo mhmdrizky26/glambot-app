@@ -1,9 +1,11 @@
 import { useQuery } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 
-// Timer halaman user yang diatur admin (GET /api/config). Default = nilai
-// hardcode lama, dipakai backend bila key belum diset — di sini hanya untuk
-// tipe & dokumentasi.
+// Timer halaman user yang diatur admin. Bentuk ini dipakai DUA endpoint yang
+// mengembalikan struct backend yang sama (`timerConfig` di handlers/config.go):
+// GET /api/config (publik, di sini) dan GET/PATCH /api/admin/settings (admin,
+// lihat TimerSettings di features/admin/settings). Deklarasikan di satu tempat
+// saja supaya tidak ada yang ketinggalan saat field bertambah.
 export interface AppConfig {
   packageTimeoutSecs: number;
   summaryTimeoutSecs: number;
@@ -19,13 +21,9 @@ const getAppConfig = async (): Promise<AppConfig> => {
 };
 
 /**
- * Ambil timer config dari backend.
- *
- * CATATAN penting: JANGAN render <Timer> sebelum `data` ada. Timer pakai
- * usePersistedCountdown yang me-reset hitungan saat `duration` berubah — kalau
- * kita render dulu pakai durasi default lalu ganti ke nilai asli, timer yang
- * persisted (photo-editor/get-photos/done) bisa ke-reset saat refresh. Maka
- * pemanggil sebaiknya gate: `{config && <Timer duration={config.x} />}`.
+ * Timer config dari backend. JANGAN render <Timer> sebelum `data` ada —
+ * durasi yang berubah me-reset usePersistedCountdown. Gate pemanggilnya:
+ * `{config && <Timer duration={config.x} />}`.
  */
 export const useAppConfig = () =>
   useQuery({

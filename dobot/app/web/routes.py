@@ -94,10 +94,9 @@ def create_app(runtime):
 
     @app.route("/presence")
     def api_presence():
-        # Sinyal ringan untuk layar Home: ada gerakan di depan kamera dalam
-        # `presence_hold_sec` terakhir? Home hanya butuh 1 boolean ini (bukan
-        # seluruh payload /detection), jadi poll-nya murah. motion_ratio disertakan
-        # untuk kalibrasi ambang di lokasi.
+        # Sinyal ringan buat layar Home: ada gerakan dalam `presence_hold_sec`
+        # terakhir? Cukup 1 boolean, jadi poll-nya murah. motion_ratio untuk
+        # kalibrasi ambang di lokasi.
         det = runtime.detector
         return jsonify({
             "present":      bool(det.presence) if det else False,

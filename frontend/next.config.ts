@@ -3,12 +3,8 @@ import type { NextConfig } from 'next';
 const isDev = process.env.NODE_ENV === 'development';
 
 const nextConfig: NextConfig = {
-  // Next.js 15+/16 dev-mode security: requests to /_next/* from non-localhost
-  // origins are blocked unless explicitly listed. Without this, accessing the
-  // dev server via LAN IP loads the HTML but blocks JS bundles → blank page.
-  //
-  // Add your LAN IP(s) here. Wildcard `*` is supported per-octet only at the
-  // segment level (e.g. `192.168.1.*`), CIDR is NOT supported.
+  // Tanpa daftar ini, dev server yang diakses via LAN IP memblokir /_next/*
+  // → halaman blank. Wildcard hanya per-oktet (`192.168.1.*`), CIDR tidak.
   allowedDevOrigins: [
     '192.168.0.*',
     '192.168.1.*',

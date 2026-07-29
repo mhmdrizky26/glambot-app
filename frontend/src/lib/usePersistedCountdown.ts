@@ -2,12 +2,9 @@
 
 import { useCallback, useEffect, useState } from 'react';
 
-// usePersistedCountdown menjalankan countdown yang menyimpan `startedAt`
-// di sessionStorage, jadi saat halaman di-refresh sisa waktu tetap dihitung
-// dari saat timer pertama kali jalan — bukan reset ke durasi penuh.
-//
-// Key biasanya disertakan sessionId supaya tidak bocor antar sesi.
-// Pass key = null untuk disable persistence (timer berperilaku seperti biasa).
+// Countdown yang menyimpan `startedAt` di sessionStorage supaya refresh tidak
+// mereset sisa waktu. Key biasanya memuat sessionId biar tidak bocor antar
+// sesi; key = null mematikan persistence.
 export interface PersistedCountdown {
   timeLeft: number;
   clear: () => void;
@@ -99,11 +96,8 @@ export function usePersistedCountdown(
     initialState(key, duration),
   );
 
-  // Re-init kalau key atau duration berubah di tengah lifetime.
-  // Pattern React canonical "adjusting state during render" (lihat
-  // https://react.dev/reference/react/useState#storing-information-from-previous-renders):
-  // lebih ringan daripada useEffect (tidak perlu render kedua) dan
-  // memang dimaksudkan untuk reset state saat input berubah.
+  // Re-init kalau key/duration berubah — pola "adjusting state during render"
+  // (lebih ringan dari useEffect, tak perlu render kedua).
   const [prevKey, setPrevKey] = useState(key);
   const [prevDuration, setPrevDuration] = useState(duration);
   if (prevKey !== key || prevDuration !== duration) {
@@ -128,15 +122,9 @@ export function usePersistedCountdown(
     return () => clearInterval(pauseInterval);
   }, [paused, key, duration]);
 
-  // Tick — recompute dari startedAt supaya tidak drift saat tab di-throttle atau
-  // perangkat ter-suspend. Pakai functional update biar interval bisa berhenti
-  // otomatis saat timeLeft sampai 0 tanpa perlu include `state.timeLeft` di deps.
-  //
-  // Interval 250ms (bukan 1000ms): karena `next === prev.timeLeft` mem-bail-out
-  // render, display TETAP update sekali per detik — tapi PERPINDAHAN detiknya
-  // terdeteksi dalam ~250ms dari batas sebenarnya, bukan meleset sampai ~1 detik
-  // akibat fase interval yang acak. Ini yang bikin narasi "waktu hampir habis"
-  // (dipicu saat timeLeft menyentuh ambang urgent) berbunyi tepat waktu.
+  // Tick dihitung ulang dari startedAt supaya tidak drift saat tab di-throttle.
+  // Interval 250ms (bukan 1000ms) supaya perpindahan detik terdeteksi tepat
+  // waktu — render tetap sekali per detik karena nilai sama mem-bail-out.
   useEffect(() => {
     if (state.startedAt === null || paused) return;
 

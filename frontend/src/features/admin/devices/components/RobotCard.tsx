@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { BotIcon, WifiIcon, WifiOffIcon } from 'lucide-react';
+import { InfoRow } from '@/components/admin/shared/InfoRow';
 
 interface RobotInfo {
   id: string;
@@ -74,22 +75,10 @@ export function RobotCard({ data }: RobotCardProps) {
       {/* Information */}
       <div className="flex flex-col gap-3 text-sm">
         <div className="text-base font-semibold">Information</div>
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Robot ID</span>
-          <span className="text-right font-medium">{data.id}</span>
-        </div>
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Status</span>
-          <span className="text-right font-medium">{data.status}</span>
-        </div>
-        <div className="flex justify-between border-b pb-2">
-          <span className="text-muted-foreground">Last Active</span>
-          <span className="text-right font-medium">{data.lastActive}</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="text-muted-foreground">Active Duration</span>
-          <span className="text-right font-medium">{data.activeDuration}</span>
-        </div>
+        <InfoRow label="Robot ID" value={data.id} />
+        <InfoRow label="Status" value={data.status} />
+        <InfoRow label="Last Active" value={data.lastActive} />
+        <InfoRow label="Active Duration" value={data.activeDuration} last />
       </div>
     </div>
   );

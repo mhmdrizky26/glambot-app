@@ -258,12 +258,9 @@ export const usePatchSessionStatus = ({
     ...mutationConfig,
     mutationFn: patchSessionStatus,
     onSuccess: (data, variables, onMutateResult, context) => {
-      // Segarkan HANYA field status di cache ['session', id] agar halaman
-      // berikutnya (mis. /instruction) tidak membaca 'pending_payment' basi
-      // sesaat setelah bayar (penyebab bug "balik ke /package").
-      // PENTING: respons PATCH hanya berisi {session_id, status} — jadi MERGE,
-      // jangan timpa seluruh objek, supaya field lain (packageCode, harga, dst)
-      // tidak hilang. packageCode dipakai routing VIP/digital di PhotoSessionPage.
+      // MERGE status saja ke cache ['session', id] — respons PATCH cuma berisi
+      // {session_id, status}, kalau ditimpa penuh field lain (packageCode,
+      // harga) hilang. Tanpa ini /instruction sempat baca status basi.
       queryClient.setQueryData<SessionDetailResponse>(
         ['session', variables.sessionId],
         (old) => (old ? { ...old, status: data.status } : old),

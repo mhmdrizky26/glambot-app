@@ -28,6 +28,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/admin/ui/dropdown-menu';
+import { formatDateShort } from '@/lib/formats';
+import { useRowSelection, useSortedRows } from '@/lib/useTableRows';
 import { type Frame } from '../api/types';
 import { FrameDeleteDialog } from './FrameDeleteDialog';
 import { useDeleteFrame } from '../api/deleteFrame';
@@ -82,31 +84,7 @@ export function FrameTable({
   const [sortKey, setSortKey] = React.useState<SortKey>('name');
   const [sortDir, setSortDir] = React.useState<SortDir>('asc');
   const [deleteTarget, setDeleteTarget] = React.useState<Frame | null>(null);
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-
-  const toggleRow = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const toggleAll = (ids: string[], checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        ids.forEach((id) => next.add(id));
-      } else {
-        ids.forEach((id) => next.delete(id));
-      }
-      return next;
-    });
-  };
+  const { selectedIds, toggleRow, toggleAll } = useRowSelection();
 
   const { mutate: deleteFrame, isPending: isDeleting } = useDeleteFrame({
     mutationConfig: {
@@ -129,17 +107,7 @@ export function FrameTable({
     }
   };
 
-  const sorted = React.useMemo(() => {
-    return [...data].sort((a, b) => {
-      const aVal = a[sortKey] ?? '';
-      const bVal = b[sortKey] ?? '';
-      const cmp =
-        typeof aVal === 'number' && typeof bVal === 'number'
-          ? aVal - bVal
-          : String(aVal).localeCompare(String(bVal));
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-  }, [data, sortKey, sortDir]);
+  const sorted = useSortedRows(data, sortKey, sortDir);
 
   if (isLoading) {
     return (
@@ -320,11 +288,7 @@ export function FrameTable({
                   <TableCell className="hidden xl:table-cell">
                     <div className="text-sm">
                       {frame.lastUsed
-                        ? new Date(frame.lastUsed).toLocaleDateString('id-ID', {
-                            day: 'numeric',
-                            month: 'short',
-                            year: 'numeric',
-                          })
+                        ? formatDateShort(frame.lastUsed)
                         : '-'}
                     </div>
                   </TableCell>

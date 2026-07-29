@@ -1,9 +1,5 @@
-// Package auth menyediakan utilitas autentikasi admin yang bebas-dependency:
-// hashing password (sha256 + salt) dan token bertanda-tangan HMAC-SHA256
-// bergaya JWT. Dipakai oleh handlers (login) dan middleware (proteksi route).
-//
-// Catatan keamanan: sha256+salt dipilih agar tanpa dependency eksternal.
-// Untuk produksi pertimbangkan bcrypt/argon2 (golang.org/x/crypto).
+// Package auth: hash password (sha256+salt) & token HMAC-SHA256 bergaya JWT,
+// tanpa dependency eksternal. Untuk produksi pertimbangkan bcrypt/argon2.
 package auth
 
 import (

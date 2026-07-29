@@ -1,9 +1,7 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 
-// Route guard admin (Next.js 16 "proxy" convention, pengganti "middleware").
-// Memblokir akses halaman admin sebelum render kalau belum login.
-//
+// Route guard admin (konvensi "proxy" Next.js 16, pengganti middleware).
 // Nama cookie HARUS sama dengan ADMIN_TOKEN_KEY di src/lib/api-admin.ts.
 const ADMIN_TOKEN_KEY = 'admin_token';
 

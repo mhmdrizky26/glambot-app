@@ -1,7 +1,5 @@
-// Command probecheck menjalankan ketiga probe device monitoring (kamera Canon,
-// printer fisik, robot) memakai config .env asli — tanpa perlu DB / auth admin.
-// Dipakai untuk verifikasi cepat bahwa status "Online" benar-benar mencerminkan
-// perangkat nyata. Jalankan dari folder backend: go run ./cmd/probecheck
+// Command probecheck: cek cepat probe kamera/printer/robot pakai .env asli,
+// tanpa DB & auth admin. Jalankan dari folder backend: go run ./cmd/probecheck
 package main
 
 import (

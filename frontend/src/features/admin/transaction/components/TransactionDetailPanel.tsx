@@ -1,47 +1,18 @@
 import React from 'react';
 import { Badge } from '@/components/admin/ui/badge';
 import { Separator } from '@/components/admin/ui/separator';
-import { type Transaction, type TransactionStatus } from '../api/types';
-import { formatIDR as formatCurrency } from '@/lib/formats';
+import { type Transaction } from '../api/types';
+import {
+  formatIDR as formatCurrency,
+  formatDateTimeShort as formatDateTime,
+} from '@/lib/formats';
+import { TRANSACTION_STATUS_CONFIG } from '../utils/status';
 
 interface TransactionDetailPanelProps {
   transaction: Transaction | null;
 }
 
-const STATUS_CONFIG: Record<
-  TransactionStatus,
-  { label: string; className: string }
-> = {
-  success: {
-    label: 'Success',
-    className: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100/80',
-  },
-  pending: {
-    label: 'Pending',
-    className: 'bg-amber-100 text-amber-800 hover:bg-amber-100/80',
-  },
-  failed: {
-    label: 'Failed',
-    className: 'bg-rose-100 text-rose-800 hover:bg-rose-100/80',
-  },
-  expired: {
-    label: 'Expired',
-    className: 'bg-slate-100 text-slate-800 hover:bg-slate-100/80',
-  },
-  cancelled: {
-    label: 'Cancelled',
-    className: 'bg-slate-100 text-slate-800 hover:bg-slate-100/80',
-  },
-};
-
-const formatDateTime = (iso: string) =>
-  new Date(iso).toLocaleString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+const STATUS_CONFIG = TRANSACTION_STATUS_CONFIG;
 
 function Row({
   label,

@@ -1,71 +1,62 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+  PDF_ACCENT as ACCENT,
+  PDF_ACCENT_LIGHT as ACCENT_LIGHT,
+  PDF_SUCCESS as SUCCESS,
+  PDF_DANGER as DANGER,
+  drawBrandHeader,
+  drawPageFooters,
+  formatPdfRupiah as formatRupiah,
+  formatReportDate,
+  lastTableY,
+  loadRobotIcon,
+  savePdfWithStamp,
+} from '@/lib/pdf';
 import { type Transaction } from '../api/types';
 
-// jspdf-autotable menempelkan lastAutoTable ke instance doc tanpa deklarasi tipe.
-type AutoTableDoc = jsPDF & { lastAutoTable?: { finalY: number } };
+import { TRANSACTION_STATUS_LABEL as STATUS_LABEL } from './status';
 
-const PURPLE = [138, 56, 245] as const;
-const PURPLE_LIGHT = [248, 245, 255] as const;
-const GREEN = [18, 201, 100] as const;
-const RED = [235, 66, 41] as const;
-
-const formatRupiah = (n: number) =>
-  new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(n);
-
-const STATUS_LABEL: Record<string, string> = {
-  success: 'Success',
-  pending: 'Pending',
-  failed: 'Failed',
-  expired: 'Expired',
-  cancelled: 'Cancelled',
-};
-
-export function exportTransactionsToPDF(
+export async function exportTransactionsToPDF(
   transactions: Transaction[],
   filters?: { status?: string; search?: string },
 ) {
+  const icon = await loadRobotIcon();
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const now = new Date();
 
   // ── Header ──────────────────────────────────────────────────────────────
-  doc.setFillColor(PURPLE[0], PURPLE[1], PURPLE[2]);
-  doc.rect(0, 0, pageW, 32, 'F');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(20);
-  doc.text('GLAMBOT', 14, 13);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('PHOTO BOOTH', 14, 20);
-  doc.text('Transaction Report', 14, 27);
-
-  const dateStr = now.toLocaleDateString('en-US', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
-  doc.setFontSize(8.5);
-  doc.text(`Printed: ${dateStr}`, pageW - 14, 14, { align: 'right' });
-  doc.text(`Total Data: ${transactions.length} transactions`, pageW - 14, 21, { align: 'right' });
+  const dateStr = formatReportDate(now);
 
   const filterInfo: string[] = [];
   if (filters?.status && filters.status !== 'all') {
     filterInfo.push(`Status: ${STATUS_LABEL[filters.status] ?? filters.status}`);
   }
   if (filters?.search) filterInfo.push(`Search: "${filters.search}"`);
+
+  const rightLines = [
+    { text: `Printed: ${dateStr}`, y: 14 },
+    { text: `Total Data: ${transactions.length} transactions`, y: 21 },
+  ];
   if (filterInfo.length) {
-    doc.text(`Filter — ${filterInfo.join('  ·  ')}`, pageW - 14, 28, { align: 'right' });
+    rightLines.push({ text: `Filter — ${filterInfo.join('  ·  ')}`, y: 28 });
   }
 
-  doc.setTextColor(0, 0, 0);
+  drawBrandHeader(doc, {
+    pageW,
+    bandHeight: 32,
+    reportLabel: 'Transaction Report',
+    titleSize: 20,
+    bodySize: 9,
+    titleY: 13,
+    subtitleY: 20,
+    labelY: 27,
+    rightSize: 8.5,
+    rightLines,
+    icon,
+  });
 
   // ── Table ────────────────────────────────────────────────────────────────
   const rows = transactions.map((t, i) => [
@@ -85,13 +76,13 @@ export function exportTransactionsToPDF(
     head: [['No', 'Transaction ID', 'Order ID', 'Package', 'Frame', 'Amount', 'Status', 'Paid', 'Created']],
     body: rows,
     headStyles: {
-      fillColor: [PURPLE[0], PURPLE[1], PURPLE[2]],
+      fillColor: [ACCENT[0], ACCENT[1], ACCENT[2]],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8,
     },
     bodyStyles: { fontSize: 7.5, cellPadding: 2 },
-    alternateRowStyles: { fillColor: [PURPLE_LIGHT[0], PURPLE_LIGHT[1], PURPLE_LIGHT[2]] },
+    alternateRowStyles: { fillColor: [ACCENT_LIGHT[0], ACCENT_LIGHT[1], ACCENT_LIGHT[2]] },
     columnStyles: {
       0: { cellWidth: 9, halign: 'center' },
       5: { halign: 'right' },
@@ -104,46 +95,33 @@ export function exportTransactionsToPDF(
     didParseCell: (data) => {
       if (data.column.index === 6 && data.section === 'body') {
         const v = data.cell.raw as string;
-        if (v === 'Success') data.cell.styles.textColor = [GREEN[0], GREEN[1], GREEN[2]];
-        else if (v === 'Failed' || v === 'Expired') data.cell.styles.textColor = [RED[0], RED[1], RED[2]];
+        if (v === 'Success') data.cell.styles.textColor = [SUCCESS[0], SUCCESS[1], SUCCESS[2]];
+        else if (v === 'Failed' || v === 'Expired') data.cell.styles.textColor = [DANGER[0], DANGER[1], DANGER[2]];
       }
     },
   });
 
   // ── Revenue summary box ───────────────────────────────────────────────────
-  const finalY: number = (doc as AutoTableDoc).lastAutoTable?.finalY ?? 200;
+  const finalY = lastTableY(doc);
   const totalRevenue = transactions
     .filter((t) => t.status === 'success')
     .reduce((s, t) => s + t.amount, 0);
 
   if (finalY + 16 < pageH - 18) {
-    doc.setFillColor(PURPLE_LIGHT[0], PURPLE_LIGHT[1], PURPLE_LIGHT[2]);
+    doc.setFillColor(ACCENT_LIGHT[0], ACCENT_LIGHT[1], ACCENT_LIGHT[2]);
     doc.roundedRect(14, finalY + 5, pageW - 28, 10, 2, 2, 'F');
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8.5);
     doc.setTextColor(80, 80, 80);
     doc.text('Total Revenue (successful):', 20, finalY + 12);
     doc.setFont('helvetica', 'bold');
-    doc.setTextColor(PURPLE[0], PURPLE[1], PURPLE[2]);
+    doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2]);
     doc.text(formatRupiah(totalRevenue), pageW - 20, finalY + 12, { align: 'right' });
     doc.setTextColor(0, 0, 0);
   }
 
   // ── Page footer ──────────────────────────────────────────────────────────
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(160, 160, 160);
-    doc.text(
-      `Page ${i} of ${pageCount}  ·  GLAMBOT Photo Booth  ·  ${dateStr}`,
-      pageW / 2,
-      pageH - 6,
-      { align: 'center' },
-    );
-  }
+  drawPageFooters(doc, dateStr, { pageW, pageH, bottomOffset: 6, icon });
 
-  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  doc.save(`transaction-report-${stamp}.pdf`);
+  savePdfWithStamp(doc, 'transaction-report', now);
 }

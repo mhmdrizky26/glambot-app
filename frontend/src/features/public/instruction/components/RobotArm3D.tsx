@@ -118,6 +118,8 @@ interface ArmRigProps {
   pose: ArmPose;
   links: ArmLink[];
   tip: ReactNode;
+  /** Yaw scene (radian). */
+  yaw: number;
 }
 
 /**
@@ -125,7 +127,7 @@ interface ArmRigProps {
  * Interpolasi dilakukan di useFrame (bukan CSS/React state) supaya transisi
  * antar preset mulus tanpa memicu re-render tiap frame.
  */
-function ArmRig({ pose, links, tip }: ArmRigProps) {
+function ArmRig({ pose, links, tip, yaw }: ArmRigProps) {
   // Sudut awal = pose pertama, bukan REST_POSE — supaya arm sudah berada di
   // pose yang benar pada frame pertama (tanpa "ayunan" masuk saat kartu baru
   // muncul), dan supaya screenshot statis di /arm-lab langsung akurat.
@@ -153,7 +155,7 @@ function ArmRig({ pose, links, tip }: ArmRigProps) {
     <group
       scale={ARM_SCALE}
       position={[0, ARM_FLOOR_Y, 0]}
-      rotation={[0, SCENE_YAW, 0]}
+      rotation={[0, yaw, 0]}
     >
       {buildChain(0, links, angles, tip)}
     </group>
@@ -192,6 +194,8 @@ export interface RobotArm3DProps {
   showCamera?: boolean;
   /** Override posisi DSLR di frame flange (mm) — dipakai /arm-lab. */
   cameraOffset?: [number, number, number];
+  /** Override yaw scene (radian) — dipakai /arm-lab untuk menguji orientasi. */
+  sceneYaw?: number;
   className?: string;
   children?: ReactNode;
 }
@@ -206,10 +210,14 @@ export default function RobotArm3D({
   links = ARM_LINKS,
   showCamera = true,
   cameraOffset,
+  sceneYaw,
   className,
   children,
 }: RobotArm3DProps) {
   const activePose = pose ?? PRESET_POSES[presetIndex] ?? REST_POSE;
+  // Satu yaw untuk semua preset (lihat SCENE_YAW). /arm-lab bisa menimpanya
+  // lewat ?yaw= untuk menguji nilai lain tanpa mengedit konstanta.
+  const yaw = sceneYaw ?? SCENE_YAW;
 
   // Dipasang di frame link 7 (dudukan kamera), sehingga ikut bergerak
   // mengikuti flange.
@@ -225,7 +233,7 @@ export default function RobotArm3D({
       >
         <Lights />
         <Suspense fallback={null}>
-          <ArmRig pose={activePose} links={links} tip={tip} />
+          <ArmRig pose={activePose} links={links} tip={tip} yaw={yaw} />
         </Suspense>
         {children}
       </Canvas>

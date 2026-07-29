@@ -1,22 +1,20 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import {
+  PDF_ACCENT as ACCENT,
+  PDF_ACCENT_LIGHT as ACCENT_LIGHT,
+  PDF_SUCCESS as SUCCESS,
+  PDF_SUCCESS_LIGHT as SUCCESS_LIGHT,
+  PDF_DANGER as DANGER,
+  drawBrandHeader,
+  drawPageFooters,
+  formatPdfRupiah as formatRupiah,
+  formatReportDate,
+  lastTableY,
+  loadRobotIcon,
+  savePdfWithStamp,
+} from '@/lib/pdf';
 import { type DashboardSummary } from '../api/types';
-
-// jspdf-autotable menempelkan lastAutoTable ke instance doc tanpa deklarasi tipe.
-type AutoTableDoc = jsPDF & { lastAutoTable: { finalY: number } };
-
-const PURPLE = [138, 56, 245] as const;
-const PURPLE_LIGHT = [248, 245, 255] as const;
-const GREEN = [18, 201, 100] as const;
-const GREEN_LIGHT = [240, 255, 248] as const;
-const RED = [235, 66, 41] as const;
-
-const formatRupiah = (n: number) =>
-  new Intl.NumberFormat('id-ID', {
-    style: 'currency',
-    currency: 'IDR',
-    minimumFractionDigits: 0,
-  }).format(n);
 
 const ORDER_STATUS_LABEL: Record<string, string> = {
   completed: 'Completed',
@@ -28,45 +26,42 @@ const ORDER_STATUS_LABEL: Record<string, string> = {
 function sectionTitle(doc: jsPDF, title: string, y: number, pageW: number): number {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(PURPLE[0], PURPLE[1], PURPLE[2]);
+  doc.setTextColor(ACCENT[0], ACCENT[1], ACCENT[2]);
   doc.text(title, 14, y);
-  doc.setDrawColor(PURPLE[0], PURPLE[1], PURPLE[2]);
+  doc.setDrawColor(ACCENT[0], ACCENT[1], ACCENT[2]);
   doc.setLineWidth(0.4);
   doc.line(14, y + 1.5, pageW - 14, y + 1.5);
   doc.setTextColor(0, 0, 0);
   return y + 6;
 }
 
-export function exportDashboardToPDF(summary: DashboardSummary) {
+export async function exportDashboardToPDF(summary: DashboardSummary) {
+  const icon = await loadRobotIcon();
   const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageW = doc.internal.pageSize.getWidth();
   const pageH = doc.internal.pageSize.getHeight();
   const now = new Date();
 
-  const dateStr = now.toLocaleDateString('en-US', {
-    day: '2-digit',
-    month: 'long',
-    year: 'numeric',
-  });
+  const dateStr = formatReportDate(now);
   const monthStr = now.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
   // ── Header ──────────────────────────────────────────────────────────────
-  doc.setFillColor(PURPLE[0], PURPLE[1], PURPLE[2]);
-  doc.rect(0, 0, pageW, 34, 'F');
-
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(22);
-  doc.text('GLAMBOT', 14, 14);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9.5);
-  doc.text('PHOTO BOOTH', 14, 21);
-  doc.text('Dashboard Report', 14, 29);
-
-  doc.setFontSize(9);
-  doc.text(dateStr, pageW - 14, 14, { align: 'right' });
-  doc.text(`Period: ${monthStr}`, pageW - 14, 21, { align: 'right' });
-  doc.setTextColor(0, 0, 0);
+  drawBrandHeader(doc, {
+    pageW,
+    bandHeight: 34,
+    reportLabel: 'Dashboard Report',
+    titleSize: 22,
+    bodySize: 9.5,
+    titleY: 14,
+    subtitleY: 21,
+    labelY: 29,
+    rightSize: 9,
+    rightLines: [
+      { text: dateStr, y: 14 },
+      { text: `Period: ${monthStr}`, y: 21 },
+    ],
+    icon,
+  });
 
   // ── KPI Summary ─────────────────────────────────────────────────────────
   let y = sectionTitle(doc, 'KPI Summary', 42, pageW);
@@ -81,13 +76,13 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
     head: [['Metric', 'Value', 'Change', 'Note']],
     body: kpiRows,
     headStyles: {
-      fillColor: [PURPLE[0], PURPLE[1], PURPLE[2]],
+      fillColor: [ACCENT[0], ACCENT[1], ACCENT[2]],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 9,
     },
     bodyStyles: { fontSize: 9, cellPadding: 3 },
-    alternateRowStyles: { fillColor: [PURPLE_LIGHT[0], PURPLE_LIGHT[1], PURPLE_LIGHT[2]] },
+    alternateRowStyles: { fillColor: [ACCENT_LIGHT[0], ACCENT_LIGHT[1], ACCENT_LIGHT[2]] },
     columnStyles: {
       1: { fontStyle: 'bold', halign: 'right' },
       2: { halign: 'center', fontStyle: 'bold' },
@@ -97,14 +92,14 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
     didParseCell: (data) => {
       if (data.column.index === 2 && data.section === 'body') {
         const val = data.cell.raw as string;
-        if (val.startsWith('+')) data.cell.styles.textColor = [GREEN[0], GREEN[1], GREEN[2]];
-        else if (val.startsWith('-')) data.cell.styles.textColor = [RED[0], RED[1], RED[2]];
+        if (val.startsWith('+')) data.cell.styles.textColor = [SUCCESS[0], SUCCESS[1], SUCCESS[2]];
+        else if (val.startsWith('-')) data.cell.styles.textColor = [DANGER[0], DANGER[1], DANGER[2]];
       }
     },
   });
 
   // ── Sales Summary ───────────────────────────────────────────────────────
-  const salesStartY: number = (doc as AutoTableDoc).lastAutoTable.finalY + 10;
+  const salesStartY = lastTableY(doc) + 10;
   y = sectionTitle(doc, 'Sales Summary', salesStartY, pageW);
 
   const salesDelta = Math.round(summary.salesReport.delta);
@@ -121,19 +116,19 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
     bodyStyles: { fontSize: 9, cellPadding: 3 },
     columnStyles: {
       0: { fontStyle: 'bold', cellWidth: 80 },
-      1: { halign: 'right', fontStyle: 'bold', textColor: [PURPLE[0], PURPLE[1], PURPLE[2]] },
+      1: { halign: 'right', fontStyle: 'bold', textColor: [ACCENT[0], ACCENT[1], ACCENT[2]] },
     },
     margin: { left: 14, right: 14 },
     didParseCell: (data) => {
       if (data.column.index === 1 && data.section === 'body' && data.row.index === 1) {
         const val = data.cell.raw as string;
-        if (val.startsWith('-')) data.cell.styles.textColor = [RED[0], RED[1], RED[2]];
+        if (val.startsWith('-')) data.cell.styles.textColor = [DANGER[0], DANGER[1], DANGER[2]];
       }
     },
   });
 
   // ── Top Frames & Top Products (side by side) ─────────────────────────────
-  const topStartY: number = (doc as AutoTableDoc).lastAutoTable.finalY + 10;
+  const topStartY = lastTableY(doc) + 10;
   y = sectionTitle(doc, 'Top Frames & Products', topStartY, pageW);
 
   const midX = pageW / 2 + 3;
@@ -146,13 +141,13 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
         ? summary.topFrames.map((f, i) => [i + 1, f.name || '-', f.used])
         : [['—', 'No data yet', '']],
     headStyles: {
-      fillColor: [PURPLE[0], PURPLE[1], PURPLE[2]],
+      fillColor: [ACCENT[0], ACCENT[1], ACCENT[2]],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8,
     },
     bodyStyles: { fontSize: 8, cellPadding: 2.5 },
-    alternateRowStyles: { fillColor: [PURPLE_LIGHT[0], PURPLE_LIGHT[1], PURPLE_LIGHT[2]] },
+    alternateRowStyles: { fillColor: [ACCENT_LIGHT[0], ACCENT_LIGHT[1], ACCENT_LIGHT[2]] },
     columnStyles: {
       0: { cellWidth: 8, halign: 'center' },
       2: { halign: 'center' },
@@ -160,7 +155,7 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
     margin: { left: 14, right: midX },
     styles: { overflow: 'ellipsize' },
   });
-  const leftFinalY: number = (doc as AutoTableDoc).lastAutoTable.finalY;
+  const leftFinalY = lastTableY(doc);
 
   autoTable(doc, {
     startY: y,
@@ -170,13 +165,13 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
         ? summary.topProducts.map((p, i) => [i + 1, p.name || '-', p.used])
         : [['—', 'No data yet', '']],
     headStyles: {
-      fillColor: [GREEN[0], GREEN[1], GREEN[2]],
+      fillColor: [SUCCESS[0], SUCCESS[1], SUCCESS[2]],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8,
     },
     bodyStyles: { fontSize: 8, cellPadding: 2.5 },
-    alternateRowStyles: { fillColor: [GREEN_LIGHT[0], GREEN_LIGHT[1], GREEN_LIGHT[2]] },
+    alternateRowStyles: { fillColor: [SUCCESS_LIGHT[0], SUCCESS_LIGHT[1], SUCCESS_LIGHT[2]] },
     columnStyles: {
       0: { cellWidth: 8, halign: 'center' },
       2: { halign: 'center' },
@@ -184,7 +179,7 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
     margin: { left: midX, right: 14 },
     styles: { overflow: 'ellipsize' },
   });
-  const rightFinalY: number = (doc as AutoTableDoc).lastAutoTable.finalY;
+  const rightFinalY = lastTableY(doc);
 
   // ── Recent Orders ────────────────────────────────────────────────────────
   const recentStartY = Math.max(leftFinalY, rightFinalY) + 10;
@@ -204,13 +199,13 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
           ])
         : [['—', 'No data yet', '', '', '']],
     headStyles: {
-      fillColor: [PURPLE[0], PURPLE[1], PURPLE[2]],
+      fillColor: [ACCENT[0], ACCENT[1], ACCENT[2]],
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       fontSize: 8,
     },
     bodyStyles: { fontSize: 8, cellPadding: 2.5 },
-    alternateRowStyles: { fillColor: [PURPLE_LIGHT[0], PURPLE_LIGHT[1], PURPLE_LIGHT[2]] },
+    alternateRowStyles: { fillColor: [ACCENT_LIGHT[0], ACCENT_LIGHT[1], ACCENT_LIGHT[2]] },
     columnStyles: {
       2: { halign: 'right' },
       3: { halign: 'center' },
@@ -220,27 +215,14 @@ export function exportDashboardToPDF(summary: DashboardSummary) {
     didParseCell: (data) => {
       if (data.column.index === 4 && data.section === 'body') {
         const v = data.cell.raw as string;
-        if (v === 'Completed') data.cell.styles.textColor = [GREEN[0], GREEN[1], GREEN[2]];
-        else if (v === 'Failed' || v === 'Cancelled') data.cell.styles.textColor = [RED[0], RED[1], RED[2]];
+        if (v === 'Completed') data.cell.styles.textColor = [SUCCESS[0], SUCCESS[1], SUCCESS[2]];
+        else if (v === 'Failed' || v === 'Cancelled') data.cell.styles.textColor = [DANGER[0], DANGER[1], DANGER[2]];
       }
     },
   });
 
   // ── Page footer ──────────────────────────────────────────────────────────
-  const pageCount = doc.getNumberOfPages();
-  for (let i = 1; i <= pageCount; i++) {
-    doc.setPage(i);
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(160, 160, 160);
-    doc.text(
-      `Page ${i} of ${pageCount}  ·  GLAMBOT Photo Booth  ·  ${dateStr}`,
-      pageW / 2,
-      pageH - 8,
-      { align: 'center' },
-    );
-  }
+  drawPageFooters(doc, dateStr, { pageW, pageH, bottomOffset: 8, icon });
 
-  const stamp = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  doc.save(`dashboard-report-${stamp}.pdf`);
+  savePdfWithStamp(doc, 'dashboard-report', now);
 }

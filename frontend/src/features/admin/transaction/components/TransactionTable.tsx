@@ -14,8 +14,13 @@ import { Badge } from '@/components/admin/ui/badge';
 import { Button } from '@/components/admin/ui/button';
 import { Checkbox } from '@/components/admin/ui/checkbox';
 import { Skeleton } from '@/components/admin/ui/skeleton';
-import { type Transaction, type TransactionStatus } from '../api/types';
-import { formatIDR as formatCurrency } from '@/lib/formats';
+import { type Transaction } from '../api/types';
+import {
+  formatIDR as formatCurrency,
+  formatDateTimeShort as formatDateTime,
+} from '@/lib/formats';
+import { useRowSelection } from '@/lib/useTableRows';
+import { TRANSACTION_STATUS_CONFIG } from '../utils/status';
 
 type SortKey = 'id' | 'package' | 'amount' | 'createdAt' | 'status';
 type SortDir = 'asc' | 'desc';
@@ -38,45 +43,13 @@ const COLUMNS = [
   '',
 ];
 
-const STATUS_CONFIG: Record<
-  TransactionStatus,
-  { label: string; className: string }
-> = {
-  success: {
-    label: 'Success',
-    className: 'bg-emerald-100 text-emerald-800 hover:bg-emerald-100/80',
-  },
-  pending: {
-    label: 'Pending',
-    className: 'bg-amber-100 text-amber-800 hover:bg-amber-100/80',
-  },
-  failed: {
-    label: 'Failed',
-    className: 'bg-rose-100 text-rose-800 hover:bg-rose-100/80',
-  },
-  expired: {
-    label: 'Expired',
-    className: 'bg-slate-100 text-slate-800 hover:bg-slate-100/80',
-  },
-  cancelled: {
-    label: 'Cancelled',
-    className: 'bg-slate-100 text-slate-800 hover:bg-slate-100/80',
-  },
-};
+const STATUS_CONFIG = TRANSACTION_STATUS_CONFIG;
 
 const TYPE_CONFIG: Record<string, string> = {
   digital: 'bg-blue-100 text-blue-800 hover:bg-blue-100/80',
   'digital+print': 'bg-purple-100 text-purple-800 hover:bg-purple-100/80',
 };
 
-const formatDateTime = (iso: string) =>
-  new Date(iso).toLocaleString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 
 const SortBtn = ({
   col,
@@ -103,31 +76,7 @@ export function TransactionTable({
 }: TransactionTableProps) {
   const [sortKey, setSortKey] = React.useState<SortKey>('createdAt');
   const [sortDir, setSortDir] = React.useState<SortDir>('desc');
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-
-  const toggleRow = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const toggleAll = (ids: string[], checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        ids.forEach((id) => next.add(id));
-      } else {
-        ids.forEach((id) => next.delete(id));
-      }
-      return next;
-    });
-  };
+  const { selectedIds, toggleRow, toggleAll } = useRowSelection();
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {

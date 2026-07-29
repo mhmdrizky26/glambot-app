@@ -51,7 +51,16 @@ export const ARM_LINKS: ArmLink[] = [
   },
   {
     url: '/arm/2c.glb',
-    offset: [0, 136.5, 0],
+    // 149.5 = duduk RATA di atas pedestal, bukan 136.5 hasil pencocokan flange.
+    // Bbox mesh: pedestal (1c) berakhir di Y 149.5, badan J1 (2c) mulai di Y 0 —
+    // pada 136.5 skirt J1 tenggelam 13 mm ke dalam pedestal dan menelan cincin
+    // biru, sehingga cincin hanya muncul sebagai busur sepotong (terlihat
+    // "miring"). 149.5 membuat kedua permukaan bersentuhan persis: cincin utuh
+    // mengelilingi, tanpa celah dan tanpa tumpang tindih. Nilainya TIDAK boleh
+    // ditambah lagi — lebih tinggi = flange baut di dalam pedestal terekspos.
+    // Konsekuensinya seluruh rantai berdiri 13 mm lebih tinggi dari FK robot
+    // asli; ini model tampilan kartu, tidak dipakai mengendalikan robot.
+    offset: [0, 149.5, 0],
     axis: 'y',
     limit: [-360, 360],
     label: 'J1 base yaw',
@@ -212,4 +221,28 @@ export const CAMERA_MODEL = {
  *
  * Murni rotasi tampilan; sudut joint tidak tersentuh.
  */
-export const SCENE_YAW = (105.9 * Math.PI) / 180;
+/**
+ * Yaw tampilan — SATU nilai untuk semua preset, sengaja bukan per-pose.
+ *
+ * Patokannya arah bidik kamera DSLR (sumbu −X link 7): yaw yang membuatnya
+ * mengarah tepat ke penonton berbeda-beda tiap preset karena J1 tiap preset
+ * berbeda. Dari FK kesepuluh preset (kamera kartu di azimut 15,3°):
+ *
+ *   preset  1  2  3  4  5  6  7  8  9  10
+ *   yaw ideal 102 102 76 136 105 105 132 89 102 108   (derajat)
+ *
+ * Rata-rata melingkarnya 105,7° — itu asal nilai 105,9° yang dipakai semula.
+ * Nilai final 110° ditentukan dari penilaian mata di layar: pada 105,9° robot
+ * terbaca sedikit menghadap kiri, pada 113,9° sedikit ke kanan (terukur: bidikan
+ * preset 1 meleset 12,2° ke kanan), jadi diambil di antaranya.
+ *
+ * Pernah dicoba menghitung yaw per pose (yaw = azimut kamera − J1) supaya
+ * bidang tekuk selalu menghadap penonton. Hasilnya JUSTRU salah arah: untuk
+ * preset 1 nilainya jadi 196,9° dan robot tampak menghadap ke kanan. Jangan
+ * diulang tanpa mengecek ke layar dulu.
+ *
+ * Konsekuensi yang diterima: preset dengan J1 jauh berbeda (3, 4, 7, 8) tetap
+ * terlihat menyerong 20–34°. Kalau salah satunya mengganggu, tambahkan trim
+ * kecil per-preset — jangan geser nilai global ini, karena preset lain ikut.
+ */
+export const SCENE_YAW = (110 * Math.PI) / 180;

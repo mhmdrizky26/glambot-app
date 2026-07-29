@@ -34,9 +34,68 @@ Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis
 
 Ringkasan perubahan terbaru (per Juli 2026):
 
-### UI Touchscreen — keyboard on-screen, tap-to-place editor, home animasi (baru)
+### Tap area penuh di Home + highlight preset aktif (baru)
+- **Home** ([`HomePage.tsx`](frontend/src/features/public/home/pages/HomePage.tsx)) — `<main>` dipindah ke `fixed inset-0`. Sebelumnya `min-h-full` di dalam container `max-w-360` layout publik bikin ada pita mati kiri-kanan di layar kiosk >1440px yang tidak memicu tap, padahal konsepnya "tap anywhere to start".
+- **Grid Gesture Controls** ([`PhotoSessionPage.tsx`](frontend/src/features/public/photo-session/pages/PhotoSessionPage.tsx)) — kartu preset kini punya state "ter-select" untuk preset yang gesture-nya SEDANG dibaca robot, jadi user tahu preset mana yang akan dikonfirmasi selagi bar progress terisi. Highlight dipetakan dari `gesture_id` (1-10, sejajar `Preset N`), **bukan** `robot_preset` — panel kanan disembunyikan saat robot bergerak (`showGuide = !robotBusy`) sehingga highlight berbasis `robot_preset` praktis tak pernah terlihat. Highlight "preset terakhir dipakai" di grid dihapus (kartu *Previous Preset* di atas grid tetap ada).
+
+### Pembersihan duplikasi lapisan admin (baru)
+Audit blok-kembar otomatis menemukan 12 pasangan duplikat; sisa sekarang 3 dan semuanya bukan duplikasi nyata (blok import yang sama + pemanggilan `DataPagination` yang memang beda argumen). Yang disatukan:
+
+| Dulu tersebar di | Sekarang |
+|---|---|
+| `updateParam` di 4 halaman daftar | [`useListQueryParam`](frontend/src/lib/useListQueryParam.ts) |
+| Seleksi baris + memo sorting di 4 tabel | [`useRowSelection`, `useSortedRows`](frontend/src/lib/useTableRows.ts) |
+| 9 `<Select>` filter + daftar 12 bulan × 2 | [`FilterSelect`, `MONTH_FILTER_OPTIONS`](frontend/src/components/admin/shared/FilterSelect.tsx) |
+| 3 dialog hapus | [`ConfirmDeleteDialog`](frontend/src/components/admin/shared/ConfirmDeleteDialog.tsx) |
+| Baris info 3 kartu perangkat | [`InfoRow`](frontend/src/components/admin/shared/InfoRow.tsx) |
+| Ikon Revenue di 2 stat card | [`RevenueIcon`](frontend/src/components/admin/shared/RevenueIcon.tsx) |
+| Status transaksi (label+warna) di 4 file | [`TRANSACTION_STATUS_CONFIG`](frontend/src/features/admin/transaction/utils/status.ts) |
+| Tipe timer config di 2 file | satu `AppConfig`, `TimerSettings` jadi alias |
+| Baca `app_settings` di 2 handler Go | `readAppSettings` (pasangan `upsertAppSettings`) |
+
+Semua murni pemindahan kode: markup, kelas Tailwind, teks, dan urutan pemanggilan dipertahankan apa adanya.
+
+### Laporan PDF: mark robot + tema brand (baru)
+- **Ikon robot aplikasi** ([`robot 1.svg`](frontend/public/robot%201.svg)) tampil di pita header (di atas app-badge putih, karena gradien navy→biru-nya butuh alas terang) dan mungil di footer tiap halaman. jsPDF tidak bisa menggambar SVG, jadi [`loadRobotIcon`](frontend/src/lib/pdf.ts) merasterisasinya ke PNG **saat export** langsung dari aset yang sama dengan UI — tanpa salinan base64 di bundle yang bisa basi. Kalau aset gagal dimuat, laporan tetap terbit memakai `drawRobotMark`, mark lengan robot versi vektor sebagai cadangan.
+- Karena rasterisasi itu asinkron, `exportDashboardToPDF`/`exportTransactionsToPDF` sekarang `async` (kedua pemanggilnya memang sudah `async` + try/catch).
+- **Palet disamakan dengan brand.** Sebelumnya laporan memakai ungu `rgb(138,56,245)` yang tidak dipakai di UI mana pun. Sekarang: pita header navy `#112D4E`, aksen/kepala tabel `#3F72AF`, baris selang-seling `#EDF2F8` — sama dengan tema kiosk di `public.css` sekaligus senada dengan livery robot (badan putih, aksen biru). Status tetap semantik: sukses `#0F8A5C`, gagal `#C0392B`.
+- Nama konstanta ikut jadi semantik (`PDF_BRAND`, `PDF_ACCENT`, `PDF_SUCCESS`, `PDF_DANGER`, `PDF_MUTED`) supaya tidak ada lagi variabel bernama `PURPLE` yang isinya biru.
+
+> Cara melihat hasil PDF tanpa menjalankan dashboard: kompilasi helper-nya (`npx tsc src/lib/pdf.ts src/lib/formats.ts --outDir <tmp> --module commonjs --esModuleInterop --skipLibCheck`), panggil dari Node dengan `jspdf` + `jspdf-autotable`, lalu rasterisasi PDF-nya memakai pdf.js di browser. Catatan: pdf.js **harus** disajikan via `http://` (worker-nya diblokir di `file://`) dan jangan pakai `--virtual-time-budget` di Chrome headless — flag itu membekukan worker sehingga dokumen tidak pernah selesai dimuat.
+
+### Penyetelan visual robot arm 3D (baru)
+Sudut joint & FK tidak tersentuh; yang berubah hanya cara menampilkannya.
+
+**`SCENE_YAW` = 110°**, satu nilai untuk semua preset ([`armKinematics.ts`](frontend/src/features/public/instruction/lib/armKinematics.ts)). Patokannya arah bidik DSLR (sumbu −X link 7). Dari FK kesepuluh preset dengan kamera kartu di azimut 15,3°, yaw yang membuat bidikan tepat mengarah ke penonton:
+
+| Preset | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| Yaw ideal | 102° | 102° | 76° | 136° | 105° | 105° | 132° | 89° | 102° | 108° |
+
+Rata-rata melingkarnya 105,7° — itu asal nilai 105,9° yang dipakai semula. Angka final 110° ditentukan dari penilaian di layar: pada 105,9° robot terbaca sedikit menghadap kiri, pada 113,9° sedikit ke kanan (terukur: bidikan preset 1 meleset 12,2° ke kanan), jadi diambil di antaranya.
+
+> ⚠️ Pernah dicoba menghitung yaw **per pose** (`yaw = azimut kamera − J1`) supaya bidang tekuk selalu menghadap penonton. Hasilnya justru salah arah — preset 1 jadi 196,9° dan robot tampak menghadap ke kanan. Jangan diulang tanpa mengecek ke layar dulu.
+>
+> Konsekuensi yang diterima: preset dengan J1 jauh berbeda (3, 4, 7, 8) tetap terlihat menyerong 20–34°. Kalau salah satunya mengganggu, tambahkan trim kecil khusus preset itu — jangan geser nilai global, karena preset lain ikut bergeser.
+
+Offset J1 juga diperbaiki dari `136.5` → **`149.5`** mm. Angka lama berasal dari pencocokan cincin flange, tapi bbox mesh menunjukkan pedestal (`1c.glb`) berakhir di Y 149,5 sementara badan J1 (`2c.glb`) mulai di Y 0 — jadi pada 136,5 skirt J1 tenggelam 13 mm dan **menelan cincin biru**, menyisakan busur sepotong yang terbaca seperti sambungan miring. Di 149,5 kedua permukaan bersentuhan persis: cincin utuh, tanpa celah.
+
+> ⚠️ Jangan menaikkannya lebih dari 149,5 — flange baut di dalam pedestal langsung terekspos. Untuk menggeser arm di dalam frame kartu (bukan memisah sambungan), pakai `ARM_FLOOR_Y` di [`RobotArm3D.tsx`](frontend/src/features/public/instruction/components/RobotArm3D.tsx) yang menggerakkan seluruh rig.
+>
+> Cara memeriksa perubahan semacam ini tanpa menebak: jalankan `npm run dev`, lalu screenshot `/arm-lab?hud=0&view=front&dist=0.32&target=0,-0.26,0` (Chrome headless pun bisa). Hindari `dist` di bawah ~0,2 — kamera menembus dinding pedestal dan isi bautnya terlihat, itu artefak near-plane, bukan cacat model.
+
+### Optimalisasi: preview satu koneksi, helper bersama, route dev dipagari (baru)
+- **Live preview kiosk pindah ke MJPEG.** [`CameraPreview`](frontend/src/features/public/photo-session/components/CameraPreview.tsx) dulu menarik JPEG penuh tiap 100 ms (±10 request/detik menembus Go → digiCamControl); sekarang memakai satu koneksi `GET /api/robot/liveview/stream` lewat `<img>`. Freeze instan saat shutter tetap ada — frame di-snapshot dari `<img>` ke canvas sementara (`crossOrigin="anonymous"`, backend sudah mengirim header CORS).
+- **Deteksi gagal ikut dikeraskan** supaya penggantian ini tidak menghilangkan UI *"Stream not available" + Try again*: backend memprobe satu frame **sebelum** menulis header (kamera mati → `503` yang jelas, bukan stream menggantung) dan menutup koneksi setelah 20 kegagalan beruntun (±10 detik); frontend menyambung ulang otomatis maks. 3× (jeda 1,5 detik) plus watchdog 6 detik untuk kasus "tersambung tapi tak pernah ada frame".
+- **Helper dipakai bersama:** [`lib/pdf.ts`](frontend/src/lib/pdf.ts) baru (palet, header brand, footer, penamaan file) untuk kedua laporan PDF admin; `formatIDR` & `formatDateShort` di [`lib/formats.ts`](frontend/src/lib/formats.ts) menggantikan formatter rupiah/tanggal yang tadinya ditulis ulang di 4 + 7 tempat; `resolveBaseUrl`/`resolveRobotUrl` kini berbagi satu implementasi. Perilaku & tampilan tidak berubah.
+- **`/arm-lab` 404 di produksi.** Halaman kalibrasi lengan 3D tetap bisa dipakai saat `npm run dev`, tapi tidak lagi bisa dibuka dari kiosk yang sudah di-build.
+
+### Rapikan komentar & dokumentasi kode
+- Blok komentar panjang di seluruh repo dipadatkan (dari 101 blok ≥4 baris jadi 28; rasio komentar 5,9% → 4,7%) tanpa membuang alasan "kenapa"-nya. Riwayat versi panjang di `gif_live.go` diringkas jadi aturan singkat: **bump suffix versi file GIF tiap kali logika compositing berubah**.
+
+### UI Touchscreen — keyboard on-screen, tap-to-place editor, home animasi
 Penyesuaian UX untuk kiosk **layar sentuh** (tanpa mouse/keyboard fisik):
-- **Home** ([`HomePage.tsx`](frontend/src/features/public/home/pages/HomePage.tsx)) — tombol "Tap to Start" dihapus (seluruh halaman memang sudah bisa di-tap). Diganti indikator sentuh animatif: cincin riak memuai (`tapRing`) + titik inti berdenyut, judul "GLAMBOT" diperbesar & mengambang halus (`floatY`), plus teks "TAP ANYWHERE TO START" dengan glow lembut redup-terang (`softGlow`).
+- **Home** ([`HomePage.tsx`](frontend/src/features/public/home/pages/HomePage.tsx)) — tombol "Tap to Start" dihapus (seluruh halaman memang sudah bisa di-tap). Diganti indikator sentuh animatif: cincin riak memuai (`tapRing`) + titik inti berdenyut, dan judul "GLAMBOT" diperbesar & mengambang halus (`floatY`).
 - **Voucher keyboard on-screen** ([`OnScreenKeyboard.tsx`](frontend/src/components/shared/OnScreenKeyboard.tsx)) — input voucher di `/payment/summary` kini `readOnly`; menyentuhnya memunculkan keyboard alfanumerik bertema (senada GlassCard) yang **slide masuk dari kanan** sembari kartu ringkasan bergeser halus ke kiri.
 - **Photo editor tap-to-place** ([`PreviewArea.tsx`](frontend/src/features/public/photo-editor/components/PreviewArea.tsx) + [`PhotoSelectionPanel.tsx`](frontend/src/features/public/photo-editor/components/PhotoSelectionPanel.tsx)) — **drag & drop diganti tap**: tap foto (armed) → tap slot untuk menempatkannya. Tiap slot diberi **nomor**; mengganti foto slot cukup tap foto lain lalu tap slotnya (tanpa drag). Reposisi dalam slot & toolbar zoom/rotate tetap.
 - **Kartu unlock gesture** ([`PhotoSessionPage.tsx`](frontend/src/features/public/photo-session/pages/PhotoSessionPage.tsx)) — fase locked kini punya pengingat "Only one person's hand at a time" + gambar telapak lebih besar, layout dirapikan.
@@ -530,6 +589,7 @@ glambot-app/
 │   │   │   │   └── (dashboard)/   # dashboard, frame, packages, voucher,
 │   │   │   │                      # transaction, devices, settings
 │   │   │   ├── (public)/          # Public routes (kiosk + download)
+│   │   │   │   ├── arm-lab/page.tsx   # Kalibrasi robot arm 3D (dev-only; 404 di build produksi)
 │   │   │   │   ├── package/page.tsx
 │   │   │   │   ├── payment/summary/page.tsx
 │   │   │   │   ├── payment/pay/page.tsx
@@ -548,8 +608,11 @@ glambot-app/
 │   │   ├── assets/                # Local fixed assets (loading.json Lottie)
 │   │   ├── components/
 │   │   │   ├── shared/            # GlassCard, Timer, StatusAnimation, Spinner, OnScreenKeyboard (touchscreen)
-│   │   │   └── ui/                # Button, Dialog, Input (Radix wrappers)
+│   │   │   ├── ui/                # Button, Dialog, Input (Radix wrappers) — dipakai kiosk
+│   │   │   └── admin/             # layout/ (sidebar, header), shared/ (ChartContainer, DataPagination,
+│   │   │                          # NotFoundState), ui/ (komponen shadcn dashboard)
 │   │   ├── features/
+│   │   │   ├── admin/             # dashboard, frame, packages, voucher, transaction, devices, settings, auth
 │   │   │   └── public/
 │   │   │       ├── home/
 │   │   │       ├── instruction/   # Multi-step instruction (3 cards + 60s timer)
@@ -564,7 +627,8 @@ glambot-app/
 │   │   ├── lib/
 │   │   │   ├── api-client.ts      # axios instance + resolveBaseUrl + toAbsoluteUrl
 │   │   │   ├── audio.ts           # voice-over: play/preload + cross-page coordination (whenVoiceIdle, playAfterCurrent)
-│   │   │   ├── formats.ts         # formatRupiah, formatPriceToK
+│   │   │   ├── formats.ts         # formatRupiah, formatIDR, formatDateShort, formatPriceToK
+│   │   │   ├── pdf.ts             # Palet brand + mark robot vektor + header/footer laporan PDF
 │   │   │   ├── formatTime.ts      # formatTimeMMSS — shared MM:SS + negative grace timer format
 │   │   │   ├── usePersistedCountdown.ts # Countdown yang persist via sessionStorage (survive refresh)
 │   │   │   ├── react-query.ts     # Query config
@@ -586,8 +650,8 @@ glambot-app/
 │   │   ├── detector/               # Deteksi gesture jari (MediaPipe hand landmarker)
 │   │   ├── robot/                  # Driver Dobot Nova 5 (dashboard :29999 + move :30003)
 │   │   └── web/                    # Flask dashboard + endpoint /robot/enable|disable|stop|preset, /tracking/*
-│   ├── config/                     # Preset posisi robot (JSON): new_preset.json, presets.json
-│   ├── model/                      # Model MediaPipe hand gesture recognizer (v2, v3)
+│   ├── config/                     # Preset posisi robot: new_preset.json (dirujuk DOBOT_PRESETS_JSON)
+│   ├── model/                      # Model MediaPipe hand gesture recognizer (v3, ±8 MB)
 │   ├── .env.example
 │   ├── requirements.txt
 │   └── main.py                     # Entry point (python main.py [--no-robot] [--ip] [--port])
@@ -721,8 +785,8 @@ Diskon code.
 | GET | `/api/photo/session/{id}/gif-live/available` | Cek ringan apakah Live Strip GIF tersedia (perlu framed + burst frames). |
 | GET | `/api/robot/status` | Cek kamera connected + type |
 | POST | `/api/robot/capture` | Manual trigger capture (Canon) |
-| GET | `/api/robot/liveview` | Single live frame JPEG (Canon, mirrored) |
-| GET | `/api/robot/liveview/stream` | MJPEG continuous stream (Canon) |
+| GET | `/api/robot/liveview` | Single live frame JPEG (Canon). Dipakai untuk probe/debug — preview kiosk memakai endpoint stream di bawah |
+| GET | `/api/robot/liveview/stream` | MJPEG ~10 fps (Canon) — sumber live preview `/photo-session`. Balas `503` kalau kamera tidak mengirim frame, dan menutup koneksi setelah 20 kegagalan beruntun supaya frontend bisa reconnect |
 | GET | `/api/robot/session/{id}` | Session photos (alias) |
 | POST | `/api/robot/enable` | Backend → call robot URL `/robot/enable` |
 | POST | `/api/robot/disable` | Backend → call robot URL `/robot/disable` |
@@ -883,7 +947,7 @@ Canon-only via digiCamControl. Saat startup ([services/camera.go:CheckCamera](ba
 
 ### Mirror behavior
 
-Preview liveview di-mirror di sisi frontend (CSS `scaleX(-1)` pada canvas preview), jadi user lihat preview mirrored (familiar selfie) tanpa backend perlu decode+re-encode JPEG tiap frame. Hasil foto Canon disimpan apa adanya (natural orientation, tidak di-flip).
+Preview liveview di-mirror di sisi frontend (CSS `scaleX(-1)` pada `<img>` stream), jadi user lihat preview mirrored (familiar selfie) tanpa backend perlu decode+re-encode JPEG tiap frame. Snapshot freeze saat shutter ikut di-mirror supaya konsisten dengan yang barusan dilihat user. Hasil foto Canon disimpan apa adanya (natural orientation, tidak di-flip).
 
 ---
 
