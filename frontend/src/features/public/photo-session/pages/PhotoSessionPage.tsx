@@ -12,7 +12,11 @@ import { instructionSteps } from '@/features/public/instruction/data/steps';
 import { useEffect, useRef, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useGetSession } from '@/shared/api/session';
-import { sendSessionBroadcast } from '../lib/broadcastChannel';
+import {
+  SESSION_HEARTBEAT_MS,
+  sendSessionBroadcast,
+} from '../lib/broadcastChannel';
+import { disableRobot, disableRobotBeacon } from '../lib/robotPower';
 import { useLiveStream } from '../api/getLivePreview';
 import { useRobotConfig } from '../api/getRobotConfig';
 import { useRobotDetection } from '../api/getRobotDetection';
@@ -103,11 +107,22 @@ export function PhotoSessionPage() {
   // (tombol back browser, redirect eksternal), pastikan robot tetap dimatikan
   // saat unmount. Guard robotDisabledRef mencegah dobel dengan disable di
   // end-effect. Fire hanya bila robot memang sempat di-enable.
+  //
+  // `pagehide` menutup lubang terakhir: tab/jendela kiosk yang ditutup atau
+  // di-refresh TIDAK menjalankan cleanup React sampai tuntas, dan XHR yang
+  // sedang jalan ikut dibatalkan — jadi di situ dipakai sendBeacon.
   useEffect(() => {
+    const onPageHide = () => {
+      if (!enableFiredRef.current || robotDisabledRef.current) return;
+      disableRobotBeacon();
+    };
+    window.addEventListener('pagehide', onPageHide);
+
     return () => {
+      window.removeEventListener('pagehide', onPageHide);
       if (enableFiredRef.current && !robotDisabledRef.current) {
         robotDisabledRef.current = true;
-        apiClient.post('/api/robot/disable').catch(() => {});
+        void disableRobot();
       }
     };
   }, []);
@@ -183,28 +198,6 @@ export function PhotoSessionPage() {
     : null;
   const selectedPresetIndex =
     robotGestureId != null ? robotGestureId - 1 : null;
-
-  // Preset terakhir yang SELESAI dijalankan robot. `robot_preset` berisi preset
-  // yang sedang DITUJU dan balik null begitu gerakan beres — jadi di-latch tepat
-  // pada transisi non-null → null. Dengan begitu kartu "Previous Preset" tidak
-  // ikut berubah selagi robot masih menuju posisi (itu preset "sekarang", bukan
-  // "sebelumnya") dan nilainya bertahan setelah robot kembali LOCKED.
-  const [lastPresetNumber, setLastPresetNumber] = useState<number | null>(null);
-  const prevActivePresetRef = useRef<string | null>(null);
-  useEffect(() => {
-    const prev = prevActivePresetRef.current;
-    prevActivePresetRef.current = robotActivePreset;
-    if (!prev || robotActivePreset) return;
-    const n = Number(prev);
-    if (!Number.isFinite(n) || n < 1 || n > PRESET_GESTURES.length) return;
-    // Latch dari state robot eksternal (poll), jadi memang butuh efek.
-    setLastPresetNumber(n);
-  }, [robotActivePreset]);
-
-  const lastPresetIndex =
-    lastPresetNumber != null ? lastPresetNumber - 1 : null;
-  const lastPresetGesture =
-    lastPresetIndex != null ? PRESET_GESTURES[lastPresetIndex] : null;
 
   // Fase "terkunci" (belum unlock): tampilan kontrol hanya menampilkan gesture
   // unlock (Preset 5). Progress bar deteksi memakai progress unlock saat locked,
@@ -402,6 +395,21 @@ export function PhotoSessionPage() {
     endingRef.current = endingNow;
   }, [endingNow]);
 
+  // Heartbeat "sesi foto sedang berjalan" ke jendela lain (Monitor 2, dan
+  // jendela mana pun yang masih tertinggal di Home). SESSION_START yang cuma
+  // dikirim sekali dari halaman instruction tidak terdengar oleh jendela yang
+  // dibuka/di-reload belakangan — dan jendela Home yang tidak tahu ada sesi
+  // akan memutar ajakan "sentuh layar" menimpa narasi sesi foto. Berhenti
+  // sendiri saat sesi masuk fase berakhir; SESSION_END tetap dikirim di
+  // end-effect di bawah.
+  useEffect(() => {
+    if (!sessionId || endingNow) return;
+    const beat = () => sendSessionBroadcast({ type: 'SESSION_START', sessionId });
+    beat();
+    const id = setInterval(beat, SESSION_HEARTBEAT_MS);
+    return () => clearInterval(id);
+  }, [sessionId, endingNow]);
+
   // Grace tick: hanya jalan saat sessionTimeLeft sudah 0 DAN robot masih
   // dipakai (menjepret ATAU user sedang unlock). Mulai dari 1 supaya tampilan
   // langsung "-00:01" tanpa nampung "00:00" sesaat.
@@ -458,10 +466,9 @@ export function PhotoSessionPage() {
     clearSessionTimer();
 
     // Sesi selesai → matikan robot. Tandai agar cleanup unmount tidak dobel.
+    // disableRobot sudah punya fallback emergency stop kalau disable gagal.
     robotDisabledRef.current = true;
-    apiClient.post('/api/robot/disable').catch((err) => {
-      console.warn('[PhotoSession] robot/disable failed:', err);
-    });
+    void disableRobot();
 
     const isPrint = session?.packageCode === 'vip';
     const target = isPrint
@@ -554,8 +561,9 @@ export function PhotoSessionPage() {
         </div>
 
         {/* Kanan — 2 kartu: Gesture Detection (bar + info preset, ringkas) di
-            atas, lalu Gesture Controls. Muncul saat robot idle dengan animasi
-            slide-in dari kanan; hilang saat robot sibuk. */}
+            atas, lalu Gesture Controls yang mengisi sisa tinggi. Muncul saat
+            robot idle dengan animasi slide-in dari kanan; hilang saat robot
+            sibuk. */}
         {showGuide && (
           <div className="flex w-[26rem] 2xl:w-[30rem] shrink-0 flex-col gap-4 min-h-0 animate-[slideInRight_350ms_ease-out]">
             {/* Gesture Detection — kartu ringkas: bar progress deteksi + info
@@ -604,57 +612,6 @@ export function PhotoSessionPage() {
                   </span>
                 </div>
               </div>
-            </div>
-
-            {/* Previous Preset — kartu info preset yang terakhir dijalankan
-                robot. Ikon + nama gesture dipakai supaya user langsung ingat
-                gerakan tangan mana yang barusan dipakai (dan tidak mengulang
-                pose yang sama tanpa sadar). Kosong sebelum ada preset pertama. */}
-            <div
-              className={cn(
-                'flex shrink-0 items-center gap-4 bg-primary/75 px-5 py-4',
-                PREVIEW_FRAME,
-              )}
-            >
-              {lastPresetGesture ? (
-                <>
-                  <div className="flex h-14 w-14 2xl:h-16 2xl:w-16 shrink-0 items-center justify-center rounded-xl border border-white/25 bg-white/15">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={lastPresetGesture.icon ?? ''}
-                      alt={`Preset ${lastPresetNumber}`}
-                      className={cn(
-                        'h-9 w-9 2xl:h-11 2xl:w-11 object-contain',
-                        // Preset 6 (Move Left) — lihat catatan di grid bawah.
-                        lastPresetGesture.icon?.includes('MOVELEFT') &&
-                          'rotate-[100deg]',
-                      )}
-                    />
-                  </div>
-                  <div className="flex min-w-0 flex-col">
-                    <span className="text-xs uppercase tracking-wide text-white/50">
-                      Previous preset
-                    </span>
-                    <span className="text-lg font-bold text-white">
-                      Preset {lastPresetNumber} · {lastPresetGesture.name}
-                    </span>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="flex h-14 w-14 2xl:h-16 2xl:w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/5 text-2xl font-bold text-white/30">
-                    —
-                  </div>
-                  <div className="flex min-w-0 flex-col">
-                    <span className="text-xs uppercase tracking-wide text-white/50">
-                      Previous preset
-                    </span>
-                    <span className="text-lg font-medium text-white/55">
-                      No preset used yet
-                    </span>
-                  </div>
-                </>
-              )}
             </div>
 
             {/* Gesture Controls — mengisi sisa tinggi kolom. Sebelum unlock

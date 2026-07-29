@@ -74,6 +74,21 @@ const clearPriority = () => {
 };
 
 /**
+ * Jadwal `playBackendAudioAfterCurrent` yang masih menunggu narasi sekarang
+ * selesai. Disimpan di modul supaya BISA DIBATALKAN — dulu `setTimeout`
+ * pengamannya tidak pernah dilepas, jadi narasi halaman sebelumnya (mis.
+ * "intro" dari instruction) bisa tiba-tiba nyala di halaman sesi foto sampai
+ * beberapa detik setelah user pindah.
+ */
+let pendingAfterCurrent: (() => void) | null = null;
+
+const cancelPendingAfterCurrent = () => {
+  const cancel = pendingAfterCurrent;
+  pendingAfterCurrent = null;
+  cancel?.();
+};
+
+/**
  * Ada narasi prioritas yang sedang dilindungi? Dibaca dari latch
  * `priorityVoice`, bukan `audio.paused` — `play()` asinkron jadi clip sempat
  * berstatus paused dan cue di jeda itu bisa lolos menyela.
@@ -164,6 +179,11 @@ function playAudioElement(
   audio: HTMLAudioElement,
   onEnded?: () => void,
 ): void {
+  // "Terbaru menang" juga berlaku untuk yang MASIH DIJADWALKAN: begitu ada
+  // narasi baru diputar, antrean after-current lama dibatalkan supaya tidak
+  // menyusul di halaman yang sudah berbeda konteksnya.
+  cancelPendingAfterCurrent();
+
   // Satu channel narasi: hentikan voice yang sedang berbunyi (kalau beda clip)
   // supaya dua narasi tidak menumpuk. "Terbaru menang" — cocok untuk cue
   // real-time robot yang statenya berganti cepat. Clip yang sama cukup di-rewind.
@@ -214,6 +234,9 @@ function playAudioElement(
  */
 export function stopBackendAudio(): void {
   if (typeof window === 'undefined') return;
+  // Termasuk narasi yang baru DIJADWALKAN tapi belum sempat bunyi — kalau
+  // tidak, ia tetap menyusul beberapa detik kemudian di halaman berikutnya.
+  cancelPendingAfterCurrent();
   for (const audio of audioCache.values()) {
     try {
       if (!audio.paused) {
@@ -269,7 +292,13 @@ export function whenVoiceIdle(cb: () => void): () => void {
   };
 }
 
-/** Putar SETELAH narasi sekarang selesai — cegah dua narasi bertabrakan. */
+/**
+ * Putar SETELAH narasi sekarang selesai — cegah dua narasi bertabrakan.
+ *
+ * Jadwalnya BISA dibatalkan (lihat `pendingAfterCurrent`): kalau ada narasi
+ * lain diputar duluan, atau `stopBackendAudio` dipanggil saat pindah halaman,
+ * clip ini batal — bukan menyusul di layar yang sudah lain.
+ */
 export function playBackendAudioAfterCurrent(
   filename: string,
   onEnded?: () => void,
@@ -285,11 +314,22 @@ export function playBackendAudioAfterCurrent(
     return;
   }
 
-  let played = false;
-  const start = () => {
-    if (played) return;
-    played = true;
+  // Antrean sebelumnya (kalau ada) kalah dari yang ini.
+  cancelPendingAfterCurrent();
+
+  let settled = false;
+  let timer = 0;
+  const detach = () => {
+    settled = true;
     prev.removeEventListener('ended', start);
+    window.clearTimeout(timer);
+  };
+  const start = () => {
+    if (settled) return;
+    detach();
+    // Lepas dulu supaya playAudioElement di dalam playBackendAudio tidak
+    // membatalkan jadwal ini sendiri.
+    pendingAfterCurrent = null;
     playBackendAudio(filename, onEnded);
   };
 
@@ -300,5 +340,10 @@ export function playBackendAudioAfterCurrent(
     Number.isFinite(prev.duration) && prev.duration > 0
       ? Math.max(0, (prev.duration - prev.currentTime) * 1000) + 300
       : 6000;
-  window.setTimeout(start, remainingMs);
+  timer = window.setTimeout(start, remainingMs);
+
+  pendingAfterCurrent = () => {
+    if (settled) return;
+    detach();
+  };
 }

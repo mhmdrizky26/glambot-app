@@ -4,6 +4,17 @@ export type PhotoSessionMessage =
 
 const CHANNEL_NAME = 'photo-session';
 
+/**
+ * Cadence pemancaran ulang SESSION_START selama sesi foto berjalan.
+ *
+ * SESSION_START dulu dikirim SEKALI saat pindah dari instruction, jadi jendela
+ * lain yang dibuka / di-reload di tengah sesi tidak pernah tahu ada sesi aktif
+ * (Monitor 2 nyangkut di "Standby", dan jendela yang tertinggal di Home tetap
+ * memutar ajakan "sentuh layar" menimpa narasi sesi). Dengan heartbeat,
+ * penerima cukup melihat "kapan terakhir dengar" — tanpa perlu endpoint baru.
+ */
+export const SESSION_HEARTBEAT_MS = 3_000;
+
 export function sendSessionBroadcast(message: PhotoSessionMessage) {
   const channel = new BroadcastChannel(CHANNEL_NAME);
   channel.postMessage(message);
