@@ -63,10 +63,38 @@ export function usePinchZoom(
       const canvas = getCanvas();
       if (!canvas) return;
 
+      // Jari kedua baru turun → Fabric mungkin sedang drag objek dari jari
+      // pertama. Hentikan drag itu: hapus __currentTransform internal Fabric
+      // supaya Fabric berhenti menggerakkan objek manapun pada touchmove
+      // berikutnya. Ini lebih andal daripada fire('mouse:up') yang bisa
+      // memicu side-effect lain (selection:cleared dll).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const c = canvas as any;
+      if (c.__currentTransform) {
+        c.__currentTransform = null;
+      }
+
       const m = mid(e.touches);
-      const touched = photoAt(m.x, m.y);
       const active = canvas.getActiveObject();
-      target = touched ?? (active?.data?.isPhoto ? active : null);
+      const activePhoto = active?.data?.isPhoto ? active : null;
+
+      // Cari foto di bawah masing-masing jari & titik tengah secara presisi.
+      const photo0 = photoAt(e.touches[0].clientX, e.touches[0].clientY);
+      const photo1 = photoAt(e.touches[1].clientX, e.touches[1].clientY);
+      const photoMid = photoAt(m.x, m.y);
+
+      // Prioritas target:
+      // 1. Jika ada foto aktif dan salah satu jari berada di slotnya -> tetap targetkan foto aktif tersebut.
+      // 2. Foto di bawah jari pertama (primary touch).
+      // 3. Foto di bawah jari kedua.
+      // 4. Foto di titik tengah antar-jari.
+      // 5. Fallback ke foto yang sedang aktif saat ini.
+      if (activePhoto && (photo0 === activePhoto || photo1 === activePhoto)) {
+        target = activePhoto;
+      } else {
+        target = photo0 ?? photo1 ?? photoMid ?? activePhoto;
+      }
+
       if (!target) return;
 
       // Jadikan target aktif → toolbar adjust muncul & tersorot.
