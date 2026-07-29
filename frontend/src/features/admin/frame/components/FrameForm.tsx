@@ -100,10 +100,8 @@ export function FrameForm({
   };
 
   const handleNext = () => {
-    // Hanya butuh file (mode create) untuk lanjut. Validasi canvas/slot
-    // dijalankan saat Save — kalau gerbang ini memvalidasi slot di sini, frame
-    // dengan slot lama yang sedikit beda bisa membuat Next "diam" tak pernah
-    // masuk Step 2. Error Step 1 (kalau ada) dimunculkan saat submit.
+    // Cukup file untuk lanjut; validasi canvas/slot ditunda ke Save supaya
+    // frame dengan slot lama tidak bikin tombol Next "diam".
     const hasFile = mode === 'edit' || file || previewUrl;
     if (!hasFile) {
       setFileError('Frame file is required');
@@ -144,10 +142,8 @@ export function FrameForm({
     },
   );
 
-  // Penjaga submit: form HANYA menyimpan saat di Step 2. Submit apa pun di
-  // Step 1 (mis. tombol Enter di input, atau event yang lolos) dialihkan jadi
-  // "lanjut ke Step 2" — bukan menyimpan & keluar. Ini mencegah bug "Next
-  // malah submit / tidak pernah masuk Step 2".
+  // Form HANYA menyimpan di Step 2; submit apa pun di Step 1 (mis. Enter di
+  // input) dialihkan jadi "lanjut ke Step 2".
   const handleFormSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     if (currentStep !== 2) {

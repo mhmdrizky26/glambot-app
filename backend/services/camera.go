@@ -23,10 +23,8 @@ var liveFrameState = struct {
 	set  bool
 }{}
 
-// digiCam URLs di-cache via sync.Once: dipanggil di hot path (liveview,
-// burst, capture), tidak perlu re-parse string config tiap call.
-// Config.App di-set sekali saat startup jadi cache stay valid sepanjang
-// process lifetime.
+// URL digiCam di-cache (sync.Once) karena dipakai di hot path liveview/burst/
+// capture; Config.App di-set sekali saat startup jadi cache selalu valid.
 var (
 	digiCamURLOnce sync.Once
 	digiCamBase    string
@@ -146,16 +144,9 @@ func digiCamReadFirstAvailable(paths []string) ([]byte, error) {
 	return nil, lastErr
 }
 
-// isJPEG validates JPEG framing — SOI marker (0xFF 0xD8) at the start AND
-// EOI marker (0xFF 0xD9) somewhere in the trailing bytes. SOI-only check
-// let truncated camera frames (network glitch mid-MJPEG, partial liveview
-// read) through; the EOI guard rejects half-frames before they're stored
-// as burst frames / captures.
-//
-// Trailing window pakai 64 byte (bukan exact-end) supaya tetap accept
-// JPEG dengan small trailer (EXIF/thumbnail/app marker setelah EOI) yang
-// produced by some camera firmwares — kalau strict exact-end, satu byte
-// trailer akan reject SEMUA frame dari kamera itu.
+// isJPEG cek SOI di awal DAN EOI di ekor — cek SOI saja meloloskan frame
+// terpotong. Ekor dicek dalam window 64 byte (bukan tepat di akhir) supaya
+// JPEG dengan trailer kecil dari firmware tertentu tetap diterima.
 func isJPEG(b []byte) bool {
 	n := len(b)
 	if n < 4 {
@@ -195,10 +186,8 @@ type CameraStatus struct {
 	CameraType string `json:"camera_type"` // selalu "canon"
 }
 
-// probeCanon mengambil nama kamera (kalau endpoint /camera tersedia) lalu
-// memprobe frame liveview/preview dari digiCamControl. Dipakai bersama oleh
-// CheckCamera & DetectCanonCamera supaya logika probe tidak terduplikasi.
-// err != nil atau frame kosong berarti Canon tidak mengirim frame valid.
+// probeCanon ambil nama kamera + frame liveview dari digiCamControl (dipakai
+// CheckCamera & DetectCanonCamera). err/frame kosong = Canon tidak valid.
 func probeCanon() (cameraName string, frame []byte, err error) {
 	cameraName = "Canon Camera"
 
@@ -246,10 +235,8 @@ func CheckCamera() (*CameraStatus, error) {
 	}, nil
 }
 
-// DetectCanonCamera mengecek kamera Canon via digiCamControl liveview. Dipakai
-// halaman monitoring admin supaya status "Online" benar-benar berarti kamera
-// Canon fisik terhubung dan mengirim frame JPEG valid. Identik dengan
-// CheckCamera (yang juga Canon-only), dipisah untuk kejelasan pemanggil.
+// DetectCanonCamera dipakai halaman monitoring admin: "Online" berarti Canon
+// fisik mengirim frame JPEG valid. Identik CheckCamera, dipisah demi kejelasan.
 func DetectCanonCamera() (*CameraStatus, error) {
 	cameraName, frame, err := probeCanon()
 	if err != nil {
@@ -271,16 +258,10 @@ func TriggerCapture(sessionID string) (string, error) {
 	return triggerCanonCapture(sessionID)
 }
 
-// triggerCanonCapture trigger shutter Canon via digiCamControl
-// Foto akan disimpan ke folder sesi.
-//
-// KUALITAS: yang disimpan adalah file JPEG FULL-RESOLUTION asli DSLR yang
-// ditransfer digiCamControl ke PC (folder DIGICAM_CAPTURE_DIR) — BUKAN frame
-// liveview res-rendah. Setelah shutter, kita tunggu file JPEG BARU muncul di
-// folder itu (transfer selesai = ukuran stabil) lalu salin apa adanya (tanpa
-// re-encode) ke folder sesi. Frame liveview hanya dipakai sebagai fallback
-// darurat kalau folder tidak diset / file tak kunjung muncul, supaya sesi
-// tetap menghasilkan foto ketimbang gagal total.
+// triggerCanonCapture menekan shutter Canon lalu menunggu file JPEG FULL-RES
+// baru muncul di DIGICAM_CAPTURE_DIR (ukuran stabil = transfer selesai) dan
+// menyalinnya apa adanya ke folder sesi. Frame liveview hanya fallback darurat
+// kalau folder tidak diset / file tak kunjung muncul.
 func triggerCanonCapture(sessionID string) (string, error) {
 	// Buat folder sesi kalau belum ada
 	sessionDir := filepath.Join(config.App.StoragePath, "sessions", sessionID, "raw")

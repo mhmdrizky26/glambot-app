@@ -36,12 +36,9 @@ type frameResponse struct {
 	LastUsed     string          `json:"last_used"`
 }
 
-// ensureSlotIDs menjamin setiap slot pada JSON array punya id unik & stabil.
-// Editor foto publik mem-key tiap foto berdasarkan slot id; ketika id hilang
-// (form admin membuang id sebelum upload) seluruh slot menumpuk ke satu key
-// sehingga hanya satu foto yang bisa ditempatkan. Id di-assign berdasarkan
-// posisi agar foto selalu jatuh ke slot yang sama di setiap pembacaan.
-// Return: JSON yang sudah dinormalisasi + jumlah slot.
+// ensureSlotIDs memberi id unik & stabil (berbasis posisi) ke tiap slot —
+// editor foto mem-key foto per slot id, kalau id hilang semua slot menumpuk
+// jadi satu. Return JSON ternormalisasi + jumlah slot.
 func ensureSlotIDs(slotsJSON []byte) ([]byte, int) {
 	var slots []map[string]any
 	if err := json.Unmarshal(slotsJSON, &slots); err != nil || len(slots) == 0 {

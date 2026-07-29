@@ -19,14 +19,10 @@ import (
 	"golang.org/x/oauth2"
 )
 
-// Integrasi Google Drive: upload semua aset hasil sesi (strip framed, GIF,
-// foto mentah) ke satu folder per-sesi di Drive akun Gmail, lalu folder
-// di-share "anyone with link → reader". Link folder inilah yang dipakai untuk
-// QR di halaman download — bisa dibuka dari mana saja, tidak bergantung LAN.
-//
-// Auth: OAuth2 refresh-token milik akun Gmail (lihat cmd/gdrive-token untuk
-// mengambil refresh token sekali consent). Scope minimal `drive.file` — app
-// hanya bisa melihat/mengubah file yang ia buat sendiri.
+// Google Drive: semua aset sesi masuk satu folder per-sesi yang di-share
+// "anyone with link" — link itu yang dipakai QR halaman download (tak
+// bergantung LAN). Auth OAuth2 refresh-token (cmd/gdrive-token), scope
+// `drive.file` saja.
 
 const (
 	driveAPIBase    = "https://www.googleapis.com/drive/v3"
@@ -73,10 +69,8 @@ func driveClient(ctx context.Context) *http.Client {
 	return conf.Client(ctx, tok)
 }
 
-// CreateSharedFolder membuat satu folder Drive per-sesi lalu men-share-nya
-// publik (anyone with link → reader). Dipakai untuk membuat folder SEKALI di
-// awal (saat foto pertama masuk) supaya file bisa di-stream masuk satu per satu
-// tanpa menunggu akhir sesi. Mengembalikan folder ID + webViewLink (untuk QR).
+// CreateSharedFolder bikin folder per-sesi + share publik, dipanggil sekali
+// saat foto pertama masuk. Return folder ID + webViewLink (untuk QR).
 func CreateSharedFolder(ctx context.Context, folderName string) (folderID, webViewLink string, err error) {
 	if !IsDriveEnabled() {
 		return "", "", fmt.Errorf("google drive belum dikonfigurasi")

@@ -1,7 +1,6 @@
 /**
- * Bungkus handler submit form dengan try/catch + logging seragam.
- * Dipakai oleh form admin (voucher/frame/package) supaya wrapper
- * error-handling-nya tidak ditulis ulang di tiap hook.
+ * Bungkus handler submit dengan try/catch + logging seragam untuk form admin
+ * (voucher/frame/package).
  */
 export function withFormErrorLogging<T>(onSubmit: (data: T) => Promise<void>) {
   return async (data: T) => {

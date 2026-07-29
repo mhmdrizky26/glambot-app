@@ -228,10 +228,9 @@ func GetFrames(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, models.SuccessResponse(frames))
 }
 
-// POST /api/photo/compose
-// Simpan hasil komposisi (image canvas yang sudah di-render frontend) ke storage + DB.
-// Frontend export canvas (frame + foto + filter) jadi JPEG dan kirim via field "image".
-// Backend tidak re-render server-side karena slot positions dinamis per-frame (di DB).
+// POST /api/photo/compose — simpan JPEG hasil export canvas frontend (field
+// "image") ke storage + DB. Tidak di-render ulang server-side karena posisi
+// slot dinamis per-frame.
 func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	// Max 20MB per file (canvas export bisa besar)
 	if err := r.ParseMultipartForm(20 << 20); err != nil {
@@ -343,10 +342,8 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Assignment per-slot (photoIds URUT SESUAI SLOT, boleh duplikat kalau 1
-	// foto dipakai di beberapa slot) disimpan apa adanya. Ini sumber kebenaran
-	// pemetaan slot→foto untuk generator GIF live — supaya burst tampil di slot
-	// yang benar, tidak bergeser, dan foto berulang muncul di tiap slotnya.
+	// photoIds urut slot (boleh duplikat) disimpan apa adanya — sumber kebenaran
+	// slot→foto untuk GIF live supaya burst tidak bergeser slot.
 	slotPhotoIDsJSON, _ := json.Marshal(photoIDs)
 
 	// Update sesi: frame_id + filter strip + assignment slot + status completed.
@@ -406,14 +403,9 @@ type printCompositionRequest struct {
 	SessionID string `json:"session_id"`
 }
 
-// POST /api/photo/print — kirim strip foto hasil komposisi sesi ke printer
-// fisik. Jumlah salinan mengikuti print_count paket sesi. Cetak hanya jalan
-// kalau ada printer fisik yang siap (lihat services.PrintFile); kalau tidak,
-// balas error supaya frontend bisa memberi tahu user tanpa menghentikan alur.
-// latestFramedStripRelPath mengembalikan relative path strip framed TERBARU
-// untuk sesi. Mengembalikan error kalau belum ada (compose belum dijalankan).
-// Dipakai bersama oleh PrintComposition, collectLiveStripSources, dan
-// collectFinalDriveFiles supaya query "strip framed terbaru" tidak diduplikasi.
+// latestFramedStripRelPath = relative path strip framed TERBARU sesi, error
+// kalau compose belum jalan. Dipakai bersama PrintComposition,
+// collectLiveStripSources, dan collectFinalDriveFiles.
 func latestFramedStripRelPath(sessionID string) (string, error) {
 	var rel string
 	if err := database.DB.QueryRow(`
@@ -513,10 +505,8 @@ func DownloadPhoto(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, fullPath)
 }
 
-// GET /api/photo/session/{sessionID}/gif
-// Generate (atau ambil cache) animated GIF: framed strip + tiap foto raw
-// terpilih sebagai frame berurutan, loop forever. File di-cache di
-// storage/sessions/{id}/animation.gif.
+// GET /api/photo/session/{sessionID}/gif — generate/ambil cache animated GIF
+// (foto raw terpilih, loop) di storage/sessions/{id}/animation.gif.
 func DownloadSessionGIF(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
 	if sessionID == "" {
@@ -562,10 +552,9 @@ func serveGIFFile(w http.ResponseWriter, r *http.Request, gifPath, downloadName 
 	http.ServeFile(w, r, gifPath)
 }
 
-// collectAnimationSources mengumpulkan path foto raw (urut posisi terpilih,
-// atau created_at sebagai fallback session Digital) untuk dipakai sebagai
-// frame slideshow GIF #1. Framed strip TIDAK disertakan — GIF #1 murni
-// rotasi foto raw, tidak ada overlay/header/footer frame.
+// collectAnimationSources kumpulkan path foto raw (urut posisi terpilih, atau
+// created_at untuk sesi Digital) sebagai frame GIF #1 — murni rotasi foto raw,
+// tanpa framed strip.
 func collectAnimationSources(sessionID string) (services.GenerateAnimationOptions, error) {
 	opts := services.GenerateAnimationOptions{SessionID: sessionID}
 
@@ -582,11 +571,8 @@ func collectAnimationSources(sessionID string) (services.GenerateAnimationOption
 	return opts, nil
 }
 
-// selectedRawRelPaths mengembalikan relative path foto raw TERPILIH (urut
-// posisi), atau semua raw kalau tidak ada yang ditandai selected. Dipakai
-// generator GIF — GIF hanya menampilkan foto yang dipilih untuk strip.
-// (Upload Drive kini streaming per-capture; lihat EnqueueRawPhotoUpload &
-// collectFinalDriveFiles di drive.go.)
+// selectedRawRelPaths = path foto raw TERPILIH (urut posisi), atau semua raw
+// kalau tidak ada yang selected. Dipakai generator GIF.
 func selectedRawRelPaths(sessionID string) []string {
 	var paths []string
 
@@ -625,11 +611,9 @@ func selectedRawRelPaths(sessionID string) []string {
 	return paths
 }
 
-// GET /api/photo/session/{sessionID}/gif-live/available
-// Cek ringan: apakah GIF #2 (Live Strip) tersedia untuk session ini?
-// Tersedia = ada framed strip + minimal satu foto terpilih yang punya burst
-// frames. Kalau liveview Canon sempat gagal saat countdown (tidak ada burst),
-// endpoint ini return false dan frontend bisa hide tombol/preview supaya UX bersih.
+// GET /api/photo/session/{sessionID}/gif-live/available — cek ringan GIF #2:
+// butuh framed strip + minimal satu foto terpilih yang punya burst frames.
+// False (mis. liveview gagal saat countdown) → frontend hide tombolnya.
 func GetSessionLiveGIFAvailable(w http.ResponseWriter, r *http.Request) {
 	sessionID := chi.URLParam(r, "sessionID")
 	if sessionID == "" {
@@ -762,12 +746,9 @@ func collectLiveStripSources(sessionID string) (services.LiveStripOptions, error
 	}
 	opts.FramedImagePath = abs
 
-	// Pemetaan slot→foto: pakai slot_photo_ids (array photoId URUT SESUAI SLOT,
-	// disimpan saat compose, boleh duplikat). Ini WAJIB — men-derive ulang dari
-	// photos.selected/position salah untuk foto yang dipakai di beberapa slot
-	// (model 1-baris-per-foto meng-collapse duplikat → jumlah foto < jumlah slot
-	// → slot bergeser). Satu entri per slot, urut slot; burst diambil per photoId
-	// (foto yang sama di 2 slot → burst yang sama di kedua slot, sesuai hasil).
+	// WAJIB pakai slot_photo_ids (satu entri per slot, urut slot): men-derive
+	// dari photos.selected/position meng-collapse foto yang dipakai di beberapa
+	// slot → jumlah foto < jumlah slot → slot bergeser.
 	var slotJSON string
 	_ = database.DB.QueryRow(
 		`SELECT COALESCE(slot_photo_ids, '') FROM sessions WHERE id = ?`, sessionID,
@@ -823,13 +804,9 @@ func collectLiveStripSources(sessionID string) (services.LiveStripOptions, error
 // di dalam folder storage (defense-in-depth terhadap path traversal kalau
 // file_path di DB ternyata mengandung "..").
 func safeStoragePath(relPath string) (string, bool) {
-	// Normalisasi: file_path di DB tidak konsisten. Frame seed memakai relatif
-	// "frames/frame-166.svg", sedangkan frame upload admin menyimpan dengan
-	// prefix URL "/storage/frames/uuid.png". Tanpa di-strip, Join("./storage",
-	// "/storage/frames/..") menghasilkan "storage/storage/frames/.." yang tidak
-	// ada di disk → loadFrameOverlayPNG gagal → fallback overlay yang melubangi
-	// slot rect mentah → burst bocor keluar frame. Samakan semuanya ke path
-	// relatif terhadap StoragePath.
+	// file_path di DB campur: seed relatif ("frames/x.svg") vs upload admin
+	// ber-prefix "/storage/...". Tanpa di-strip jadi "storage/storage/..." →
+	// overlay gagal → burst bocor keluar frame. Samakan ke path relatif.
 	relPath = strings.TrimPrefix(relPath, "/")
 	relPath = strings.TrimPrefix(relPath, "storage/")
 

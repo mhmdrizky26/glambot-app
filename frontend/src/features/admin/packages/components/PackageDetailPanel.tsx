@@ -1,7 +1,10 @@
 import React from 'react';
 import { Badge } from '@/components/admin/ui/badge';
 import { type Package, type PackageStatus } from '../api/types';
-import { formatIDR as formatCurrency } from '@/lib/formats';
+import {
+  formatIDR as formatCurrency,
+  formatDateShort as formatDate,
+} from '@/lib/formats';
 
 interface PackageDetailPanelProps {
   pkg: Package | null;
@@ -40,12 +43,6 @@ const getLastModified = (id: number) => {
   return new Date(base + offset).toISOString();
 };
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 
 export function PackageDetailPanel({ pkg }: PackageDetailPanelProps) {
   if (!pkg) return null;

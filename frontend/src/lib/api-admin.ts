@@ -1,11 +1,9 @@
 import axios, { AxiosError } from 'axios';
 import { resolveBaseUrl } from './api-client';
 
-// Token admin disimpan di dua tempat:
-// - localStorage  → dibaca interceptor axios (client-side request).
-// - cookie        → dibaca Next.js middleware (server-side route guard),
-//                   karena middleware tidak bisa mengakses localStorage.
-// Nama cookie ini HARUS sama dengan yang dicek di `src/middleware.ts`.
+// Token admin disimpan ganda: localStorage (dibaca interceptor axios) dan
+// cookie (dibaca route guard server-side, yang tak bisa akses localStorage).
+// Nama cookie HARUS sama dengan yang dicek di proxy.ts.
 export const ADMIN_TOKEN_KEY = 'admin_token';
 export const ADMIN_USER_KEY = 'admin_user';
 

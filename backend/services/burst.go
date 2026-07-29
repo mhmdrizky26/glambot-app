@@ -11,10 +11,9 @@ import (
 	"time"
 )
 
-// Burst capture menyimpan rentetan liveview frames selama countdown 3 detik
-// supaya GIF #2 (animated strip) bisa pakai motion sebelum shutter.
-// File ditulis ke storage/sessions/{id}/burst/pending/frame_*.jpg.
-// Setelah photo terjepret, frames dipindah ke burst/{photoID}/.
+// Burst capture: simpan liveview frames selama countdown 3 detik ke
+// burst/pending/, lalu pindahkan ke burst/{photoID}/ setelah foto terjepret.
+// Dipakai GIF #2 supaya ada motion sebelum shutter.
 
 const (
 	// Sengaja sedikit lebih banyak dari 10 fps × 3s biar buffer kalau ada
@@ -114,11 +113,8 @@ func StartBurstCapture(sessionID string) {
 }
 
 func writeBurstFrame(dir string, idx int) {
-	// Bound waktu tunggu liveview supaya satu frame lambat tidak nahan
-	// loop burst. HTTP client digiCam punya timeout 8s — itu plafon
-	// internal-nya; di sini kita potong lebih agresif (2× burst interval)
-	// supaya tick selanjutnya bisa jalan. Goroutine bagian dalam tetap
-	// selesai sendiri thanks to HTTP timeout (tidak leak permanen).
+	// Potong tunggu liveview di 2× interval burst supaya satu frame lambat
+	// tidak nahan loop; goroutine dalamnya selesai sendiri via timeout HTTP.
 	type result struct {
 		data []byte
 		err  error
@@ -189,10 +185,8 @@ func PromoteBurstToPhoto(sessionID, photoID string) {
 	log.Printf("📸 burst: promoted frames untuk photo %s", photoID)
 }
 
-// ForgetBurstSession menghapus entri burst state untuk sessionID supaya
-// peta dalam memori tidak menumpuk terus-menerus. Dipanggil saat session
-// selesai (compose berhasil) — capture sudah pasti tidak terjadi lagi
-// untuk sesi yang sama.
+// ForgetBurstSession membuang burst state sesi (dipanggil setelah compose
+// berhasil) supaya peta di memori tidak menumpuk.
 func ForgetBurstSession(sessionID string) {
 	if sessionID == "" {
 		return

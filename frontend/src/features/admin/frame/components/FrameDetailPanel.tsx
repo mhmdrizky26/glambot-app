@@ -1,4 +1,5 @@
 import React from 'react';
+import { formatDateShort } from '@/lib/formats';
 import { Frame } from '../api/types';
 import Image from 'next/image';
 import { Badge } from '@/components/admin/ui/badge';
@@ -79,11 +80,7 @@ export function FrameDetailPanel({ frame }: FrameDetailPanelProps) {
               <div className="flex flex-col items-end">
                 <span className="font-semibold">
                   {frame.lastUsed
-                    ? new Date(frame.lastUsed).toLocaleDateString('id-ID', {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                      })
+                    ? formatDateShort(frame.lastUsed)
                     : '-'}
                 </span>
                 <span className="text-muted-foreground text-[10px]">
@@ -121,11 +118,7 @@ export function FrameDetailPanel({ frame }: FrameDetailPanelProps) {
             <span className="text-muted-foreground">Date Created</span>
             <span className="text-right font-medium">
               {frame.dateCreated
-                ? new Date(frame.dateCreated).toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })
+                ? formatDateShort(frame.dateCreated)
                 : '-'}
             </span>
           </div>
@@ -133,11 +126,7 @@ export function FrameDetailPanel({ frame }: FrameDetailPanelProps) {
             <span className="text-muted-foreground">Last Modified</span>
             <span className="text-right font-medium">
               {frame.lastModified
-                ? new Date(frame.lastModified).toLocaleDateString('id-ID', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })
+                ? formatDateShort(frame.lastModified)
                 : '-'}
             </span>
           </div>

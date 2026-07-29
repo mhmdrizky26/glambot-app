@@ -50,10 +50,8 @@ export interface DashboardSummary {
   topProducts: TopListItem[];
 }
 
-// The dashboard summary is consolidated by the backend from multiple
-// tables (transactions, frames, packages, vouchers) so it travels as a
-// single payload. Field names use snake_case to mirror what other admin
-// endpoints return.
+// Summary dashboard datang sebagai satu payload gabungan dari backend;
+// field-nya snake_case mengikuti endpoint admin lain.
 export type BackendKpiSparkPoint = {
   label: string;
   value: number;

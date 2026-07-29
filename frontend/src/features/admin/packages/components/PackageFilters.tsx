@@ -4,13 +4,7 @@ import * as React from 'react';
 import { useDebouncedSearch } from '@/lib/useDebouncedSearch';
 import { Search, Loader2 } from 'lucide-react';
 import { Input } from '@/components/admin/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/admin/ui/select';
+import { FilterSelect } from '@/components/admin/shared/FilterSelect';
 
 type PackageFiltersProps = {
   search: string;
@@ -51,28 +45,31 @@ export function PackageFilters({
         />
       </div>
 
-      <Select value={status} onValueChange={onStatusChange}>
-        <SelectTrigger className="h-9 w-36 text-sm rounded-[8px]" aria-label="Filter by status">
-          <SelectValue placeholder="Status" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all" className="text-sm">Status</SelectItem>
-          <SelectItem value="active" className="text-sm">Active</SelectItem>
-          <SelectItem value="inactive" className="text-sm">Inactive</SelectItem>
-          <SelectItem value="draft" className="text-sm">Draft</SelectItem>
-        </SelectContent>
-      </Select>
+      <FilterSelect
+        value={status}
+        onChange={onStatusChange}
+        placeholder="Status"
+        ariaLabel="Filter by status"
+        options={[
+          { value: 'all', label: 'Status' },
+          { value: 'active', label: 'Active' },
+          { value: 'inactive', label: 'Inactive' },
+          { value: 'draft', label: 'Draft' },
+        ]}
+      />
 
-      <Select value={code} onValueChange={onCodeChange}>
-        <SelectTrigger className="h-9 w-44 text-sm rounded-[8px]" aria-label="Filter by package type">
-          <SelectValue placeholder="Types" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all" className="text-sm">Types</SelectItem>
-          <SelectItem value="regular" className="text-sm">Regular (Digital)</SelectItem>
-          <SelectItem value="vip" className="text-sm">VIP (Print + Digital)</SelectItem>
-        </SelectContent>
-      </Select>
+      <FilterSelect
+        value={code}
+        onChange={onCodeChange}
+        placeholder="Types"
+        ariaLabel="Filter by package type"
+        widthClass="w-44"
+        options={[
+          { value: 'all', label: 'Types' },
+          { value: 'regular', label: 'Regular (Digital)' },
+          { value: 'vip', label: 'VIP (Print + Digital)' },
+        ]}
+      />
     </div>
   );
 }

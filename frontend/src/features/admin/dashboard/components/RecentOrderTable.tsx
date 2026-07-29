@@ -13,7 +13,11 @@ import {
 import { Badge } from '@/components/admin/ui/badge';
 import { Checkbox } from '@/components/admin/ui/checkbox';
 import { type RecentOrder, type OrderStatus } from '../api/types';
-import { formatIDR as formatCurrency } from '@/lib/formats';
+import {
+  formatIDR as formatCurrency,
+  formatDateShort as formatDate,
+} from '@/lib/formats';
+import { useRowSelection } from '@/lib/useTableRows';
 
 interface RecentOrderTableProps {
   data: RecentOrder[];
@@ -41,39 +45,9 @@ const STATUS_CONFIG: Record<
   },
 };
 
-const formatDate = (iso: string) =>
-  new Date(iso).toLocaleDateString('id-ID', {
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
 
 export function RecentOrderTable({ data }: RecentOrderTableProps) {
-  const [selectedIds, setSelectedIds] = React.useState<Set<string>>(new Set());
-
-  const toggleRow = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  };
-
-  const toggleAll = (ids: string[], checked: boolean) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (checked) {
-        ids.forEach((id) => next.add(id));
-      } else {
-        ids.forEach((id) => next.delete(id));
-      }
-      return next;
-    });
-  };
+  const { selectedIds, toggleRow, toggleAll } = useRowSelection();
 
   return (
     <div className="bg-card flex flex-col gap-4 rounded-xl p-6">

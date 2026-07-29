@@ -1,14 +1,10 @@
+import { formatRupiah } from '@/lib/formats';
 import { DiscountType } from '../api/types';
 
-export const formatDiscount = (value: number, type: DiscountType): string => {
-  if (type === 'percentage') {
-    return `${value}%`;
-  }
+// Voucher memakai gaya "Rp 45.000" (spasi biasa), bukan formatIDR yang memakai
+// non-breaking space bawaan Intl currency — angka tetap dari sumber yang sama.
+export const formatCurrency = (value: number): string =>
+  `Rp ${formatRupiah(value)}`;
 
-  // Format as currency (Rp)
-  return `Rp ${value.toLocaleString('id-ID')}`;
-};
-
-export const formatCurrency = (value: number): string => {
-  return `Rp ${value.toLocaleString('id-ID')}`;
-};
+export const formatDiscount = (value: number, type: DiscountType): string =>
+  type === 'percentage' ? `${value}%` : formatCurrency(value);

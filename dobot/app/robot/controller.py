@@ -99,12 +99,9 @@ class DobotController:
         self._send_dashboard("RequestControl()")
         self._send_dashboard("ClearError()")
         self._send_dashboard("EnableRobot()")
-        # Tunggu servo benar-benar ENABLE (event-driven), bukan sleep 3 detik.
-        # Catatan desain "lanjut saja": pembacaan RobotMode() bisa flaky di
-        # hardware ini, jadi kita TETAP proceed walau belum terkonfirmasi
-        # (memaksa berhenti di sini justru bisa menggagalkan robot yang
-        # sebenarnya sudah enable). Hasil konfirmasi disimpan agar bisa
-        # diobservasi/di-log, bukan disembunyikan.
+        # Tunggu servo ENABLE secara event-driven (bukan sleep). RobotMode()
+        # bisa flaky, jadi tetap lanjut walau belum terkonfirmasi — hasilnya
+        # disimpan untuk di-log.
         self.enable_confirmed = self._wait_until_enabled()
         self.enabled = True
         if not self.enable_confirmed:

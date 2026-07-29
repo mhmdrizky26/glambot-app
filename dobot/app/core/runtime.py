@@ -351,17 +351,10 @@ class Runtime:
             state = self._fsm_state
 
             if state in ("LOCKED", "UNLOCKING"):
-                # Grace "dengarkan inisiasi dulu": jangan MULAI proses unlock walau
-                # telapak buka (gesture 5) sudah terlihat, supaya tidak ada bar unlock
-                # yang jalan sebelum narasinya selesai. Aktif saat:
-                #   (a) hold dari frontend — berlaku untuk SETIAP putaran inisiasi, dan
-                #   (b) window sejak masuk LOCKED — jaring pengaman tanpa gantung
-                #       jaringan, menutup putaran pertama walau POST hold gagal.
-                #
-                # Sengaja HANYA saat state LOCKED: unlock yang SUDAH berjalan
-                # (UNLOCKING) tidak boleh dibatalkan narasi. Tanpa syarat ini, tick
-                # re-prompt yang telat (handDetectedRef frontend baru update tiap poll
-                # 150ms) bisa mereset progress telapak user yang sedang ditahan.
+                # Grace "dengarkan inisiasi dulu": tunda MULAI unlock selama
+                # narasi berjalan — dari hold frontend, plus window sejak masuk
+                # LOCKED sebagai jaring pengaman kalau POST hold gagal. Hanya
+                # saat LOCKED supaya unlock yang sudah jalan tak ikut ke-reset.
                 if state == "LOCKED" and (
                     self._in_announce_hold()
                     or time.time() - self._locked_at < self.config.locked_announce_sec
@@ -395,15 +388,10 @@ class Runtime:
                     self._reset_to_locked()
                     return None
 
-                # Grace "dengarkan konfirmasi unlock dulu": selama unlock.mp3 masih
-                # diputar, tahan pengenalan gesture preset (jangan akumulasi counter)
-                # supaya user menyimak dulu. Return sebelum logika confirm/grace-gesture.
-                # Hold frontend ikut dihormati; window sejak UNLOCKED jadi pengamannya.
-                #
-                # Sama seperti cabang LOCKED: HANYA saat state UNLOCKED. Pengenalan
-                # preset yang sudah berjalan (CONFIRMING) tidak dibatalkan narasi yang
-                # datang telat. Window tetap efektif karena selama ia aktif state tak
-                # pernah sempat naik ke CONFIRMING.
+                # Sama seperti cabang LOCKED, tapi untuk unlock.mp3: tahan
+                # pengenalan preset (jangan akumulasi counter) selama narasi
+                # berjalan. Hanya saat UNLOCKED supaya CONFIRMING yang sudah
+                # jalan tidak dibatalkan narasi yang datang telat.
                 if state == "UNLOCKED" and (
                     self._in_announce_hold()
                     or time.time() - self._unlocked_at < self.config.unlock_announce_sec

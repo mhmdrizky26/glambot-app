@@ -44,10 +44,7 @@ export const BACKEND_AUDIO_FILES = [
   'waktuHabisFoto.mp3',
 ];
 
-/**
- * Preload (download + buffer) audio ke cache tanpa memutarnya. Aman dipanggil
- * sebelum interaksi user — tidak kena autoplay block.
- */
+/** Preload audio ke cache tanpa memutarnya — aman sebelum interaksi user. */
 export function preloadBackendAudio(
   filenames: string[] = BACKEND_AUDIO_FILES,
 ): void {
@@ -63,17 +60,10 @@ export function preloadBackendAudio(
 }
 
 /**
- * ─── Narasi PRIORITAS ───────────────────────────────────────────────────────
- * Sebagian narasi wajib terdengar utuh (mis. "waktu foto hampir habis") dan
- * tidak boleh dipotong cue real-time yang berdatangan — unlock gesture,
- * inisiasi, preset terkonfirmasi, dsb. Selama clip prioritas berbunyi,
- * `playBackendAudio` biasa akan DILEWATI (bukan diantrikan: cue robot bersifat
- * real-time, memutarnya terlambat malah menyesatkan).
- *
- * Satu-satunya yang boleh menembus adalah `playBackendAudioForce` — dipakai
- * countdown auto-capture, karena aba-aba jepret lebih penting daripada
- * peringatan waktu. Saat itu terjadi, `onInterrupted` milik clip prioritas
- * dipanggil supaya pemanggilnya bisa menjadwalkan ulang.
+ * Narasi PRIORITAS: selama clip ini berbunyi, `playBackendAudio` biasa
+ * DILEWATI (bukan diantre — cue robot real-time, telat malah menyesatkan).
+ * Hanya `playBackendAudioForce` (countdown jepret) yang boleh menembus, dan
+ * saat itu `onInterrupted` dipanggil supaya pemanggil bisa menjadwal ulang.
  */
 let priorityVoice: HTMLAudioElement | null = null;
 let priorityInterrupted: (() => void) | null = null;
@@ -84,41 +74,31 @@ const clearPriority = () => {
 };
 
 /**
- * Apakah ada narasi prioritas yang sedang dilindungi?
- *
- * Sengaja dari latch `priorityVoice`, BUKAN dari `audio.paused` — `play()`
- * bersifat asinkron, jadi tepat setelah dimulai clip masih berstatus paused
- * dan cue yang datang di jeda itu akan lolos menyela. Latch dilepas saat clip
- * selesai (termasuk pengaman timeout di playAudioElement), ditembus force,
- * atau saat stopBackendAudio.
+ * Ada narasi prioritas yang sedang dilindungi? Dibaca dari latch
+ * `priorityVoice`, bukan `audio.paused` — `play()` asinkron jadi clip sempat
+ * berstatus paused dan cue di jeda itu bisa lolos menyela.
  */
 export function isPriorityAudioPlaying(): boolean {
   return priorityVoice !== null;
 }
 
 /**
- * Apakah ADA narasi apa pun yang sedang berbunyi di channel? Dipakai pemanggil
- * yang ingin menyelipkan narasi "boleh mengalah" (mis. peringatan waktu) HANYA
- * saat channel senyap — supaya tidak memotong instruksi (unlock/inisiasi) yang
- * sedang diputar. Beda dari isPriorityAudioPlaying: ini melihat suara aktual.
+ * Ada suara apa pun di channel? Dipakai narasi "boleh mengalah" (mis.
+ * peringatan waktu) supaya hanya bunyi saat senyap. Beda dari
+ * isPriorityAudioPlaying: ini melihat suara aktual.
  */
 export function isVoiceBusy(): boolean {
   return !!currentVoice && !currentVoice.paused && !currentVoice.ended;
 }
 
 /**
- * Play an audio file served from backend `/storage/audio/`.
- * Caches the Audio element across calls so repeated plays don't re-fetch.
- * Silently fails on autoplay block / missing file.
+ * Putar clip dari `/storage/audio/` (Audio element di-cache, gagal diam-diam
+ * saat autoplay block / file hilang). `onEnded` selalu dipanggil, termasuk
+ * saat play() gagal atau event 'ended' tak fire.
  *
- * `onEnded` (opsional) dipanggil saat clip selesai — juga saat play() gagal atau
- * event 'ended' tak fire (pengaman timeout), supaya pemanggil tak menunggu selamanya.
- *
- * Return `false` kalau cue DILEWATI karena ada narasi prioritas yang sedang
- * dilindungi. Pemanggil yang punya efek samping selain suara WAJIB mengecek ini
- * — mis. playAnnounce yang ikut membekukan deteksi gesture di robot: membekukan
- * deteksi padahal narasinya tidak jadi berbunyi membuat gesture user berhenti
- * terbaca tanpa penjelasan apa pun.
+ * Return `false` kalau cue dilewati karena ada narasi prioritas — pemanggil
+ * dengan efek samping lain (mis. playAnnounce yang membekukan deteksi gesture)
+ * WAJIB mengeceknya.
  */
 export function playBackendAudio(
   filename: string,
@@ -139,9 +119,8 @@ export function playBackendAudio(
 }
 
 /**
- * Putar narasi PRIORITAS — tidak boleh dipotong `playBackendAudio` biasa.
- * `onInterrupted` dipanggil kalau clip ini ditembus `playBackendAudioForce`
- * (countdown auto-capture), supaya pemanggil bisa memutarnya ulang nanti.
+ * Putar narasi PRIORITAS. `onInterrupted` dipanggil kalau ditembus
+ * `playBackendAudioForce`, supaya pemanggil bisa memutarnya ulang nanti.
  */
 export function playBackendAudioPriority(
   filename: string,
@@ -159,9 +138,8 @@ export function playBackendAudioPriority(
 }
 
 /**
- * Putar narasi yang BOLEH menembus narasi prioritas. Khusus untuk aba-aba yang
- * lebih penting dari peringatan apa pun — countdown auto-capture & konfirmasi
- * preset (rangkaian jepret foto).
+ * Putar narasi yang BOLEH menembus prioritas — khusus rangkaian jepret foto
+ * (countdown auto-capture & konfirmasi preset).
  */
 export function playBackendAudioForce(
   filename: string,
@@ -230,11 +208,9 @@ function playAudioElement(
 }
 
 /**
- * Hentikan SEMUA audio narasi/cue yang sedang berbunyi dan reset ke awal.
- * Dipakai saat sesi foto berakhir supaya tidak ada suara sesi (inisiasi, cue
- * gesture, countdown, dll.) yang menyambung ke layar loading / halaman berikut.
- * Menyapu seluruh cache (bukan hanya `currentVoice`) agar clip apa pun yang
- * mungkin masih diputar ikut berhenti.
+ * Hentikan SEMUA audio & reset ke awal (menyapu seluruh cache, bukan cuma
+ * `currentVoice`). Dipakai saat sesi berakhir supaya suara sesi tidak
+ * menyambung ke halaman berikutnya.
  */
 export function stopBackendAudio(): void {
   if (typeof window === 'undefined') return;
@@ -255,12 +231,9 @@ export function stopBackendAudio(): void {
 }
 
 /**
- * Jalankan `cb` saat narasi yang sedang berbunyi selesai (atau langsung kalau
- * senyap); return fungsi cleanup untuk membatalkan (mis. saat unmount).
- *
- * Lintas halaman: `currentVoice` bertahan saat navigasi SPA, jadi mis. halaman
- * package bisa menunggu "selamatDatang" (dimulai di Home) selesai sebelum kartu
- * boleh diklik. Ada pengaman timeout kalau 'ended' tak fire.
+ * Jalankan `cb` saat narasi selesai (atau langsung kalau senyap); return
+ * cleanup untuk membatalkan. `currentVoice` bertahan lintas navigasi SPA, jadi
+ * halaman berikutnya bisa menunggu narasi halaman sebelumnya.
  */
 export function whenVoiceIdle(cb: () => void): () => void {
   if (typeof window === 'undefined') return () => {};
@@ -296,10 +269,7 @@ export function whenVoiceIdle(cb: () => void): () => void {
   };
 }
 
-/**
- * Play SETELAH narasi yang sedang berbunyi selesai (atau langsung kalau senyap).
- * Mencegah dua narasi bertabrakan lintas halaman, tanpa menebak durasi audio.
- */
+/** Putar SETELAH narasi sekarang selesai — cegah dua narasi bertabrakan. */
 export function playBackendAudioAfterCurrent(
   filename: string,
   onEnded?: () => void,

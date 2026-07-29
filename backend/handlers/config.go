@@ -5,15 +5,13 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"photobooth/database"
 )
 
-// ─── Timer config (halaman user) ─────────────────────────────────────────────
-//
-// Empat timer layar user yang bisa diatur admin. Disimpan di tabel app_settings
-// sebagai key→value TEXT; kalau key belum ada, dipakai default di bawah.
-// GET /api/config (publik) dibaca frontend saat runtime; admin mengubah via
+// Timer layar user: disimpan di app_settings (key→value TEXT), fallback ke
+// default di bawah. Dibaca frontend via GET /api/config, diubah admin lewat
 // GET/PATCH /api/admin/settings.
 
 const (
@@ -55,21 +53,15 @@ var timerDefaults = timerConfig{
 func loadTimerConfig() (timerConfig, error) {
 	cfg := timerDefaults
 
-	rows, err := database.DB.Query(
-		`SELECT key, value FROM app_settings WHERE key IN (?, ?, ?, ?, ?, ?)`,
+	values, err := readAppSettings(
 		keyPackageTimeout, keySummaryTimeout, keyInstructionTimeout,
 		keyPhotoEditorTimeout, keyGetPhotosTimeout, keyDoneScreenTimeout,
 	)
 	if err != nil {
 		return cfg, err
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var k, v string
-		if err := rows.Scan(&k, &v); err != nil {
-			continue
-		}
+	for k, v := range values {
 		n, convErr := strconv.Atoi(v)
 		if convErr != nil {
 			continue // nilai rusak → biarkan default
@@ -89,7 +81,7 @@ func loadTimerConfig() (timerConfig, error) {
 			cfg.DoneScreenTimeoutSecs = n
 		}
 	}
-	return cfg, rows.Err()
+	return cfg, nil
 }
 
 // GET /api/config — publik. Dibaca frontend untuk durasi timer tiap halaman.
@@ -112,11 +104,43 @@ func AdminGetSettings(w http.ResponseWriter, r *http.Request) {
 	respondJSON(w, http.StatusOK, cfg)
 }
 
-// PATCH /api/admin/settings — update sebagian/semua timer. Field nil = tidak
-// diubah. Setiap nilai divalidasi ke rentang [minTimerSecs, maxTimerSecs].
-// upsertAppSettings menyimpan beberapa pasangan key/value ke tabel app_settings
-// (INSERT ... ON CONFLICT DO UPDATE). Dipakai bersama oleh handler timer &
-// robot-settings supaya loop upsert tidak diduplikasi.
+// readAppSettings mengambil key→value dari app_settings untuk key yang diminta.
+// Key yang belum ada di tabel tidak muncul di hasil — pemanggil yang memutuskan
+// default & cara mem-parse nilainya. Pasangan baca untuk upsertAppSettings,
+// dipakai bersama handler timer & robot-settings.
+func readAppSettings(keys ...string) (map[string]string, error) {
+	out := make(map[string]string, len(keys))
+	if len(keys) == 0 {
+		return out, nil
+	}
+
+	args := make([]interface{}, len(keys))
+	for i, k := range keys {
+		args[i] = k
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(keys)), ",")
+
+	rows, err := database.DB.Query(
+		`SELECT key, value FROM app_settings WHERE key IN (`+placeholders+`)`,
+		args...,
+	)
+	if err != nil {
+		return out, err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var k, v string
+		if err := rows.Scan(&k, &v); err != nil {
+			continue
+		}
+		out[k] = v
+	}
+	return out, rows.Err()
+}
+
+// upsertAppSettings menyimpan pasangan key/value ke app_settings (INSERT ...
+// ON CONFLICT DO UPDATE). Dipakai bersama handler timer & robot-settings.
 func upsertAppSettings(updates map[string]string) error {
 	for k, v := range updates {
 		if _, err := database.DB.Exec(

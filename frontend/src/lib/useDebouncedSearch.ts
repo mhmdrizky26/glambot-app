@@ -1,15 +1,9 @@
 import { useEffect, useState } from 'react';
 
 /**
- * useDebouncedSearch — mengelola input pencarian dengan debounce.
- *
- * Menyimpan nilai ketik lokal (`localSearch`), menyinkronkan kalau nilai
- * eksternal `search` berubah dari luar (mis. reset filter), dan memanggil
- * `onSearchChange` setelah `delayMs` diam. `isSearchPending` true selagi nilai
- * lokal belum ter-commit ke `search`.
- *
- * Menggantikan blok debounce yang sebelumnya dicopy-paste identik di semua
- * komponen filter admin (Frame/Transaction/Package/Voucher).
+ * Input pencarian dengan debounce — dipakai bersama semua filter admin.
+ * Nilai ketik disimpan lokal, ikut sinkron kalau `search` berubah dari luar,
+ * dan `onSearchChange` dipanggil setelah `delayMs` diam.
  */
 export function useDebouncedSearch(
   search: string,

@@ -1,13 +1,6 @@
 import * as XLSX from 'xlsx';
 import { type Transaction } from '../api/types';
-
-const STATUS_LABEL: Record<string, string> = {
-  success: 'Success',
-  pending: 'Pending',
-  failed: 'Failed',
-  expired: 'Expired',
-  cancelled: 'Cancelled',
-};
+import { TRANSACTION_STATUS_LABEL as STATUS_LABEL } from './status';
 
 export function exportTransactionsToExcel(transactions: Transaction[]) {
   const now = new Date();

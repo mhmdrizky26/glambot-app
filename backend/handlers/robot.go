@@ -141,34 +141,70 @@ func GetLiveView(w http.ResponseWriter, r *http.Request) {
 	w.Write(frame)
 }
 
+// Stream MJPEG berhenti setelah gagal ambil frame sebanyak ini berturut-turut
+// (±10 detik). Koneksi ditutup supaya <img> di frontend memicu onerror dan bisa
+// reconnect / memunculkan UI retry — bukan menggantung dengan gambar beku.
+const liveStreamMaxFailures = 20
+
 // GET /api/robot/liveview/stream
-// Continuous MJPEG stream untuk live preview di browser
+// MJPEG ~10 fps untuk live preview di browser. Satu koneksi menggantikan
+// polling per-frame, jadi beban kiosk & backend jauh lebih ringan.
 func StreamLiveView(w http.ResponseWriter, r *http.Request) {
+	// Probe satu frame SEBELUM header ditulis: kalau kamera mati, balas 503 yang
+	// jelas (frontend langsung tahu) daripada stream kosong yang tak pernah error.
+	first, err := services.GetLiveViewFrame()
+	if err != nil {
+		respondError(w, http.StatusServiceUnavailable, "Live view tidak tersedia")
+		return
+	}
+
 	w.Header().Set("Content-Type", "multipart/x-mixed-replace; boundary=frame")
 	w.Header().Set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
 	w.Header().Set("Pragma", "no-cache")
 	w.Header().Set("Expires", "0")
 
+	flusher, _ := w.(http.Flusher)
+	writeFrame := func(frame []byte) error {
+		if _, err := fmt.Fprintf(w, "--frame\r\nContent-Type: image/jpeg\r\n\r\n"); err != nil {
+			return err
+		}
+		if _, err := w.Write(frame); err != nil {
+			return err
+		}
+		if _, err := fmt.Fprintf(w, "\r\n"); err != nil {
+			return err
+		}
+		if flusher != nil {
+			flusher.Flush()
+		}
+		return nil
+	}
+
+	if err := writeFrame(first); err != nil {
+		return
+	}
+
+	failures := 0
 	for {
 		select {
 		case <-r.Context().Done():
 			return
-		default:
-			frame, err := services.GetLiveViewFrame()
-			if err != nil {
-				time.Sleep(500 * time.Millisecond)
-				continue
+		case <-time.After(100 * time.Millisecond): // ~10 fps
+		}
+
+		frame, err := services.GetLiveViewFrame()
+		if err != nil {
+			failures++
+			if failures >= liveStreamMaxFailures {
+				return
 			}
+			continue
+		}
+		failures = 0
 
-			fmt.Fprintf(w, "--frame\r\nContent-Type: image/jpeg\r\n\r\n")
-			w.Write(frame)
-			fmt.Fprintf(w, "\r\n")
-
-			if f, ok := w.(http.Flusher); ok {
-				f.Flush()
-			}
-
-			time.Sleep(100 * time.Millisecond) // ~10 fps
+		// Error tulis = klien sudah pergi → hentikan goroutine ini.
+		if err := writeFrame(frame); err != nil {
+			return
 		}
 	}
 }

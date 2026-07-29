@@ -21,13 +21,8 @@ def draw_overlay(frame, det, full, *,
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
         return out
 
-    # ── Detection visuals ────────────────────────────────────────
-    # Sengaja MINIMALIS: hanya overlay yang menempel pada TANGAN yang
-    # dipertahankan — skeleton tangan + bounding box & label gesture di atas
-    # tangan — supaya mudah melihat tangan mana yang terdeteksi dan gesture
-    # apa. Overlay status lain (safety gate + hold bar, teks gesture besar di
-    # pojok, status PRESET/READY, indikator TRACKING, dan status ROBOT) DIHAPUS
-    # agar tampilan bersih.
+    # Detection visuals — sengaja minimalis: hanya yang menempel di tangan
+    # (skeleton + bbox & label gesture). Overlay status lain dihapus.
     if not detection_paused:
         # ── Hand skeleton ────────────────────────────────────────────
         if full.get("hand_detected") and "landmarks_raw" in full:

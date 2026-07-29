@@ -28,6 +28,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/admin/ui/dropdown-menu';
+import { formatIDR } from '@/lib/formats';
 import { type Package, type PackageStatus } from '../api/types';
 import { Badge } from '@/components/admin/ui/badge';
 import { PackageDeleteDialog } from './PackageDeleteDialog';
@@ -325,11 +326,7 @@ export function PackageTable({
                     </p>
                   </TableCell>
                   <TableCell className="text-sm">
-                    {new Intl.NumberFormat('id-ID', {
-                      style: 'currency',
-                      currency: 'IDR',
-                      minimumFractionDigits: 0,
-                    }).format(pkg.price)}
+                    {formatIDR(pkg.price)}
                   </TableCell>
                   <TableCell onClick={(e) => e.stopPropagation()}>
                     <DropdownMenu>

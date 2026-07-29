@@ -51,6 +51,15 @@ const PRESET_GESTURES =
 const PREVIEW_FRAME =
   'rounded-[28px] border-0 ring-[6px] ring-primary ring-offset-2 ring-offset-transparent shadow-[0_20px_60px_-15px_rgba(63,114,175,0.45)]';
 
+// Style kartu preset di grid Gesture Controls. Varian SELECTED dipakai untuk
+// preset yang gesture-nya sedang dibaca robot, supaya user tahu preset mana
+// yang akan dikonfirmasi selagi bar progress terisi.
+const PRESET_TILE =
+  'flex min-h-0 flex-col items-center justify-center gap-2 rounded-xl border p-2 text-center transition-all duration-200';
+const PRESET_TILE_IDLE = 'border-white/10 bg-white/5';
+const PRESET_TILE_SELECTED =
+  'border-white/60 bg-white/25 shadow-[0_0_20px_-2px_rgba(255,255,255,0.45)] scale-[1.04]';
+
 export function PhotoSessionPage() {
   const searchParams = useSearchParams();
   const router = useRouter();
@@ -161,6 +170,41 @@ export function PhotoSessionPage() {
     ? robotDetection?.gesture_name ?? null
     : null;
   const robotActivePreset = robotDetection?.robot_preset ?? null;
+
+  // Preset yang gesture-nya SEDANG dibaca robot → dipakai untuk state
+  // "ter-select" di grid Gesture Controls. `gesture_id` dari dobot bernomor
+  // 1-10 dan sejajar dengan penomoran preset di grid (Preset N =
+  // PRESET_GESTURES[N-1]), jadi tinggal dikurangi 1 jadi index. Sengaja pakai
+  // gesture_id, BUKAN robot_preset, karena panel kanan disembunyikan saat robot
+  // bergerak (showGuide = !robotBusy) sehingga highlight berbasis robot_preset
+  // praktis tidak pernah terlihat.
+  const robotGestureId = robotHandDetected
+    ? robotDetection?.gesture_id ?? null
+    : null;
+  const selectedPresetIndex =
+    robotGestureId != null ? robotGestureId - 1 : null;
+
+  // Preset terakhir yang SELESAI dijalankan robot. `robot_preset` berisi preset
+  // yang sedang DITUJU dan balik null begitu gerakan beres — jadi di-latch tepat
+  // pada transisi non-null → null. Dengan begitu kartu "Previous Preset" tidak
+  // ikut berubah selagi robot masih menuju posisi (itu preset "sekarang", bukan
+  // "sebelumnya") dan nilainya bertahan setelah robot kembali LOCKED.
+  const [lastPresetNumber, setLastPresetNumber] = useState<number | null>(null);
+  const prevActivePresetRef = useRef<string | null>(null);
+  useEffect(() => {
+    const prev = prevActivePresetRef.current;
+    prevActivePresetRef.current = robotActivePreset;
+    if (!prev || robotActivePreset) return;
+    const n = Number(prev);
+    if (!Number.isFinite(n) || n < 1 || n > PRESET_GESTURES.length) return;
+    // Latch dari state robot eksternal (poll), jadi memang butuh efek.
+    setLastPresetNumber(n);
+  }, [robotActivePreset]);
+
+  const lastPresetIndex =
+    lastPresetNumber != null ? lastPresetNumber - 1 : null;
+  const lastPresetGesture =
+    lastPresetIndex != null ? PRESET_GESTURES[lastPresetIndex] : null;
 
   // Fase "terkunci" (belum unlock): tampilan kontrol hanya menampilkan gesture
   // unlock (Preset 5). Progress bar deteksi memakai progress unlock saat locked,
@@ -562,6 +606,57 @@ export function PhotoSessionPage() {
               </div>
             </div>
 
+            {/* Previous Preset — kartu info preset yang terakhir dijalankan
+                robot. Ikon + nama gesture dipakai supaya user langsung ingat
+                gerakan tangan mana yang barusan dipakai (dan tidak mengulang
+                pose yang sama tanpa sadar). Kosong sebelum ada preset pertama. */}
+            <div
+              className={cn(
+                'flex shrink-0 items-center gap-4 bg-primary/75 px-5 py-4',
+                PREVIEW_FRAME,
+              )}
+            >
+              {lastPresetGesture ? (
+                <>
+                  <div className="flex h-14 w-14 2xl:h-16 2xl:w-16 shrink-0 items-center justify-center rounded-xl border border-white/25 bg-white/15">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={lastPresetGesture.icon ?? ''}
+                      alt={`Preset ${lastPresetNumber}`}
+                      className={cn(
+                        'h-9 w-9 2xl:h-11 2xl:w-11 object-contain',
+                        // Preset 6 (Move Left) — lihat catatan di grid bawah.
+                        lastPresetGesture.icon?.includes('MOVELEFT') &&
+                          'rotate-[100deg]',
+                      )}
+                    />
+                  </div>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-xs uppercase tracking-wide text-white/50">
+                      Previous preset
+                    </span>
+                    <span className="text-lg font-bold text-white">
+                      Preset {lastPresetNumber} · {lastPresetGesture.name}
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="flex h-14 w-14 2xl:h-16 2xl:w-16 shrink-0 items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/5 text-2xl font-bold text-white/30">
+                    —
+                  </div>
+                  <div className="flex min-w-0 flex-col">
+                    <span className="text-xs uppercase tracking-wide text-white/50">
+                      Previous preset
+                    </span>
+                    <span className="text-lg font-medium text-white/55">
+                      No preset used yet
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
             {/* Gesture Controls — mengisi sisa tinggi kolom. Sebelum unlock
                 hanya menampilkan gesture Preset 5 (telapak terbuka) sebagai
                 ajakan unlock; setelah unlock baru tampilkan semua preset. */}
@@ -611,27 +706,41 @@ export function PhotoSessionPage() {
                   /* Sudah unlock → semua preset, 2 kolom × 5 baris, ikon lebih
                      besar & rapi. */
                   <div className="grid min-h-0 flex-1 grid-cols-2 grid-rows-5 gap-3 2xl:gap-4">
-                    {PRESET_GESTURES.map((g, i) => (
-                      <div
-                        key={`${g.name}-${i}`}
-                        className="flex min-h-0 flex-col items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 p-2 text-center"
-                      >
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img
-                          src={g.icon ?? ''}
-                          alt={`Preset ${i + 1}`}
+                    {PRESET_GESTURES.map((g, i) => {
+                      // Preset yang gesture-nya sedang dibaca robot ditandai
+                      // "terpilih", jadi user tahu preset mana yang akan
+                      // dikonfirmasi selagi bar progress terisi.
+                      const isSelected = selectedPresetIndex === i;
+                      return (
+                        <div
+                          key={`${g.name}-${i}`}
                           className={cn(
-                            'h-12 w-12 2xl:h-15 2xl:w-15 object-contain',
-                            // Preset 6 (Move Left) — gambar diputar 100° ke kanan
-                            // supaya jempol menghadap ke atas.
-                            g.icon?.includes('MOVELEFT') && 'rotate-[100deg]',
+                            PRESET_TILE,
+                            isSelected ? PRESET_TILE_SELECTED : PRESET_TILE_IDLE,
                           )}
-                        />
-                        <span className="text-sm 2xl:text-base font-semibold text-white">
-                          Preset {i + 1}
-                        </span>
-                      </div>
-                    ))}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={g.icon ?? ''}
+                            alt={`Preset ${i + 1}`}
+                            className={cn(
+                              'h-12 w-12 2xl:h-15 2xl:w-15 object-contain',
+                              // Preset 6 (Move Left) — gambar diputar 100° ke kanan
+                              // supaya jempol menghadap ke atas.
+                              g.icon?.includes('MOVELEFT') && 'rotate-[100deg]',
+                            )}
+                          />
+                          <span
+                            className={cn(
+                              'text-sm 2xl:text-base font-semibold',
+                              isSelected ? 'text-white' : 'text-white/80',
+                            )}
+                          >
+                            Preset {i + 1}
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 </div>

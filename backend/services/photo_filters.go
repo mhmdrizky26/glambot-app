@@ -7,11 +7,8 @@ import (
 	"math/rand"
 )
 
-// Replikasi filter strip dari frontend (lib/filters.ts berbasis Fabric.js).
-// Dipakai untuk menerapkan filter yang sama ke burst frame GIF live supaya
-// animasi konsisten dengan hasil akhir — frontend bake-in filter ke export,
-// sedangkan burst yang disimpan server masih mentah. Tidak harus identik
-// bit-per-bit dengan Fabric, cukup match secara visual.
+// Replikasi filter frontend (lib/filters.ts) untuk burst frame GIF live yang
+// masih mentah — cukup mirip secara visual, tak perlu identik bit-per-bit.
 
 // StripFilters daftar filter yang valid (selain "original"). Dipakai handler
 // untuk memvalidasi input sebelum disimpan.

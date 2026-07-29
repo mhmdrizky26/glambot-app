@@ -33,13 +33,8 @@ func Setup(storagePath string) http.Handler {
 			http.Error(w, "Forbidden", http.StatusForbidden)
 			return
 		}
-		// Audio narasi memakai nama file STABIL (mis. preset.mp3) tapi isinya
-		// bisa diganti tanpa ganti nama. http.FileServer tidak menyetel
-		// Cache-Control, sehingga browser meng-cache secara heuristik dan tetap
-		// memutar versi LAMA walau file di disk sudah baru. `no-cache` = boleh
-		// disimpan tapi WAJIB revalidasi (If-Modified-Since) tiap request → file
-		// baru langsung kepakai, file tak berubah tetap dapat 304 (murah).
-		// Foto/frame pakai nama unik (immutable) jadi tak perlu ini.
+		// Nama file audio stabil tapi isinya bisa diganti → wajibkan revalidasi
+		// supaya browser tidak memutar versi lama (foto/frame nama unik, aman).
 		if strings.HasPrefix(r.URL.Path, "/storage/audio/") {
 			w.Header().Set("Cache-Control", "no-cache")
 		}
@@ -138,10 +133,8 @@ func Setup(storagePath string) http.Handler {
 			// Login publik (tanpa auth)
 			r.Post("/login", handlers.AdminLogin)
 
-			// Semua route di bawah diproteksi token admin.
-			// Catatan: rute flat (bukan Route("/x")+Get("/")) agar cocok dengan
-			// path FE tanpa trailing slash. chi memprioritaskan segmen statis
-			// (/stats, /export) di atas wildcard /{id}, jadi urutan aman.
+			// Diproteksi token admin. Rute sengaja flat supaya cocok dengan path
+			// FE tanpa trailing slash; chi menang-kan segmen statis atas /{id}.
 			r.Group(func(r chi.Router) {
 				r.Use(middleware.AdminAuth)
 

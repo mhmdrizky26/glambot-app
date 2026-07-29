@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useListQueryParam } from '@/lib/useListQueryParam';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/admin/ui/button';
 import { DataPagination } from '@/components/admin/shared/DataPagination';
@@ -27,16 +28,7 @@ export function VoucherPage() {
   const page = Number(searchParams.get('page') ?? '1');
   const pageSize = Number(searchParams.get('pageSize') ?? '10');
 
-  const updateParam = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value && value !== 'all' && value !== '') {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    if (key !== 'page') params.set('page', '1');
-    router.replace(`/voucher?${params.toString()}`);
-  };
+  const updateParam = useListQueryParam('/voucher');
 
   const { data: vouchersResponse, isLoading: isLoadingVouchers } =
     useGetVouchers({

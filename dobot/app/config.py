@@ -73,19 +73,15 @@ class Config:
     post_action_delay: float
     cooldown_after_capture: float
 
-    # "Jendela dengar" — tahan deteksi gesture selama narasi audio masih diputar,
-    # supaya user menyimak dulu sebelum gesturenya mulai dihitung. Nilai default =
-    # panjang file audio + margin skew poll/network (unlock.mp3 ±3.0s, inisiasi.mp3
-    # ±2.4s). unlock: tahan pengenalan preset setelah UNLOCKED. locked: tahan mulai
-    # unlock (gesture 5) di loop pertama inisiasi tiap masuk LOCKED.
+    # "Jendela dengar": tahan deteksi gesture selama narasi diputar (default =
+    # panjang audio + margin poll). unlock = tahan preset setelah UNLOCKED,
+    # locked = tahan mulai unlock di putaran inisiasi pertama.
     unlock_announce_sec: float
     locked_announce_sec: float
 
-    # Presence (motion frame-diff) — dipakai layar Home agar loop suara "mulai"
-    # hanya berbunyi saat ada gerakan di depan kamera (bukan di ruangan kosong).
-    # motion_threshold: ambang beda per-piksel (0-255). area_pct: min % frame yang
-    # berubah supaya dihitung "gerakan". hold_sec: berapa lama tetap "ada orang"
-    # setelah gerakan terakhir (hysteresis biar audio tidak kedip).
+    # Presence (motion frame-diff) untuk layar Home. motion_threshold: ambang
+    # beda per-piksel (0-255), area_pct: min % frame yang berubah, hold_sec:
+    # hysteresis "masih ada orang" biar audio tidak kedip.
     presence_motion_threshold: int
     presence_area_pct: float
     presence_hold_sec: float

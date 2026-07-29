@@ -24,12 +24,9 @@ type RobotProbeResult struct {
 
 var robotPingClient = &http.Client{Timeout: 4 * time.Second}
 
-// PingRobot mengecek apakah robot API benar-benar HIDUP. Berbeda dari sekadar
-// "ada respons HTTP": kita HANYA anggap online kalau /health atau / membalas
-// status 2xx. Ini penting untuk tunnel ngrok-free — kalau service di belakang
-// tunnel mati, ngrok tetap membalas 404/502 (bukan 2xx), jadi tidak akan
-// keliru dianggap online. Header ngrok-skip-browser-warning dipasang agar
-// ngrok mengembalikan status asli, bukan halaman peringatan interstisial 200.
+// PingRobot: online HANYA kalau /health atau / membalas 2xx — ngrok tetap
+// menjawab 404/502 saat service di belakangnya mati. Header
+// ngrok-skip-browser-warning supaya status asli yang keluar, bukan interstisial.
 func PingRobot() RobotProbeResult {
 	base, err := robotBaseURL()
 	if err != nil {
@@ -155,13 +152,8 @@ func probePrinterWindows() PrinterProbeResult {
 		return PrinterProbeResult{Found: false}
 	}
 
-	// Pilih printer TERBAIK, bukan sekadar yang di-set "default" oleh OS.
-	// Printer default Windows belum tentu printer foto yang aktif: sering ada
-	// printer lain yang diset default tapi sedang OFFLINE (mis. EPSON PM-520
-	// offline) sementara printer foto yang tersambung (mis. EPSON SL-D500)
-	// justru siap mencetak. Maka kita beri skor: siap-cetak > online > default
-	// sebagai pemecah seri. Dengan begitu printer yang benar-benar siap selalu
-	// dipilih lebih dulu daripada default yang offline.
+	// Pilih printer TERBAIK, bukan default OS — default sering justru yang
+	// offline. Skor: siap-cetak > online > default (pemecah seri).
 	score := func(p rawWinPrinter) int {
 		s := 0
 		if _, ready := winStatusText(p.PrinterStatus); ready && !p.WorkOffline {

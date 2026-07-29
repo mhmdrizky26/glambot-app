@@ -8,9 +8,8 @@ interface BackButtonProps {
 }
 
 /**
- * Tombol Back kiosk — mengambang di kiri-atas (mirror Timer di kanan-atas).
- * Dipakai HANYA pada langkah pra-pembayaran (package/summary/pay); setelah
- * status `paid` jangan ditampilkan agar tidak memicu double-charge.
+ * Tombol Back kiosk (kiri-atas). HANYA untuk langkah pra-pembayaran —
+ * setelah `paid` jangan ditampilkan supaya tidak memicu double-charge.
  */
 export default function BackButton({ onClick, label = 'Back' }: BackButtonProps) {
   return (

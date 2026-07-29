@@ -1,7 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
+import { useListQueryParam } from '@/lib/useListQueryParam';
 import { FileDown, FileText, Sheet, ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/admin/ui/button';
@@ -25,7 +26,6 @@ import { exportTransactionsToPDF } from '../utils/exportToPDF';
 import { exportTransactionsToExcel } from '../utils/exportToExcel';
 
 export function TransactionPage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const search = searchParams.get('search') ?? '';
@@ -41,16 +41,7 @@ export function TransactionPage() {
   >(null);
   const [isExporting, setIsExporting] = React.useState(false);
 
-  const updateParam = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    if (value && value !== 'all' && value !== '') {
-      params.set(key, value);
-    } else {
-      params.delete(key);
-    }
-    if (key !== 'page') params.set('page', '1');
-    router.replace(`/transaction?${params.toString()}`);
-  };
+  const updateParam = useListQueryParam('/transaction');
 
   const { data: transactionsResponse, isLoading: isLoadingTransactions } =
     useGetTransactions({
@@ -91,7 +82,7 @@ export function TransactionPage() {
     setIsExporting(true);
     try {
       const all = await fetchAllForExport();
-      exportTransactionsToPDF(all, {
+      await exportTransactionsToPDF(all, {
         status: status !== 'all' ? status : undefined,
         search: search || undefined,
       });

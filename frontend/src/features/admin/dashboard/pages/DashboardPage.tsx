@@ -23,7 +23,7 @@ export function DashboardPage() {
     }
     setIsDownloading(true);
     try {
-      exportDashboardToPDF(summary);
+      await exportDashboardToPDF(summary);
       toast.success('PDF report downloaded successfully');
     } catch {
       toast.error('Failed to generate PDF report');

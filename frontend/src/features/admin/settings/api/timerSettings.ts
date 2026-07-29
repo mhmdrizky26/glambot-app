@@ -1,16 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { axiosInstance } from '@/lib/api-admin';
+import type { AppConfig } from '@/shared/api/config';
 
-// Timer halaman user yang diatur admin. Cocok dengan timerConfig di backend
-// (handlers/config.go) — satuan detik.
-export interface TimerSettings {
-  packageTimeoutSecs: number;
-  summaryTimeoutSecs: number;
-  instructionTimeoutSecs: number;
-  photoEditorTimeoutSecs: number;
-  getPhotosTimeoutSecs: number;
-  doneScreenTimeoutSecs: number;
-}
+// Endpoint admin mengembalikan struct yang sama dengan /api/config, jadi
+// bentuknya ikut AppConfig (satu deklarasi) — nama TimerSettings dipertahankan
+// karena itu istilah yang dipakai di halaman Settings.
+export type TimerSettings = AppConfig;
 
 export const TIMER_SETTINGS_KEY = ['admin', 'settings'] as const;
 

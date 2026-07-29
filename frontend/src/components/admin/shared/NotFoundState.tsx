@@ -7,10 +7,7 @@ import { Button } from '@/components/admin/ui/button';
 interface NotFoundStateProps {
   /** Judul utama, biasanya nama entity. Contoh: "Frame tidak ditemukan". */
   title: string;
-  /**
-   * Penjelasan tambahan opsional. Default-nya template generik yang
-   * menjelaskan kemungkinan penyebab.
-   */
+  /** Penjelasan tambahan; default-nya template generik. */
   description?: string;
   /** Label tombol kembali. Contoh: "Kembali ke List Frame". */
   backLabel: string;
@@ -18,12 +15,7 @@ interface NotFoundStateProps {
   onBack: () => void;
 }
 
-/**
- * Tampilan "not found" yang dipakai di seluruh halaman edit/detail saat
- * data tidak tersedia (misal id tidak valid, dihapus user lain, atau
- * server error). Konsistensi visual + bahasa membuat pengalaman seragam
- * di semua fitur.
- */
+/** Tampilan "not found" seragam untuk semua halaman edit/detail admin. */
 export function NotFoundState({
   title,
   description = 'The data you are looking for may have been deleted or the ID is invalid.',

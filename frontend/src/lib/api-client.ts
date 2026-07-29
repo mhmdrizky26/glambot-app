@@ -7,68 +7,36 @@ export interface ApiError {
 }
 
 /**
- * Resolve API base URL.
- *
- * Strategy:
- * - In the browser: if env points to localhost/127.0.0.1 but the page itself
- *   is opened from a LAN IP (192.168.x.x, etc.), the env localhost is wrong
- *   for that device — derive backend URL from current page hostname instead.
- *   This makes the same build work on PC (localhost) and phones (LAN IP).
- * - If env is a non-local URL (e.g. production domain), respect it.
- * - SSR / no env / no window → fall back to localhost.
+ * URL service dari env, dengan koreksi LAN: kalau env menunjuk localhost tapi
+ * halaman dibuka dari LAN IP, host diturunkan dari halaman supaya satu build
+ * jalan di PC kiosk maupun HP. Env non-lokal dihormati apa adanya; SSR /
+ * tanpa env jatuh ke localhost.
  */
-export const resolveBaseUrl = (): string => {
-  const envUrl = process.env.NEXT_PUBLIC_API_URL?.trim();
+const resolveServiceUrl = (rawEnvUrl: string | undefined, port: number): string => {
+  const envUrl = rawEnvUrl?.trim();
 
   if (typeof window !== 'undefined') {
     const currentHost = window.location.hostname;
     const onLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
+    const derived = `${window.location.protocol}//${currentHost}:${port}`;
 
     if (envUrl) {
       const envIsLocal = /localhost|127\.0\.0\.1/.test(envUrl);
-      // env says localhost but page is on LAN IP → override using window host
-      if (envIsLocal && !onLocalhost) {
-        return `${window.location.protocol}//${currentHost}:8080`;
-      }
-      return envUrl;
+      return envIsLocal && !onLocalhost ? derived : envUrl;
     }
-
-    // No env → always derive from current page
-    return `${window.location.protocol}//${currentHost}:8080`;
+    return derived;
   }
 
-  if (envUrl) return envUrl;
-  return 'http://localhost:8080';
+  return envUrl || `http://localhost:${port}`;
 };
 
-/**
- * Resolve URL dobot robot service (Flask, default :5001).
- *
- * Sama strateginya dengan resolveBaseUrl: hormati NEXT_PUBLIC_ROBOT_URL kalau
- * di-set ke host non-lokal; kalau env-nya localhost tapi halaman dibuka dari
- * LAN IP, derive dari hostname halaman + port 5001. Ini bikin Monitor 2 jalan
- * baik di PC kiosk (localhost) maupun device LAN.
- */
-export const resolveRobotUrl = (): string => {
-  const envUrl = process.env.NEXT_PUBLIC_ROBOT_URL?.trim();
+/** Base URL backend Go (:8080). */
+export const resolveBaseUrl = (): string =>
+  resolveServiceUrl(process.env.NEXT_PUBLIC_API_URL, 8080);
 
-  if (typeof window !== 'undefined') {
-    const currentHost = window.location.hostname;
-    const onLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1';
-
-    if (envUrl) {
-      const envIsLocal = /localhost|127\.0\.0\.1/.test(envUrl);
-      if (envIsLocal && !onLocalhost) {
-        return `${window.location.protocol}//${currentHost}:5001`;
-      }
-      return envUrl;
-    }
-    return `${window.location.protocol}//${currentHost}:5001`;
-  }
-
-  if (envUrl) return envUrl;
-  return 'http://localhost:5001';
-};
+/** URL service dobot (Flask :5001) untuk panel Gesture Detection. */
+export const resolveRobotUrl = (): string =>
+  resolveServiceUrl(process.env.NEXT_PUBLIC_ROBOT_URL, 5001);
 
 export const apiClient = axios.create({
   baseURL: resolveBaseUrl(),
@@ -80,10 +48,7 @@ apiClient.interceptors.request.use((config) => {
   return config;
 });
 
-/**
- * Convert a possibly-relative URL (e.g. `/storage/...`) into an absolute URL
- * by prepending the resolved API base. Pass-through if already absolute.
- */
+/** Jadikan URL relatif (mis. `/storage/...`) absolut; yang sudah absolut lewat. */
 export const toAbsoluteUrl = (path: string): string =>
   path.startsWith('http') ? path : `${resolveBaseUrl()}${path}`;
 

@@ -7,21 +7,13 @@ import (
 	"net/http"
 	"strconv"
 
-	"photobooth/database"
 	"photobooth/services"
 )
 
-// ─── Robot runtime tuning (service dobot) ────────────────────────────────────
-//
-// Parameter perilaku robot & gesture yang boleh diatur admin dari halaman
-// Settings. Disimpan di tabel app_settings (key→value TEXT) — sama seperti timer
-// config. Kalau key belum ada, dipakai default di bawah (identik dengan nilai
-// .env dobot, jadi tanpa konfigurasi apa pun perilaku tetap sama).
-//
-// Alur: PATCH /api/admin/robot-settings → simpan ke DB → best-effort forward ke
-// service dobot (POST /config/runtime) agar berlaku live tanpa restart. Service
-// dobot juga GET /api/robot-settings saat start supaya override tetap konsisten
-// setelah restart. GET publik dipakai dobot; GET admin di belakang auth.
+// Robot runtime tuning: parameter gerak & gesture yang diatur admin, disimpan
+// di app_settings (default di bawah = nilai .env dobot). PATCH admin → simpan
+// ke DB → forward best-effort ke dobot (POST /config/runtime) supaya berlaku
+// tanpa restart; dobot juga GET /api/robot-settings saat start.
 
 const (
 	keyRobotSpeedFactor     = "robot_speed_factor"
@@ -76,8 +68,7 @@ var robotRanges = map[string]robotRange{
 func loadRobotSettings() (robotSettings, error) {
 	cfg := robotDefaults
 
-	rows, err := database.DB.Query(
-		`SELECT key, value FROM app_settings WHERE key IN (?, ?, ?, ?, ?, ?, ?)`,
+	values, err := readAppSettings(
 		keyRobotSpeedFactor, keyRobotJointSpeed, keyRobotJointAcc,
 		keySafetyHoldSec, keySafetyTimeout, keyPresetDebounceFrames,
 		keyPostActionDelay,
@@ -85,13 +76,8 @@ func loadRobotSettings() (robotSettings, error) {
 	if err != nil {
 		return cfg, err
 	}
-	defer rows.Close()
 
-	for rows.Next() {
-		var k, v string
-		if err := rows.Scan(&k, &v); err != nil {
-			continue
-		}
+	for k, v := range values {
 		f, convErr := strconv.ParseFloat(v, 64)
 		if convErr != nil {
 			continue // nilai rusak → biarkan default
@@ -113,7 +99,7 @@ func loadRobotSettings() (robotSettings, error) {
 			cfg.PostActionDelay = f
 		}
 	}
-	return cfg, rows.Err()
+	return cfg, nil
 }
 
 // GetRobotSettings — GET publik & admin. Publik dipakai service dobot saat start

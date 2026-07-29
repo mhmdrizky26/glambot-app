@@ -114,10 +114,8 @@ func CreatePayment(w http.ResponseWriter, r *http.Request) {
 		now.UTC(),
 	)
 	if err != nil {
-		// Race condition: request lain sudah membuat transaksi 'pending' untuk
-		// sesi ini lebih dulu (ditolak partial unique index). Kembalikan
-		// transaksi yang sudah ada itu daripada membuat baris kedua — inilah
-		// yang dulu memunculkan 2 pembayaran untuk 1 sesi yang sama.
+		// Request lain sudah bikin 'pending' duluan (ditolak partial unique
+		// index) → pakai transaksi itu, jangan bikin baris kedua.
 		if isUniqueViolation(err) {
 			if existing, gerr := getPendingTransactionBySession(req.SessionID); gerr == nil {
 				respondJSON(w, http.StatusOK, models.SuccessResponse(models.CreatePaymentResponse{
@@ -370,12 +368,9 @@ func markTransactionPaid(orderID string) (string, error) {
 	// menit) menjadi retensi penuh (SESSION_EXPIRY_HOURS) supaya foto & link
 	// download tidak ikut ke-cleanup tak lama setelah bayar.
 	sessionExpiresAt := now.Add(time.Duration(config.App.SessionExpiryHours) * time.Hour)
-	// Guard status: hanya transisi ke 'paid' dari state pra-shooting.
-	// Webhook Midtrans bisa dobel/terlambat (capture + settlement, atau retry).
-	// Tanpa guard, notifikasi 'settlement' yang telat bisa mereset sesi yang
-	// sudah 'shooting'/'completed' kembali ke 'paid' dan memajukan expires_at.
-	// 'expired' tetap diikutkan agar pembayaran yang lolos setelah payment window
-	// singkat masih bisa memulihkan sesi (perilaku lama untuk kasus itu terjaga).
+	// Hanya naik ke 'paid' dari state pra-shooting — webhook Midtrans bisa
+	// dobel/telat dan jangan sampai mereset sesi 'shooting'/'completed'.
+	// 'expired' tetap ikut supaya bayar yang lolos telat masih memulihkan sesi.
 	if _, err := tx.Exec(`
 		UPDATE sessions SET status = 'paid', expires_at = ?
 		WHERE id = ? AND status IN ('pending_payment', 'expired')`, sessionExpiresAt, sessionID,

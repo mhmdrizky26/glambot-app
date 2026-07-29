@@ -23,6 +23,8 @@ import { Button } from '@/components/admin/ui/button';
 import { Checkbox } from '@/components/admin/ui/checkbox';
 import { Progress } from '@/components/admin/ui/progress';
 import { Skeleton } from '@/components/admin/ui/skeleton';
+import { formatDateShort } from '@/lib/formats';
+import { useSortedRows } from '@/lib/useTableRows';
 import { type Voucher } from '../api/types';
 import { DeleteVoucherDialog } from './DeleteVoucherDialog';
 import { useDeleteVoucher } from '../api/deleteVoucher';
@@ -119,17 +121,7 @@ export function VoucherTable({ data, isLoading }: VoucherTableProps) {
     }
   };
 
-  const sorted = React.useMemo(() => {
-    return [...data].sort((a, b) => {
-      const aVal = a[sortKey] ?? '';
-      const bVal = b[sortKey] ?? '';
-      const cmp =
-        typeof aVal === 'number' && typeof bVal === 'number'
-          ? aVal - bVal
-          : String(aVal).localeCompare(String(bVal));
-      return sortDir === 'asc' ? cmp : -cmp;
-    });
-  }, [data, sortKey, sortDir]);
+  const sorted = useSortedRows(data, sortKey, sortDir);
 
   if (isLoading) {
     return (
@@ -283,11 +275,7 @@ export function VoucherTable({ data, isLoading }: VoucherTableProps) {
                   </TableCell>
                   <TableCell className="hidden text-sm lg:table-cell">
                     {voucher.expiresAt
-                      ? new Date(voucher.expiresAt).toLocaleDateString('id-ID', {
-                          day: 'numeric',
-                          month: 'short',
-                          year: 'numeric',
-                        })
+                      ? formatDateShort(voucher.expiresAt)
                       : 'No expiry'}
                   </TableCell>
                   <TableCell>

@@ -14,11 +14,8 @@ import (
 // memakai jalur print bawaan OS (bukan SDK printer vendor) supaya tidak
 // bergantung pada merk tertentu — cukup untuk alur "tekan tombol → cetak".
 
-// PrintFile mengirim file gambar ke printer fisik default sebanyak `copies`
-// salinan. Dijaga ketat: hanya mencetak kalau ada printer fisik yang benar-
-// benar siap (probe yang sama dengan halaman monitoring; printer virtual PDF
-// sudah diabaikan di GetPrinterStatus). Mengembalikan error yang informatif
-// kalau printer tidak ada/tidak siap atau perintah cetak gagal.
+// PrintFile cetak `copies` salinan ke printer fisik, hanya kalau probe
+// (sama dengan halaman monitoring) bilang ada printer siap. Selain itu error.
 func PrintFile(path string, copies int) error {
 	if copies < 1 {
 		copies = 1
@@ -40,20 +37,10 @@ func PrintFile(path string, copies int) error {
 	}
 }
 
-// printWindows mencetak senyap (tanpa dialog) ke printer tertentu.
-//
-// PENTING: dulu pakai `mspaint /pt` tapi mspaint mencetak gambar apa adanya
-// (mengikuti metadata DPI file). Export canvas dari browser tidak punya DPI
-// yang benar (~96 DPI), jadi hasilnya TIDAK fit ke kertas 4R — keluar lebih
-// kecil. Sekarang kita render sendiri via System.Drawing.Printing (PowerShell)
-// dan men-scale gambar dengan fit-to-page (contain) supaya seluruh frame muat
-// utuh di kertas tanpa ada bagian yang terpotong. Karena rasio frame 2:3 sama
-// persis dengan 4R, hasilnya tetap memenuhi kertas tanpa sisa. Driver yang
-// menangani N salinan via PrinterSettings.Copies, jadi cukup satu panggilan.
-//
-// Catatan: untuk printer foto profesional (DNP/Citizen) idealnya pakai SDK
-// vendor — itu peningkatan terpisah. Jalur ini cukup untuk printer ber-driver
-// standar dengan dukungan borderless 4R.
+// printWindows cetak senyap via System.Drawing.Printing (PowerShell) dengan
+// fit-to-page. `mspaint /pt` dulu bikin hasil kekecilan karena mengikuti DPI
+// file (~96) dari export canvas. Rasio frame 2:3 = 4R jadi kertas tetap penuh;
+// N salinan diserahkan ke driver lewat PrinterSettings.Copies.
 func printWindows(path, printer string, copies int) error {
 	scriptPath, cleanup, err := writePrintScript()
 	if err != nil {
@@ -81,11 +68,9 @@ func printWindows(path, printer string, copies int) error {
 	return nil
 }
 
-// printScript mencetak frame ke kertas 4R: cari paper size 4x6 dari driver,
-// lalu fit gambar ke KOTAK KERTAS yang terletak di tengah surface render
-// (kertas fisik = PageBounds, lebih kecil dari VisibleClipBounds yang
-// mengandung zona overscan borderless). Centering inilah yang bikin hasil
-// pas edge-to-edge tanpa kepotong/melenceng. Tidak ada synthetic bleed.
+// printScript: ambil paper size 4x6 dari driver lalu fit gambar ke kotak
+// kertas (PageBounds) yang ada di TENGAH surface render — centering inilah
+// yang bikin hasil pas edge-to-edge tanpa kepotong.
 const printScript = `param(
   [Parameter(Mandatory=$true)][string]$ImagePath,
   [Parameter(Mandatory=$true)][string]$Printer,
@@ -134,15 +119,10 @@ try {
     $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
     $iw = $img.Width; $ih = $img.Height
 
-    # PENTING — kenapa dulu kepotong di kiri-atas + putih lebar di kanan-bawah:
-    # Pada printer foto borderless (mis. EPSON SL-D500) permukaan render yang
-    # sesungguhnya (VisibleClipBounds, mis. 421x621) LEBIH BESAR dari kertas
-    # fisik (PageBounds, 400x600) — itu zona overscan borderless. Titik (0,0)
-    # Graphics ada di pojok kiri-atas SURFACE (di dalam zona overscan, di LUAR
-    # kertas). Menggambar mulai (0,0) ke ukuran kertas bikin gambar melenceng ke
-    # kiri-atas: tepi kiri/atas keluar kertas (kepotong), kanan/bawah kurang →
-    # putih. Solusi: kertas fisik ada di TENGAH surface, jadi offset gambar
-    # sebesar setengah selisih overscan, lalu fit gambar ke kotak kertas itu.
+    # Pada printer borderless, VisibleClipBounds (surface) lebih besar dari
+    # PageBounds (kertas) karena zona overscan, dan (0,0) ada di surface — jadi
+    # menggambar dari (0,0) bikin gambar melenceng kiri-atas. Offset setengah
+    # selisih overscan dulu, baru fit ke kotak kertas.
     $surf = $g.VisibleClipBounds
     $sw = $surf.Width; $sh = $surf.Height
     $pw = $e.PageBounds.Width; $ph = $e.PageBounds.Height

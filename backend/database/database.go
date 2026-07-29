@@ -98,15 +98,11 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		// bisa menerapkan filter yang sama ke burst frame (frontend bake-in filter
 		// ke hasil akhir, tapi burst mentah perlu difilter ulang server-side).
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS strip_filter TEXT NOT NULL DEFAULT 'original'`,
-		// Per-slot assignment saat compose: JSON array photoId URUT SESUAI SLOT
-		// (boleh duplikat kalau 1 foto dipakai di beberapa slot). Sumber kebenaran
-		// pemetaan slot→foto untuk generator GIF live — model photos.selected/
-		// position tidak bisa mewakili 1 foto di N slot (1 baris per foto).
+		// photoId urut slot (boleh duplikat) — sumber kebenaran slot→foto untuk
+		// GIF live; photos.selected/position tak bisa wakili 1 foto di N slot.
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS slot_photo_ids TEXT NOT NULL DEFAULT ''`,
-		// Google Drive: tandai foto raw yang SUDAH diunggah ke Drive. Upload kini
-		// per-capture (streaming) supaya file full-res tidak menumpuk di akhir;
-		// kolom ini mencegah dobel-upload & memungkinkan finalize meng-upload
-		// hanya yang belum terkirim (mis. jika upload per-capture sempat gagal).
+		// Penanda foto raw yang sudah naik ke Drive (upload streaming per-capture)
+		// — cegah dobel-upload, finalize tinggal kirim sisanya.
 		`ALTER TABLE photos ADD COLUMN IF NOT EXISTS drive_uploaded BOOLEAN NOT NULL DEFAULT FALSE`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qris_url TEXT`,
 		`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS qris_raw_string TEXT`,
@@ -140,11 +136,8 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS file_size TEXT NOT NULL DEFAULT ''`,
 		`UPDATE frames SET frame_code = id WHERE frame_code = ''`,
 
-		// Frames: kategori kini berbasis kapasitas orang — 'Personal' (1-4 orang)
-		// & 'Group' (banyak orang). Default kolom dipindah ke 'Personal', dan
-		// semua frame lama (Event/Fun/Premium/Standard/dll) dimigrasikan ke
-		// 'Personal'. WHERE membatasi ke kategori di luar dua nilai baru →
-		// idempoten & tidak menimpa pilihan admin pada boot berikutnya.
+		// Kategori frame kini 'Personal' (1-4 orang) / 'Group'. WHERE dibatasi ke
+		// kategori lama → idempoten, tidak menimpa pilihan admin.
 		`ALTER TABLE frames ALTER COLUMN category SET DEFAULT 'Personal'`,
 		`UPDATE frames SET category = 'Personal' WHERE category NOT IN ('Personal', 'Group')`,
 
@@ -166,15 +159,9 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 			updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 		)`,
 
-		// ─── Cegah transaksi pending duplikat per sesi ───────────────────────
-		// Akar bug "2 pembayaran untuk 1 sesi yang sama": CreatePayment dulu
-		// SELECT-lalu-INSERT (tidak atomik), jadi 2 request bersamaan bisa
-		// sama-sama membuat baris 'pending'. Saat satu dibayar, sisanya jadi
-		// 'expired' → muncul 2 baris di admin.
-		//
-		// 1) Rapikan data lama: kalau satu sesi punya >1 pending, sisakan yang
-		//    terbaru, sisanya jadi 'expired' (kalau tidak, pembuatan unique
-		//    index di bawah akan gagal).
+		// Cegah transaksi pending duplikat per sesi (dulu SELECT-lalu-INSERT tidak
+		// atomik → 2 baris pending). 1) Rapikan data lama: sisakan pending
+		// terbaru, sisanya 'expired', supaya unique index di bawah bisa dibuat.
 		`UPDATE transactions t SET status = 'expired'
 		   WHERE status = 'pending'
 		     AND EXISTS (
