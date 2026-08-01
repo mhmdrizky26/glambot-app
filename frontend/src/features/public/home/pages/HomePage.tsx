@@ -67,7 +67,7 @@ export default function Home() {
     });
 
     const play = () => {
-      playBackendAudio('mulaiNew.mp3');
+      playBackendAudio('mulai.mp3');
       lastPlay = Date.now();
     };
     const playThrottled = () => {

@@ -2,7 +2,11 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { instructionSteps } from '../data/steps';
+import {
+  instructionSteps,
+  type InstructionStep,
+  type InstructionHighlight,
+} from '../data/steps';
 import {
   GetReadyCard,
   SafetyRulesCard,
@@ -13,6 +17,32 @@ import { sendSessionBroadcast } from '@/features/public/photo-session/lib/broadc
 import { playBackendAudio, playBackendAudioAfterCurrent } from '@/lib/audio';
 import Timer from '@/components/shared/Timer';
 import { useAppConfig } from '@/shared/api/config';
+
+/**
+ * Rangkaian narasi per step: diputar berurutan (yang berikutnya menunggu yang
+ * sekarang selesai), dan selama sebuah cue berbunyi bagian kartu yang dirujuk
+ * ikut ter-highlight — jadi user mendengar sekaligus melihat apa yang dimaksud.
+ * `highlight` kosong = narasi umum, tidak menyorot apa pun.
+ */
+const STEP_CUES: Record<
+  InstructionStep['type'],
+  { file: string; highlight?: InstructionHighlight }[]
+> = {
+  'get-ready': [
+    { file: 'introDengar.mp3' },
+    { file: 'waktuSesi.mp3', highlight: 'duration' },
+    { file: 'infoSingkat.mp3', highlight: 'activities' },
+  ],
+  safety: [
+    { file: 'keselamatanNoM.mp3' },
+    { file: 'deteksiSatu.mp3', highlight: 'guideline' },
+  ],
+  'gesture-controls': [
+    { file: 'infoPreset.mp3' },
+    { file: 'pilGesture.mp3', highlight: 'gestures' },
+    { file: 'pilAcam.mp3', highlight: 'camera' },
+  ],
+};
 
 export default function InstructionPage() {
   const [currentStep, setCurrentStep] = useState(0);
@@ -60,35 +90,50 @@ export default function InstructionPage() {
     }
   }, [session?.status, isSessionFetching, router]);
 
-  // Tombol "Next" (get-ready & safety) baru muncul setelah narasi step selesai,
-  // supaya user mendengarkan dulu. Direset tiap ganti step.
+  // Tombol "Next" (get-ready & safety) baru muncul setelah SELURUH rangkaian
+  // narasi step selesai, supaya user mendengarkan dulu. Direset tiap ganti step.
   const [audioDone, setAudioDone] = useState(false);
+  // Bagian kartu yang sedang disorot mengikuti narasi yang berbunyi.
+  const [highlight, setHighlight] = useState<InstructionHighlight | null>(null);
 
-  // Panduan suara per step — diputar sekali saat masuk step (keyed step.type).
+  // Panduan suara per step — rangkaian cue diputar berurutan saat masuk step
+  // (keyed stepType).
+  const stepType = step?.type;
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset flag audio tiap ganti step (keyed step.type), lalu mulai narasi.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- reset flag audio & sorotan tiap ganti step (keyed stepType), lalu mulai narasi.
     setAudioDone(false);
+    setHighlight(null);
+
+    const cues = stepType ? STEP_CUES[stepType] : undefined;
+    if (!cues) return;
+
     let cancelled = false;
-    const markDone = () => {
-      if (!cancelled) setAudioDone(true);
+    const playFrom = (index: number) => {
+      if (cancelled) return;
+      if (index >= cues.length) {
+        // Rangkaian habis: tombol dibuka, sorotan dilepas lagi.
+        setHighlight(null);
+        setAudioDone(true);
+        return;
+      }
+      const cue = cues[index];
+      setHighlight(cue.highlight ?? null);
+      // Cue pertama step get-ready menunggu "pembayaranBerhasil" (dari halaman
+      // payment) selesai dulu; sisanya menyambung lewat callback onEnded, jadi
+      // tidak ada dua narasi yang menumpuk.
+      const next = () => playFrom(index + 1);
+      if (index === 0 && stepType === 'get-ready') {
+        playBackendAudioAfterCurrent(cue.file, next);
+      } else {
+        playBackendAudio(cue.file, next);
+      }
     };
-    switch (step?.type) {
-      case 'get-ready':
-        // Tunggu "pembayaranBerhasil" (dari payment) selesai dulu.
-        playBackendAudioAfterCurrent('intro.mp3', markDone);
-        break;
-      case 'safety':
-        playBackendAudio('keselamatan.mp3', markDone);
-        break;
-      case 'gesture-controls':
-        // Kartu gesture punya gating sendiri, tombol tak ditahan audio di sini.
-        playBackendAudio('presetSlow.mp3');
-        break;
-    }
+    playFrom(0);
+
     return () => {
       cancelled = true;
     };
-  }, [step?.type]);
+  }, [stepType]);
 
   if (!sessionId) return null;
 
@@ -161,6 +206,7 @@ export default function InstructionPage() {
             buttonLabel="Next →"
             buttonReady={audioDone}
             sessionDurationMinutes={sessionDurationMinutes}
+            highlight={highlight}
           />
         ) : step.type === 'safety' ? (
           <SafetyRulesCard
@@ -168,12 +214,14 @@ export default function InstructionPage() {
             onNext={handleNext}
             buttonLabel="Next →"
             buttonReady={audioDone}
+            highlight={highlight}
           />
         ) : (
           <GestureControlsCard
             step={step}
             onNext={handleNext}
             buttonLabel="Got it, Let's Go!"
+            highlight={highlight}
           />
         )}
       </div>

@@ -42,9 +42,9 @@ export function GetPhotosScreen({
   }, []);
 
   // Narasi "sedang memproses foto" — main sekali saat layar ini muncul (fase
-  // loading, sebelum QR siap). scanQrAmbilFoto di bawah menyusul setelah ini.
+  // loading, sebelum QR siap). scanQr di bawah menyusul setelah ini.
   useEffect(() => {
-    playBackendAudio('prosesFoto.mp3');
+    playBackendAudio('fotoProses.mp3');
   }, []);
 
   // Build the download URL after mount (window is undefined during SSR).
@@ -187,8 +187,8 @@ export function GetPhotosScreen({
   useEffect(() => {
     if (!isLoading && !qrAudioFiredRef.current) {
       qrAudioFiredRef.current = true;
-      // Tunggu "prosesFoto" selesai dulu supaya tidak menabrak.
-      playBackendAudioAfterCurrent('scanQrAmbilFoto.mp3');
+      // Tunggu "fotoProses" selesai dulu supaya tidak menabrak.
+      playBackendAudioAfterCurrent('scanQr.mp3');
     }
   }, [isLoading]);
 

@@ -3,12 +3,12 @@ import { playBackendAudioForce } from '@/lib/audio';
 
 /**
  * Lama hold deteksi per narasi (detik) = panjang file audio + margin skew
- * poll/network. Diukur dari file: unlock.mp3 ±3.0s, inisiasi.mp3 ±2.4s.
+ * poll/network. Diukur dari file: unlock.mp3 3.31s, inisiasiGJ.mp3 2.57s.
  * Kalau file audionya diganti, sesuaikan angka di sini.
  */
 const ANNOUNCE_HOLD_SEC: Record<string, number> = {
-  'inisiasi.mp3': 2.8,
-  'unlock.mp3': 3.5,
+  'inisiasiGJ.mp3': 3.0,
+  'unlock.mp3': 3.8,
 };
 
 /**
@@ -21,7 +21,7 @@ const ANNOUNCE_HOLD_SEC: Record<string, number> = {
  * diberitahu eksplisit lewat POST /detection/hold.
  *
  * Sengaja TIDAK dipakai untuk cue yang berbunyi SAAT gesture sedang dikenali
- * (mis. tahan.mp3 / presetTerkonfirmasi.mp3) — menahan deteksi di situ justru
+ * (mis. tahan3D.mp3 / presetOk.mp3) — menahan deteksi di situ justru
  * bikin counter kereset terus sehingga preset tak pernah terkonfirmasi.
  */
 export function playAnnounce(filename: string): void {

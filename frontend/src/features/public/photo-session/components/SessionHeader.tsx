@@ -8,7 +8,7 @@ interface SessionHeaderProps {
 
 // Ambang "waktu menipis": mulai 30 detik terakhir dan TERUS berlaku saat timer
 // sudah minus (overtime menunggu robot merampungkan capture). Di-export supaya
-// narasi "waktuHabisFoto.mp3" di PhotoSessionPage memakai ambang yang SAMA —
+// narasi "habisFoto.mp3" di PhotoSessionPage memakai ambang yang SAMA —
 // timer merah & peringatan suara di-arm bersamaan (audio punya floor sendiri,
 // LOW_TIME_FLOOR_SEC, agar tetap bunyi selagi sisa waktu masih berguna).
 export const URGENT_THRESHOLD_SEC = 30;

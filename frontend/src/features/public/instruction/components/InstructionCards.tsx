@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import GlassCard from '@/components/shared/GlassCard';
 import { Button } from '@/components/ui/button';
-import type { InstructionStep } from '../data/steps';
+import type { InstructionStep, InstructionHighlight } from '../data/steps';
 import {
   Hand,
   Ruler,
@@ -35,6 +35,31 @@ const RULE_ICONS: Record<string, LucideIcon> = {
   food: CupSoda,
 };
 
+/**
+ * Kelas "terselect & maju ke depan": bagian yang sedang disebut narasi diberi
+ * cincin + bayangan lalu di-scale sedikit, sisanya diredupkan. Dipakai lewat
+ * `spotlight()` di bawah supaya konsisten di ketiga kartu.
+ */
+const SPOTLIGHT_ON =
+  'scale-[1.05] ring-4 ring-white/70 shadow-[0px_20px_55px_rgba(17,45,78,0.65)] z-10';
+// Versi untuk kartu besar (step gesture): scale-nya dikecilkan supaya kartu
+// selebar ±560px tidak menyenggol tepi layar saat maju ke depan.
+const SPOTLIGHT_ON_LARGE =
+  'scale-[1.02] ring-4 ring-white/70 shadow-[0px_20px_55px_rgba(17,45,78,0.65)] z-10';
+const SPOTLIGHT_OFF = 'opacity-45';
+
+/**
+ * `active` null = tidak ada narasi menyorot apa pun → semua tampil normal
+ * (tidak ada yang diredupkan).
+ */
+function spotlight(
+  active: boolean | null,
+  onClass: string = SPOTLIGHT_ON,
+): string {
+  if (active === null) return '';
+  return active ? onClass : SPOTLIGHT_OFF;
+}
+
 interface CardProps {
   step: InstructionStep;
   onNext: () => void;
@@ -42,6 +67,8 @@ interface CardProps {
   // Tombol baru boleh diklik/terlihat saat narasi suara step ini selesai.
   // Default true supaya kartu tanpa gating audio tetap menampilkan tombol.
   buttonReady?: boolean;
+  // Bagian yang sedang disebut narasi (lihat STEP_CUES di InstructionPage).
+  highlight?: InstructionHighlight | null;
 }
 
 interface GetReadyCardProps extends CardProps {
@@ -114,8 +141,13 @@ export function GetReadyCard({
   buttonLabel,
   buttonReady = true,
   sessionDurationMinutes,
+  highlight,
 }: GetReadyCardProps) {
   const minutes = sessionDurationMinutes ?? step.sessionDuration ?? 5;
+  // Narasi "waktuSesi" menyorot ring, "infoSingkat" menyorot daftar aktivitas.
+  // Selain kedua cue itu (null) tidak ada yang disorot maupun diredupkan.
+  const spot =
+    highlight === 'duration' || highlight === 'activities' ? highlight : null;
   return (
     <GlassCard maxWidth="max-w-[960px]" className="px-14 py-12">
       <div className="flex flex-col items-center">
@@ -126,13 +158,22 @@ export function GetReadyCard({
         {/* Grup list + ring di-center sebagai satu blok (justify-center) supaya
             margin kiri & kanan simetris; gap-14 mengatur jarak list↔ring. */}
         <div className="flex w-full flex-row items-center justify-center gap-14">
-          {/* Kiri — daftar aktivitas bernomor */}
+          {/* Kiri — daftar aktivitas bernomor. Saat "infoSingkat" berbunyi
+              ketiganya menyala berurutan (delay bertingkat), mengikuti narasi
+              yang menyebut tiga info itu satu per satu. */}
           <div className="flex w-[440px] shrink-0 flex-col gap-4">
             {step.activities?.map((activity, i) => (
               <GlassCard
                 key={activity.label}
                 variant="secondary"
-                className="flex w-full items-center gap-5 rounded-2xl px-6 py-5"
+                className={cn(
+                  'flex w-full items-center gap-5 rounded-2xl px-6 py-5 transition-all duration-500',
+                  spotlight(spot === null ? null : spot === 'activities'),
+                )}
+                style={{
+                  transitionDelay:
+                    spot === 'activities' ? `${i * 700}ms` : '0ms',
+                }}
               >
                 <span className="flex h-13 w-13 shrink-0 items-center justify-center rounded-full bg-[#F9F7F7]/15 text-[24px] font-bold text-white">
                   {i + 1}
@@ -144,8 +185,15 @@ export function GetReadyCard({
             ))}
           </div>
 
-          {/* Kanan — ring durasi sesi */}
-          <DurationRing minutes={minutes} />
+          {/* Kanan — ring durasi sesi, maju ke depan saat "waktuSesi" berbunyi */}
+          <div
+            className={cn(
+              'rounded-full transition-all duration-500',
+              spotlight(spot === null ? null : spot === 'duration'),
+            )}
+          >
+            <DurationRing minutes={minutes} />
+          </div>
         </div>
 
         <Button
@@ -211,7 +259,11 @@ export function SafetyRulesCard({
   onNext,
   buttonLabel,
   buttonReady = true,
+  highlight,
 }: CardProps) {
+  // Narasi "deteksiSatu" menyorot baris guideline ("only one person's hand"),
+  // kolom Do/Don't diredupkan selama itu.
+  const guidelineActive = highlight === 'guideline';
   return (
     <GlassCard maxWidth="max-w-[1120px]" className="py-8 px-10 overflow-hidden">
       <div className="flex flex-col items-center">
@@ -219,7 +271,12 @@ export function SafetyRulesCard({
           {step.heading}
         </h2>
 
-        <div className="grid grid-cols-2 gap-8 lg:gap-10 items-start w-full">
+        <div
+          className={cn(
+            'grid grid-cols-2 gap-8 lg:gap-10 items-start w-full transition-all duration-500',
+            guidelineActive && SPOTLIGHT_OFF,
+          )}
+        >
           {/* Do column */}
           <div className="flex flex-col">
             <div className="flex items-center justify-center gap-3 mb-4">
@@ -265,7 +322,10 @@ export function SafetyRulesCard({
           <GlassCard
             variant="secondary"
             maxWidth="max-w-full"
-            className="mt-6 w-full flex items-center justify-center gap-5 rounded-2xl px-7 py-5"
+            className={cn(
+              'mt-6 w-full flex items-center justify-center gap-5 rounded-2xl px-7 py-5 transition-all duration-500',
+              guidelineActive && SPOTLIGHT_ON,
+            )}
           >
             <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-[#F9F7F7]/12">
               <Hand size={30} className="text-blue-100" />
@@ -292,8 +352,17 @@ export function SafetyRulesCard({
 }
 
 /** "Gesture Controls" step. */
-export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
+export function GestureControlsCard({
+  step,
+  onNext,
+  buttonLabel,
+  highlight,
+}: CardProps) {
   const [activeIndex, setActiveIndex] = useState(0);
+  // "pilGesture" menyorot kartu kanan (daftar gesture), "pilAcam" kartu kiri
+  // (panggung robot + kamera). Di luar kedua cue itu keduanya tampil normal.
+  const spot =
+    highlight === 'gestures' || highlight === 'camera' ? highlight : null;
   const [hasCompletedFirstLoop, setHasCompletedFirstLoop] = useState(false);
 
   useEffect(() => {
@@ -319,7 +388,10 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
       {/* Kiri — panggung 3D robot + kamera */}
       <GlassCard
         maxWidth="max-w-none"
-        className="flex w-[560px] shrink-0 flex-col p-9"
+        className={cn(
+          'flex w-[560px] shrink-0 flex-col p-9 transition-all duration-500',
+          spotlight(spot === null ? null : spot === 'camera', SPOTLIGHT_ON_LARGE),
+        )}
       >
         <h3 className="text-[36px] font-bold leading-[1.15] text-white">
           Camera Movement
@@ -365,7 +437,16 @@ export function GestureControlsCard({ step, onNext, buttonLabel }: CardProps) {
       </GlassCard>
 
       {/* Kanan — grid gesture + tombol lanjut */}
-      <GlassCard maxWidth="max-w-none" className="flex flex-1 flex-col p-9">
+      <GlassCard
+        maxWidth="max-w-none"
+        className={cn(
+          'flex flex-1 flex-col p-9 transition-all duration-500',
+          spotlight(
+            spot === null ? null : spot === 'gestures',
+            SPOTLIGHT_ON_LARGE,
+          ),
+        )}
+      >
         <div className="text-center">
           <h2 className="text-[44px] font-bold leading-tight text-white">
             {step.heading}

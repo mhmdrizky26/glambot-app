@@ -15,6 +15,17 @@ export interface GestureItem {
   icon?: string; // Path to SVG icon
 }
 
+/**
+ * Bagian kartu yang disorot mengikuti narasi yang sedang berbunyi
+ * (rangkaian cue-nya ada di InstructionPage → STEP_CUES).
+ */
+export type InstructionHighlight =
+  | 'duration'
+  | 'activities'
+  | 'guideline'
+  | 'gestures'
+  | 'camera';
+
 export interface InstructionStep {
   id: number;
   type: 'get-ready' | 'safety' | 'gesture-controls';
