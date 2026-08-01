@@ -34,6 +34,18 @@ Aplikasi photo booth kiosk dengan integrasi robot kamera + auto-capture berbasis
 
 Ringkasan perubahan terbaru (per Juli 2026):
 
+### Set narasi baru + narasi bertahap di halaman intro & tutorial editor (baru)
+
+Seluruh voice-over diganti ke rekaman baru; isi `backend/storage/audio/` sekarang **hanya** file set baru (nama lama seperti `intro.mp3`, `presetSlow.mp3`, `presetTerkonfirmasi.mp3`, `waktuHabis*.mp3` sudah dihapus, `pilihFoto.mp3` tidak dipakai lagi). Daftar lengkap + trigger-nya ada di [Audio Cues](#audio-cues).
+
+Yang berubah lebih dari sekadar nama file:
+
+- **Tiap step instruksi kini punya rangkaian narasi**, bukan satu clip. Urutannya didefinisikan di `STEP_CUES` ([`InstructionPage.tsx`](frontend/src/features/public/instruction/pages/InstructionPage.tsx)) dan diputar berantai lewat callback `onEnded` — clip berikutnya baru mulai setelah yang sekarang benar-benar selesai. Tombol *Next* baru muncul setelah **seluruh** rangkaian habis.
+- **Sorotan mengikuti suara.** Selama sebuah cue berbunyi, bagian kartu yang sedang dibicarakan maju ke depan (scale + ring) dan sisanya diredupkan — ring durasi saat `waktuSesi`, tiga kartu info (berurutan, delay bertingkat) saat `infoSingkat`, baris "only one person's hand" saat `deteksiSatu`, kartu gesture lalu panggung kamera saat `pilGesture`/`pilAcam`. Implementasinya `spotlight()` di [`InstructionCards.tsx`](frontend/src/features/public/instruction/components/InstructionCards.tsx).
+- **Tutorial editor foto bersuara**: tiap step [`PhotoEditorOnboarding`](frontend/src/features/public/photo-editor/components/PhotoEditorOnboarding.tsx) punya narasinya sendiri (step 1–5), menggantikan satu narasi "pilih foto" saat editor terbuka. Tombol *Next* baru muncul setelah narasi step itu habis; **putaran pertama tidak punya tombol Skip** dan tidak bisa ditutup lewat tap-di-luar/Escape (`onInteractOutside`/`onEscapeKeyDown` di-preventDefault) — Skip baru tersedia kalau user membuka ulang tutorial dari tombol bantuan, dan tiap dibuka ulang selalu mulai lagi dari step 1.
+- **Voucher bersuara**: hasil apply voucher di summary memutar `voucherBerhasil`/`voucherGagal` ([`useVoucher.ts`](frontend/src/features/public/payment/hooks/useVoucher.ts)). Kode salah tetap balik HTTP 200 dengan `valid:false`, jadi cabangnya dari `result.valid` — bukan `onError`.
+- **Jendela hold deteksi ikut disesuaikan** dengan panjang file baru (unlock 3.31s, inisiasiGJ 2.57s): `ANNOUNCE_HOLD_SEC` di [`announceAudio.ts`](frontend/src/features/public/photo-session/lib/announceAudio.ts) → 3.8 / 3.0, dan default `UNLOCK_ANNOUNCE_SEC` / `LOCKED_ANNOUNCE_SEC` di [`dobot/app/config.py`](dobot/app/config.py) disamakan. Kalau file audio diganti lagi, **dua tempat ini harus ikut diubah** — kalau tidak, robot melepas deteksi sebelum narasi selesai.
+
 ### Perbaikan: preview blank hitam setelah jepretan pertama — liveview balik ke polling per frame (baru)
 
 Gejalanya: foto pertama mulus, sesudah itu Preview Camera hitam sampai sesi habis. Penyebabnya penggantian ke **satu koneksi MJPEG** di rilis sebelumnya:
@@ -594,7 +606,7 @@ glambot-app/
 │   │   ├── devices.go             # Probe kamera/printer/robot untuk admin devices
 │   │   └── robot.go               # HTTP client to external robot API
 │   ├── storage/
-│   │   ├── audio/                 # narasi voice-over per halaman (selamatDatang, pilihJumlahCetak, pembayaran*, intro, keselamatan, preset, inisiasi, countdown tiga/dua/satu, pilihFoto, prosesFoto, scanQrAmbilFoto, terimaKasih, etc.)
+│   │   ├── audio/                 # narasi voice-over per halaman (mulai, selamatDatang, jumlahCetak, voucher*, pembayaran*, introDengar/waktuSesi/infoSingkat, keselamatanNoM/deteksiSatu, infoPreset/pilGesture/pilAcam, inisiasiGJ, countdown tiga/dua/satu, tutorial editor sentuhFrame/seretFoto/seretZoom/filter/pilihCetakFoto, fotoProses, scanQr, terimakasih, etc.)
 │   │   ├── frames/                # Frame SVG assets (embedded base64 PNG → frame overlay)
 │   │   ├── packages/              # Package thumbnails (digital.svg, print.svg)
 │   │   └── sessions/{id}/         # Per-session output:
@@ -846,11 +858,11 @@ Diskon code.
     │
     ↓ Status = paid (via Midtrans webhook)
 [ /instruction ]       ← 3 steps + 60s timer
-    │                    Step 3: 🔊 preset.mp3
+    │                    Step 3: 🔊 infoPreset → pilGesture → pilAcam
     ↓ "Got it, Let's Go!" → POST /api/robot/enable
-[ /photo-session ]     ← 🔊 inisiasi.mp3, live preview (mirrored)
+[ /photo-session ]     ← 🔊 inisiasiGJ.mp3, live preview (mirrored)
     │                    5 menit session timer (durasi mengikuti paket, seed = 300s)
-    │                    Robot trigger: 🔊 presetTerkonfirmasi.mp3
+    │                    Robot trigger: 🔊 presetOk.mp3
     │                    Auto-capture: countdown 3-2-1 (🔊 tiga/dua/satu.mp3)
     │                    + modal hasil 3 detik
     │                    POST /api/robot/disable saat timer 0
@@ -943,7 +955,7 @@ Robot harus call ini saat siklus gerak:
 
 | Robot panggil | Body | Effect di backend |
 |---|---|---|
-| `POST /api/robot/moving` (alias `/move`) | `{"preset": N, "session_id": "..."}` | Update `current_preset`, reset `auto_capture_at`. Frontend deteksi → play `presetTerkonfirmasi.mp3` |
+| `POST /api/robot/moving` (alias `/move`) | `{"preset": N, "session_id": "..."}` | Update `current_preset`, reset `auto_capture_at`. Frontend deteksi → play `presetOk.mp3` |
 | `POST /api/robot/done` | `{"preset": N, "session_id": "..."}` | Schedule auto-capture 3 detik kemudian (window untuk countdown 3-2-1 di frontend) |
 | `POST /api/robot/webhook` | `{"preset": N, "event": "ended"}` | Reset robot state (`current_preset = 0`, `auto_capture_at = zero`) |
 
@@ -984,36 +996,44 @@ Narasi suara (voice-over Bahasa Indonesia) menemani **seluruh alur kiosk** — t
 
 | File | Trigger | Lokasi kode |
 |---|---|---|
+| `mulai.mp3` | Loop ajakan di Home saat sensor robot melihat orang lewat (`/presence`, throttle 5s) | `HomePage.tsx` |
 | `selamatDatang.mp3` | Tap di mana saja di Home (sekaligus meng-unlock autoplay browser) | `HomePage.tsx` |
-| `pilihJumlahCetak.mp3` | Buka modal jumlah cetak (paket Print) | `PrintQuantityModal.tsx` |
+| `jumlahCetak.mp3` | Buka modal jumlah cetak (paket Print) | `PrintQuantityModal.tsx` |
+| `voucherBerhasil.mp3` / `voucherGagal.mp3` | Hasil apply voucher di summary (`valid` true/false, termasuk request error) | `useVoucher.ts` |
 | `pembayaranDiproses.mp3` | Status pembayaran → `processing` | `PaymentStatus.tsx` |
 | `pembayaranBerhasil.mp3` | Status pembayaran → `success` | `PaymentStatus.tsx` |
 | `pembayaranGagal.mp3` | Status `failed`/`expired`, atau timer bayar habis | `PaymentStatus.tsx` / `PayPage.tsx` |
-| `intro.mp3` | Masuk step get-ready di instruction | `InstructionPage.tsx` |
-| `keselamatan.mp3` | Masuk step safety di instruction | `InstructionPage.tsx` |
-| `preset.mp3` | Masuk step gesture-controls di instruction | `InstructionPage.tsx` |
-| `inisiasi.mp3` | Masuk `/photo-session` page; juga re-prompt tiap 5s saat robot LOCKED & tidak ada tangan (maks 3×) | `PhotoSessionPage.tsx` |
-| `GestureTerdeteksi.mp3` | Robot masuk fase `UNLOCKING`/`CONFIRMING` (gesture mulai terbaca) | `PhotoSessionPage.tsx` |
+| `introDengar.mp3` → `waktuSesi.mp3` → `infoSingkat.mp3` | Step get-ready; `waktuSesi` menyorot ring durasi, `infoSingkat` menyorot 3 kartu info | `InstructionPage.tsx` (`STEP_CUES`) |
+| `keselamatanNoM.mp3` → `deteksiSatu.mp3` | Step safety; `deteksiSatu` menyorot baris "only one person's hand" | `InstructionPage.tsx` |
+| `infoPreset.mp3` → `pilGesture.mp3` → `pilAcam.mp3` | Step gesture-controls; menyorot kartu gesture (kanan) lalu panggung kamera (kiri) | `InstructionPage.tsx` |
+| `inisiasiGJ.mp3` | Masuk `/photo-session` page; juga re-prompt tiap 5s saat robot LOCKED & tidak ada tangan (maks 3×) | `PhotoSessionPage.tsx` |
+| `tahan3D.mp3` | Robot masuk fase `UNLOCKING`/`CONFIRMING` (gesture mulai terbaca) | `PhotoSessionPage.tsx` |
 | `unlock.mp3` | Robot masuk fase `UNLOCKED` (kunci terbuka, siap terima gesture preset) | `PhotoSessionPage.tsx` |
-| `presetTerkonfirmasi.mp3` | Robot move ke preset baru (`current_preset` berubah) | `CameraPreview.tsx` |
+| `habisFoto.mp3` | 30 dtk terakhir sesi foto (narasi prioritas) | `PhotoSessionPage.tsx` |
+| `presetOk.mp3` | Robot move ke preset baru (`current_preset` berubah) | `CameraPreview.tsx` |
 | `tiga.mp3` / `dua.mp3` / `satu.mp3` | Countdown detik 3 / 2 / 1 | `CameraPreview.tsx` |
-| `pilihFoto.mp3` | Editor siap (foto + frame termuat) | `PhotoEditorPage.tsx` |
-| `prosesFoto.mp3` | Layar get-photos muncul (fase loading) | `GetPhotosScreen.tsx` |
-| `scanQrAmbilFoto.mp3` | QR download tampil | `GetPhotosScreen.tsx` |
-| `terimaKasih.mp3` | Done screen tampil | `DoneScreen.tsx` |
+| `sentuhFrame` → `seretFoto` → `seretZoom` → `filter` → `pilihCetakFoto` | Step 1–5 tutorial editor foto (satu narasi per step, ikut tombol Next/dot) | `PhotoEditorOnboarding.tsx` |
+| `habisEdit.mp3` | 15 dtk terakhir di editor foto | `PhotoEditorPage.tsx` |
+| `fotoProses.mp3` | Layar get-photos muncul (fase loading) | `GetPhotosScreen.tsx` |
+| `scanQr.mp3` | QR download tampil | `GetPhotosScreen.tsx` |
+| `terimakasih.mp3` | Done screen tampil | `DoneScreen.tsx` |
+
+Cadangan yang sudah ada di folder tapi belum dipakai: `introBaca`, `inisiasiGesture`, `inisiasiJari`, `keselamatanSatu`, `keselamatanDuaM`, `tahan5D` — varian narasi untuk mode kontrol / durasi hold / jumlah orang yang berbeda.
 
 ### Helper ([`lib/audio.ts`](frontend/src/lib/audio.ts))
 
 - `playBackendAudio(filename, onEnded?)` — putar clip, cache Audio instance, silent saat autoplay block / file hilang. **Satu channel**: narasi baru menghentikan voice lama yang masih berbunyi (clip beda) supaya tidak menumpuk — cocok untuk cue robot real-time yang statenya cepat berganti. `onEnded` dipanggil saat clip selesai (dengan pengaman timeout kalau event `ended` tak fire).
 - `preloadBackendAudio()` — dipanggil sekali saat kiosk boot ([`providers.tsx`](frontend/src/app/providers.tsx)); download + buffer semua clip supaya play pertama tiap halaman tanpa jeda.
-- `playBackendAudioAfterCurrent(filename, onEnded?)` — putar SETELAH narasi yang sedang berbunyi selesai; mencegah dua narasi bertabrakan saat pindah halaman cepat (mis. "pembayaranBerhasil" → "intro").
+- `playBackendAudioAfterCurrent(filename, onEnded?)` — putar SETELAH narasi yang sedang berbunyi selesai; mencegah dua narasi bertabrakan saat pindah halaman cepat (mis. "pembayaranBerhasil" → "introDengar").
+- `stopBackendAudioFile(filename)` — hentikan SATU clip saja. Dipakai saat pemicu narasinya ditutup lebih cepat dari suaranya (tombol Skip di tutorial editor), tanpa ikut memotong narasi lain seperti peringatan waktu — beda dari `stopBackendAudio()` yang menyapu seluruh cache saat sesi berakhir.
 - `whenVoiceIdle(cb)` — jalankan `cb` saat narasi yang sedang berbunyi selesai (atau langsung kalau senyap). Karena `currentVoice` adalah state modul yang bertahan lintas navigasi SPA, dipakai untuk **gating interaksi**: mis. kartu paket baru bisa diklik setelah "selamatDatang" selesai.
 
 ### Gating interaksi berbasis suara
 
 Beberapa halaman menahan interaksi/tombol sampai narasinya selesai agar user mendengarkan dulu:
 - **Package** — kartu paket redup & non-clickable selama "selamatDatang" masih berbunyi (`whenVoiceIdle`).
-- **Instruction** — tombol "Next" di step get-ready & safety baru muncul setelah narasinya selesai (`playBackendAudio` `onEnded` → `buttonReady`).
+- **Instruction** — tombol "Next" di step get-ready & safety baru muncul setelah SELURUH rangkaian narasi step itu selesai (`playBackendAudio` `onEnded` berantai → `buttonReady`).
+- **Tutorial editor foto** — tombol "Next"/"Got it" tiap step baru muncul setelah narasi step itu habis; putaran pertama tanpa Skip. Skip di tengah narasi menghentikan suaranya (`stopBackendAudioFile`).
 
 ---
 

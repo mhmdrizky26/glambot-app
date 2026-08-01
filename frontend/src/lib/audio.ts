@@ -18,30 +18,48 @@ function getAudio(filename: string): HTMLAudioElement {
 
 // Semua narasi yang dipreload sekali di awal supaya play pertama tanpa jeda.
 export const BACKEND_AUDIO_FILES = [
-  'mulaiNew.mp3',
+  // Home & paket
+  'mulai.mp3',
   'selamatDatang.mp3',
-  'pilihJumlahCetak.mp3',
+  'jumlahCetak.mp3',
+  // Pembayaran (termasuk hasil pemakaian voucher)
+  'voucherBerhasil.mp3',
+  'voucherGagal.mp3',
   'pembayaranDiproses.mp3',
   'pembayaranBerhasil.mp3',
   'pembayaranGagal.mp3',
-  'intro.mp3',
-  'keselamatan.mp3',
-  'presetSlow.mp3',
-  'inisiasi.mp3',
-  'presetTerkonfirmasi.mp3',
-  'tahan.mp3',
+  // Instruksi step 1 → 3 (tiap step punya rangkaian narasi, lihat
+  // InstructionPage STEP_CUES)
+  'introDengar.mp3',
+  'waktuSesi.mp3',
+  'infoSingkat.mp3',
+  'keselamatanNoM.mp3',
+  'deteksiSatu.mp3',
+  'infoPreset.mp3',
+  'pilGesture.mp3',
+  'pilAcam.mp3',
+  // Sesi foto
+  'inisiasiGJ.mp3',
+  'tahan3D.mp3',
   'unlock.mp3',
+  'presetOk.mp3',
   'satu.mp3',
   'dua.mp3',
   'tiga.mp3',
-  'pilihFoto.mp3',
-  'prosesFoto.mp3',
-  'scanQrAmbilFoto.mp3',
-  'terimaKasih.mp3',
-  // Peringatan waktu menipis: waktuHabis = editor foto (15 dtk terakhir),
-  // waktuHabisFoto = sesi foto (20 dtk terakhir).
-  'waktuHabis.mp3',
-  'waktuHabisFoto.mp3',
+  // Tutorial editor foto (step 1 → 5)
+  'sentuhFrame.mp3',
+  'seretFoto.mp3',
+  'seretZoom.mp3',
+  'filter.mp3',
+  'pilihCetakFoto.mp3',
+  // Layar hasil
+  'fotoProses.mp3',
+  'scanQr.mp3',
+  'terimakasih.mp3',
+  // Peringatan waktu menipis: habisEdit = editor foto (15 dtk terakhir),
+  // habisFoto = sesi foto (20 dtk terakhir).
+  'habisEdit.mp3',
+  'habisFoto.mp3',
 ];
 
 /** Preload audio ke cache tanpa memutarnya — aman sebelum interaksi user. */
@@ -225,6 +243,29 @@ function playAudioElement(
   audio.play().catch(() => {
     /* autoplay blocked or load error — silent */
   });
+}
+
+/**
+ * Hentikan SATU clip saja (kalau memang sedang berbunyi) — dipakai saat pemicu
+ * narasinya ditutup lebih cepat dari suaranya, mis. tombol Skip di tutorial
+ * editor. Sengaja bukan `stopBackendAudio`: narasi lain yang tidak ada
+ * hubungannya (mis. peringatan waktu editor) tidak boleh ikut terpotong.
+ */
+export function stopBackendAudioFile(filename: string): void {
+  if (typeof window === 'undefined') return;
+  const audio = audioCache.get(filename);
+  if (!audio) return;
+
+  try {
+    audio.pause();
+    audio.currentTime = 0;
+  } catch {
+    /* ignore */
+  }
+  if (currentVoice === audio) currentVoice = null;
+  // Clip ini kebetulan yang sedang dilindungi → lepas latch-nya, kalau tidak
+  // semua narasi berikutnya ikut terblokir.
+  if (priorityVoice === audio) clearPriority();
 }
 
 /**

@@ -31,7 +31,7 @@ export default function PrintQuantityModal({
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setQuantity(1);
       // Modal dibuka lewat tap kartu paket (interaksi user) → autoplay aman.
-      playBackendAudio('pilihJumlahCetak.mp3');
+      playBackendAudio('jumlahCetak.mp3');
     }
   }, [isOpen]);
 

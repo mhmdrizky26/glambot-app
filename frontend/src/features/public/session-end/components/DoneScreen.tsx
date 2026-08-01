@@ -18,7 +18,7 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
   useEffect(() => {
     if (!thanksAudioFiredRef.current) {
       thanksAudioFiredRef.current = true;
-      playBackendAudio('terimaKasih.mp3');
+      playBackendAudio('terimakasih.mp3');
     }
   }, []);
 

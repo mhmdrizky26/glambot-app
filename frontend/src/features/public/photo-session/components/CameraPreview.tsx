@@ -101,7 +101,7 @@ export function CameraPreview({
     if (currentPreset > 0 && currentPreset !== prevPresetRef.current) {
       // Force: rangkaian jepret foto lebih penting dari narasi prioritas
       // (peringatan waktu) — lihat playBackendAudioForce di lib/audio.
-      playBackendAudioForce('presetTerkonfirmasi.mp3');
+      playBackendAudioForce('presetOk.mp3');
     }
     prevPresetRef.current = currentPreset;
   }, [currentPreset]);

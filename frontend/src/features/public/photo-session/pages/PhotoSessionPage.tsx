@@ -73,9 +73,9 @@ export function PhotoSessionPage() {
     if (!sessionId) router.replace('/package');
   }, [sessionId, router]);
 
-  // Play inisiasi.mp3 sekali saat halaman foto terbuka
+  // Play inisiasiGJ.mp3 sekali saat halaman foto terbuka
   useEffect(() => {
-    if (sessionId) playAnnounce('inisiasi.mp3');
+    if (sessionId) playAnnounce('inisiasiGJ.mp3');
   }, [sessionId]);
 
   const { data: session, isFetching: isSessionFetching } = useGetSession({
@@ -222,7 +222,7 @@ export function PhotoSessionPage() {
     // "susulan" begitu state berubah setelahnya.
     if (!endingRef.current && robotFsmState !== prev) {
       if (robotFsmState === 'UNLOCKING' || robotFsmState === 'CONFIRMING') {
-        playBackendAudio('tahan.mp3');
+        playBackendAudio('tahan3D.mp3');
       } else if (robotFsmState === 'UNLOCKED') {
         // Kunci terbuka — robot siap menerima gesture preset.
         playAnnounce('unlock.mp3');
@@ -231,7 +231,7 @@ export function PhotoSessionPage() {
         // menunjukkan telapak buka lagi. LOCKED awal (mount) ditangani effect
         // inisiasi terpisah, jadi tidak dobel di sini (prevFsmRef mulai dari
         // 'LOCKED').
-        playAnnounce('inisiasi.mp3');
+        playAnnounce('inisiasiGJ.mp3');
       }
     }
     prevFsmRef.current = robotFsmState;
@@ -265,7 +265,7 @@ export function PhotoSessionPage() {
       }
       if (count >= 3) return;
       count += 1;
-      playAnnounce('inisiasi.mp3');
+      playAnnounce('inisiasiGJ.mp3');
     }, 5000);
     return () => clearInterval(id);
   }, [robotFsmState]);
@@ -340,7 +340,7 @@ export function PhotoSessionPage() {
   //
   // Aturannya: narasi ini PRIORITAS terhadap cue robot BIASA (tahan), tapi
   // MENGALAH pada dua hal yang lebih penting:
-  //  • Jepret (presetTerkonfirmasi + countdown 3-2-1) = playBackendAudioForce.
+  //  • Jepret (presetOk + countdown 3-2-1) = playBackendAudioForce.
   //  • Instruksi (unlock/inisiasi) = playAnnounce → juga force sekarang, supaya
   //    instruksi tak pernah ke-skip ("unlock dulu, baru peringatan").
   // Kalau salah satunya menembus, onInterrupted membuka latch → peringatan diulang
@@ -367,7 +367,7 @@ export function PhotoSessionPage() {
     // instruksi menang & tak ada penggalan sebelum unlock.
     if (captureActive || isVoiceBusy()) return;
     lowTimeAudioFiredRef.current = true;
-    playBackendAudioPriority('waktuHabisFoto.mp3', {
+    playBackendAudioPriority('habisFoto.mp3', {
       onInterrupted: () => {
         lowTimeAudioFiredRef.current = false;
       },

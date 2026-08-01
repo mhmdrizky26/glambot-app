@@ -66,7 +66,7 @@ export default function PhotoEditorPage() {
     setTimeUrgent(urgent);
     if (urgent && !urgentAudioFiredRef.current) {
       urgentAudioFiredRef.current = true;
-      playBackendAudio('waktuHabis.mp3');
+      playBackendAudio('habisEdit.mp3');
     }
   };
 
@@ -194,16 +194,9 @@ export default function PhotoEditorPage() {
     };
   }, [sessionId, photosLoading, framesLoading, appConfig, photos, frames]);
 
-  // Panduan suara "pilih foto & frame" — main sekali saat editor benar-benar
-  // tampil (aset siap). Effect dideklarasikan sebelum early-return loading
-  // (patuh Rules of Hooks).
-  const introAudioFiredRef = useRef(false);
-  useEffect(() => {
-    if (introAudioFiredRef.current) return;
-    if (!sessionId || !assetsReady) return;
-    introAudioFiredRef.current = true;
-    playBackendAudio('pilihFoto.mp3');
-  }, [sessionId, assetsReady]);
+  // Narasi pembuka editor sekarang mengikuti tutorial (PhotoEditorOnboarding):
+  // tiap step tutorial punya suaranya sendiri, jadi tidak ada lagi satu narasi
+  // "pilih foto" yang diputar di sini.
 
   // Loading state — tahan sampai data DAN aset gambar siap supaya editor
   // muncul utuh (tidak pop-in). Juga handle case sessionId kosong, supaya

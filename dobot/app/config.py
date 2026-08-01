@@ -121,8 +121,11 @@ def load_config() -> Config:
         post_action_delay=_get_float("POST_ACTION_DELAY"),
         cooldown_after_capture=_get_float("COOLDOWN_AFTER_CAPTURE"),
 
-        unlock_announce_sec=_get_float_default("UNLOCK_ANNOUNCE_SEC", 3.5),
-        locked_announce_sec=_get_float_default("LOCKED_ANNOUNCE_SEC", 2.8),
+        # Default = panjang file narasi + margin (unlock.mp3 ±3.3s,
+        # inisiasiGJ.mp3 ±2.6s). Samakan dengan ANNOUNCE_HOLD_SEC di frontend
+        # (photo-session/lib/announceAudio.ts) kalau file audionya diganti.
+        unlock_announce_sec=_get_float_default("UNLOCK_ANNOUNCE_SEC", 3.8),
+        locked_announce_sec=_get_float_default("LOCKED_ANNOUNCE_SEC", 3.0),
 
         presence_motion_threshold=_get_int_default("PRESENCE_MOTION_THRESHOLD", 25),
         presence_area_pct=_get_float_default("PRESENCE_AREA_PCT", 0.8),

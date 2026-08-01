@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   ChevronRight,
@@ -15,12 +15,15 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GlassCard from '@/components/shared/GlassCard';
+import { playBackendAudio, stopBackendAudioFile } from '@/lib/audio';
+import { cn } from '@/lib/utils';
 
 interface PhotoEditorOnboardingProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
+// `audio` = narasi yang diputar saat step tampil (satu file per step).
 const STEPS = [
   {
     id: 1,
@@ -28,6 +31,7 @@ const STEPS = [
     description: 'Select your preferred frame template from the right panel.',
     icon: LayoutTemplate,
     panelName: 'Frame Panel',
+    audio: 'sentuhFrame.mp3',
   },
   {
     id: 2,
@@ -35,6 +39,7 @@ const STEPS = [
     description: 'Drag a photo from the left panel or tap to place it into a slot. To replace a photo, simply drop a new photo over it to overwrite.',
     icon: Hand,
     panelName: 'Photo Panel',
+    audio: 'seretFoto.mp3',
   },
   {
     id: 3,
@@ -42,6 +47,7 @@ const STEPS = [
     description: 'Tap any photo slot directly. Drag with 1 finger to move/pan, or pinch with 2 fingers to zoom.',
     icon: ZoomIn,
     panelName: 'Direct Canvas Touch',
+    audio: 'seretZoom.mp3',
   },
   {
     id: 4,
@@ -49,6 +55,7 @@ const STEPS = [
     description: 'Switch to the Filter tab on the right panel to choose color presets for your photo strip.',
     icon: Sparkles,
     panelName: 'Filter Tab',
+    audio: 'filter.mp3',
   },
   {
     id: 5,
@@ -56,6 +63,7 @@ const STEPS = [
     description: 'When all slots are filled, tap the Confirm Print button at the bottom right!',
     icon: Sparkles,
     panelName: 'Confirm Print',
+    audio: 'pilihCetakFoto.mp3',
   },
 ];
 
@@ -64,17 +72,67 @@ export default function PhotoEditorOnboarding({
   onClose,
 }: PhotoEditorOnboardingProps) {
   const [currentStep, setCurrentStep] = useState(0);
+  // Tombol Next baru muncul setelah narasi step ini selesai — user menyimak
+  // dulu, sama seperti gating di halaman instruksi.
+  const [audioDone, setAudioDone] = useState(false);
+  // Putaran pertama (yang muncul otomatis saat editor terbuka) wajib disimak:
+  // tidak ada tombol Skip dan dialog tidak bisa ditutup dari luar. Skip baru
+  // tersedia kalau user membuka ulang tutorial lewat tombol bantuan.
+  const [replay, setReplay] = useState(false);
+
+  // Tutorial dibuka ulang → mulai lagi dari step 1. Disetel saat render (pola
+  // "adjust state on prop change") supaya effect narasi di bawah langsung
+  // melihat step 0 — kalau lewat effect, narasi step terakhir sempat bunyi
+  // sekejap sebelum ke-reset.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (isOpen !== wasOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setCurrentStep(0);
+  }
+
+  // Narasi per step — diputar saat tutorial dibuka dan tiap kali step berganti
+  // (termasuk lompat lewat dot). Satu channel: step baru menghentikan narasi
+  // step sebelumnya, jadi user yang menekan Next cepat tidak dengar dua suara.
+  useEffect(() => {
+    if (!isOpen) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- tutup tombol Next tiap ganti step, lalu buka lagi saat narasinya habis.
+    setAudioDone(false);
+    const file = STEPS[currentStep]?.audio;
+    if (!file) {
+      setAudioDone(true);
+      return;
+    }
+    let cancelled = false;
+    playBackendAudio(file, () => {
+      if (!cancelled) setAudioDone(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, currentStep]);
 
   if (!isOpen) return null;
 
   const step = STEPS[currentStep];
   const totalSteps = STEPS.length;
 
+  // Sekali tutorial ditutup (Skip / "Got it"), bukaan berikutnya dianggap
+  // replay → Skip boleh muncul.
+  const closeTutorial = () => {
+    // Skip di tengah narasi → suaranya ikut berhenti, jangan menyusul di
+    // editor. Disapu seluruh clip tutorial (murah, dan tidak bergantung pada
+    // step mana yang terakhir diputar); narasi di luar tutorial — mis.
+    // peringatan waktu editor — sengaja tidak ikut dihentikan.
+    STEPS.forEach((s) => stopBackendAudioFile(s.audio));
+    setReplay(true);
+    onClose();
+  };
+
   const handleNext = () => {
     if (currentStep < totalSteps - 1) {
       setCurrentStep((prev) => prev + 1);
     } else {
-      onClose();
+      closeTutorial();
     }
   };
 
@@ -85,7 +143,10 @@ export default function PhotoEditorOnboarding({
   };
 
   return (
-    <Dialog.Root open={isOpen} onOpenChange={(open) => !open && onClose()}>
+    <Dialog.Root
+      open={isOpen}
+      onOpenChange={(open) => !open && closeTutorial()}
+    >
       <Dialog.Portal>
         {/* Backdrop Overlay */}
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/65 backdrop-blur-sm transition-opacity" />
@@ -94,6 +155,15 @@ export default function PhotoEditorOnboarding({
         <Dialog.Content
           asChild
           className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-50 w-full max-w-4xl p-0 outline-none"
+          // Putaran pertama: tap di luar / Escape tidak menutup tutorial —
+          // tanpa ini "tidak ada tombol Skip" gampang dilewati dengan menyentuh
+          // backdrop-nya saja.
+          onInteractOutside={(e) => {
+            if (!replay) e.preventDefault();
+          }}
+          onEscapeKeyDown={(e) => {
+            if (!replay) e.preventDefault();
+          }}
         >
           <GlassCard
             variant="default"
@@ -119,16 +189,19 @@ export default function PhotoEditorOnboarding({
                   </div>
                 </div>
 
-                {/* Skip Button (No icon) */}
-                <Dialog.Close asChild>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-10 px-5 text-sm font-bold hover:bg-white/20 border-white/40 text-white rounded-full transition-all"
-                  >
-                    <span>Skip</span>
-                  </Button>
-                </Dialog.Close>
+                {/* Skip Button (No icon) — hanya saat tutorial dibuka ulang;
+                    putaran pertama wajib dijalani sampai selesai. */}
+                {replay && (
+                  <Dialog.Close asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-10 px-5 text-sm font-bold hover:bg-white/20 border-white/40 text-white rounded-full transition-all"
+                    >
+                      <span>Skip</span>
+                    </Button>
+                  </Dialog.Close>
+                )}
               </header>
 
               {/* Main Visual Animation Section */}
@@ -357,7 +430,12 @@ export default function PhotoEditorOnboarding({
                   variant="default"
                   size="sm"
                   onClick={handleNext}
-                  className="h-10 px-6 text-sm font-bold gap-1.5 shadow-md rounded-full"
+                  className={cn(
+                    'h-10 px-6 text-sm font-bold gap-1.5 shadow-md rounded-full transition-opacity duration-300',
+                    // Ditahan (bukan cuma diredupkan) sampai narasi step ini
+                    // habis — ruangnya tetap dipesan supaya footer tidak lompat.
+                    !audioDone && 'opacity-0 pointer-events-none',
+                  )}
                 >
                   <span>{currentStep === totalSteps - 1 ? 'Got it! Start Editing' : 'Next'}</span>
                   <ChevronRight className="w-4 h-4" />
