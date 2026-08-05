@@ -13,7 +13,12 @@ import FrameSelectionPanel from '../components/FrameSelectionPanel';
 import ConfirmPrintButton from '../components/ConfirmPrintButton';
 import SlotAdjustToolbar from '../components/SlotAdjustToolbar';
 import PhotoEditorOnboarding from '../components/PhotoEditorOnboarding';
-import { zoomPhoto, rotatePhoto, resetPhoto } from '../lib/slotTransform';
+import {
+  zoomPhoto,
+  rotatePhoto,
+  resetPhoto,
+  collectSlotTransforms,
+} from '../lib/slotTransform';
 import { useDragToPlace, DragGhost } from '../hooks/useDragToPlace';
 
 import { usePhotos } from '../api/getPhotos';
@@ -263,7 +268,9 @@ export default function PhotoEditorPage() {
   // jadi resolusi kerja canvas dinaikkan supaya detail asli kamera terbawa ke
   // hasil akhir & cetak (bukan lagi dibatasi ~1392px seperti multiplier 3).
   const composeSaveAndPrint = async (
-    frameId: string,
+    // Frame utuh (bukan cuma id) karena `slots`-nya dipakai untuk mengurutkan
+    // slotTransforms — index-nya harus sejajar photoIds/slot_photo_ids.
+    frame: Frame,
     photoIds: string[],
     // silent = dipicu timer: error di-log, tidak alert, dan tetap navigate
     // supaya user tidak stuck di halaman.
@@ -294,12 +301,20 @@ export default function PhotoEditorPage() {
         multiplier: 4,
       });
 
+      // Diambil dari canvas yang sama dengan yang baru di-export, jadi angkanya
+      // dijamin menggambarkan strip yang benar-benar tersimpan.
+      const slotTransforms = collectSlotTransforms(
+        fabricCanvasRef.current,
+        frame.slots,
+      );
+
       saveComposition(
         {
           sessionId,
-          frameId,
+          frameId: frame.id,
           filter: selectedFilter,
           photoIds,
+          slotTransforms,
           composedImage: exported.blob,
         },
         {
@@ -330,16 +345,20 @@ export default function PhotoEditorPage() {
   const handleConfirmPrint = async () => {
     if (!isConfirmEnabled) return;
 
-    const photoIds = Object.values(slots)
-      .filter((slot) => slot.photoId !== null)
-      .map((slot) => slot.photoId as string);
+    // URUT SESUAI SLOT frame — sama seperti jalur timeout. Backend memakai
+    // index-nya sebagai pemetaan slot→foto (slot_photo_ids) DAN slot→transform,
+    // jadi urutannya tidak boleh diturunkan dari urutan lain.
+    const frame = selectedFrame!;
+    const photoIds = frame.slots
+      .map((s) => slots[s.id]?.photoId)
+      .filter((id): id is string => !!id);
 
     // Jumlah foto yang dibutuhkan mengikuti jumlah slot pada frame terpilih
     // (mis. 2, 4, 6, 8). Backend strip generator memakai slot frame secara
     // dinamis, jadi SEMUA slot harus terisi sebelum compose — kalau kurang,
     // GIF + framed strip jadi tidak konsisten. Block di sini supaya user dapat
     // pesan yang jelas, bukan error 400 dari server.
-    const requiredCount = selectedFrame!.slots.length;
+    const requiredCount = frame.slots.length;
     if (photoIds.length < requiredCount) {
       alert(
         `Please select ${requiredCount} photos first (currently ${photoIds.length}/${requiredCount}).`,
@@ -347,7 +366,7 @@ export default function PhotoEditorPage() {
       return;
     }
 
-    await composeSaveAndPrint(selectedFrame!.id, photoIds, false);
+    await composeSaveAndPrint(frame, photoIds, false);
   };
 
   // Tunggu sampai `check` bernilai true (polling ringan). Dipakai menunggu
@@ -438,7 +457,7 @@ export default function PhotoEditorPage() {
         return;
       }
 
-      await composeSaveAndPrint(frame.id, photoIds, true);
+      await composeSaveAndPrint(frame, photoIds, true);
     } catch (error) {
       console.error('[PhotoEditorPage] Gagal menuntaskan saat timeout:', error);
       navigateToSessionEnd();

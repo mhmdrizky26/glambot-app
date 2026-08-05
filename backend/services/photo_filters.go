@@ -15,7 +15,8 @@ import (
 var StripFilters = map[string]bool{
 	"original": true, "warm": true, "cool": true, "vintage": true,
 	"dramatic": true, "mono": true, "sepia": true, "vivid": true,
-	"soft": true, "film": true,
+	"soft": true, "film": true, "noir": true, "sunset": true,
+	"mint": true, "pastel": true, "blush": true, "moody": true,
 }
 
 // ApplyStripFilter mengembalikan salinan src dengan filter diterapkan. Filter
@@ -54,6 +55,29 @@ func ApplyStripFilter(src image.Image, filter string) *image.RGBA {
 		saturationF(dst, -0.1)
 		colorMatrixF(dst, matFilm)
 		noiseF(dst, 25)
+	case "noir":
+		grayscaleF(dst)
+		contrastF(dst, 0.35)
+		brightnessF(dst, -0.05)
+	case "sunset":
+		colorMatrixF(dst, matSunset)
+		saturationF(dst, 0.2)
+	case "mint":
+		colorMatrixF(dst, matMint)
+		brightnessF(dst, 0.04)
+	case "pastel":
+		saturationF(dst, -0.25)
+		brightnessF(dst, 0.1)
+		contrastF(dst, -0.18)
+	case "blush":
+		colorMatrixF(dst, matBlush)
+		brightnessF(dst, 0.05)
+		saturationF(dst, -0.05)
+	case "moody":
+		saturationF(dst, -0.3)
+		contrastF(dst, 0.22)
+		brightnessF(dst, -0.06)
+		colorMatrixF(dst, matMoody)
 	default:
 		// original / kosong / tak dikenal → tanpa perubahan.
 	}
@@ -90,6 +114,30 @@ var (
 		1.05, 0, 0, 0, 0.03,
 		0, 1.0, 0, 0, 0.02,
 		0, 0, 0.92, 0, 0,
+		0, 0, 0, 1, 0,
+	}
+	matSunset = [20]float64{
+		1.15, 0, 0, 0, 0.06,
+		0, 0.95, 0, 0, 0,
+		0, 0, 1.0, 0, 0.02,
+		0, 0, 0, 1, 0,
+	}
+	matMint = [20]float64{
+		0.92, 0, 0, 0, 0,
+		0, 1.06, 0, 0, 0.02,
+		0, 0, 1.02, 0, 0.02,
+		0, 0, 0, 1, 0,
+	}
+	matBlush = [20]float64{
+		1.08, 0, 0, 0, 0.05,
+		0, 0.96, 0, 0, 0.01,
+		0, 0, 1.0, 0, 0.03,
+		0, 0, 0, 1, 0,
+	}
+	matMoody = [20]float64{
+		0.95, 0, 0, 0, 0,
+		0, 0.98, 0, 0, 0,
+		0, 0, 1.06, 0, 0.02,
 		0, 0, 0, 1, 0,
 	}
 	// Fabric Sepia = ColorMatrix dengan koefisien standar sepia.

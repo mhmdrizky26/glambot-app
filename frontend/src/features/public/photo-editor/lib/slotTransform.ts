@@ -1,4 +1,5 @@
 import { fabric } from 'fabric';
+import type { FrameSlot } from '../api/getFrames';
 
 /**
  * Transform helpers untuk foto di dalam slot (fitur adjust: zoom/rotate/move).
@@ -127,6 +128,72 @@ export const rotatePhoto = (obj: fabric.Object, dir: 1 | -1): void => {
   if ((obj.scaleX ?? 0) < need) obj.scale(need);
 
   clampPhotoToSlot(obj);
+};
+
+/**
+ * Transform satu slot, dinyatakan RELATIF terhadap cover-fit slot — bukan
+ * dalam pixel sumber. Ini yang dikirim ke backend supaya generator GIF live
+ * bisa membingkai burst frame sama seperti hasil editan user.
+ *
+ * Kenapa relatif: burst frame itu liveview mentah (resolusi & aspect-nya beda
+ * dari foto DSLR full-res yang diedit user). Kalau transform disimpan dalam
+ * pixel sumber, backend harus menebak-nebak konversinya. Dengan basis
+ * cover-fit, backend cukup cover-fit burst-nya dulu lalu terapkan angka-angka
+ * di bawah — hasilnya nyaris identik walau aspect sumbernya beda tipis.
+ */
+export interface SlotTransform {
+  /** Skala relatif terhadap cover: 1 = persis cover, 2 = zoom 2×. */
+  scale: number;
+  /** Rotasi dalam derajat, searah jarum jam (sama dengan fabric `angle`). */
+  angle: number;
+  /** Geser titik tengah foto dari titik tengah slot, dalam satuan lebar slot. */
+  offsetX: number;
+  /** Geser titik tengah foto dari titik tengah slot, dalam satuan tinggi slot. */
+  offsetY: number;
+}
+
+/** Transform identitas = foto pas cover di tengah slot, tanpa rotasi. */
+const IDENTITY_TRANSFORM: SlotTransform = {
+  scale: 1,
+  angle: 0,
+  offsetX: 0,
+  offsetY: 0,
+};
+
+/** Bulatkan ke 4 desimal — cukup presisi, tapi JSON-nya tidak penuh noise float. */
+const round4 = (n: number): number => Math.round(n * 10000) / 10000;
+
+/**
+ * Kumpulkan transform tiap slot dari object foto di canvas, URUT sesuai
+ * `slots` frame. Slot yang fotonya tidak ketemu diisi transform identitas
+ * supaya panjang array SELALU sama dengan jumlah slot — backend memakai
+ * index array ini sebagai pemetaan ke slot, sama seperti slot_photo_ids.
+ */
+export const collectSlotTransforms = (
+  canvas: fabric.Canvas,
+  slots: FrameSlot[],
+): SlotTransform[] => {
+  const photos = canvas.getObjects().filter((o) => o.data?.isPhoto);
+
+  return slots.map((slot) => {
+    const obj = photos.find((o) => o.data?.slotId === slot.id);
+    if (!obj) return IDENTITY_TRANSFORM;
+
+    const base = getData(obj).baseScale ?? obj.scaleX ?? 1;
+    if (!base || slot.width <= 0 || slot.height <= 0) return IDENTITY_TRANSFORM;
+
+    // originX/originY foto = 'center' (lihat fitPhotoToSlot), jadi left/top
+    // memang titik tengah foto — tidak perlu koreksi setengah dimensi.
+    const centerX = slot.x + slot.width / 2;
+    const centerY = slot.y + slot.height / 2;
+
+    return {
+      scale: round4((obj.scaleX ?? base) / base),
+      angle: round4(obj.angle ?? 0),
+      offsetX: round4(((obj.left ?? centerX) - centerX) / slot.width),
+      offsetY: round4(((obj.top ?? centerY) - centerY) / slot.height),
+    };
+  });
 };
 
 /** Kembalikan foto ke posisi/skala/rotasi cover awal. */

@@ -1,12 +1,20 @@
 import { useMutation } from '@tanstack/react-query';
 import { apiClient } from '@/lib/api-client';
 import type { FilterType } from '../pages/PhotoEditorPage';
+import type { SlotTransform } from '../lib/slotTransform';
 
 export interface SaveCompositionInput {
   sessionId: string;
   frameId: string;
   filter: FilterType;
   photoIds: string[];
+  /**
+   * Zoom/rotate/geser per slot hasil editan user, urut slot & sepanjang
+   * photoIds. Dipakai backend agar burst di GIF live dibingkai sama dengan
+   * hasil akhir (tanpa ini, burst pakai cover-fit polos → framing-nya loncat
+   * saat animasi settle).
+   */
+  slotTransforms: SlotTransform[];
   composedImage: Blob;
 }
 
@@ -35,6 +43,7 @@ export const saveComposition = async (
   formData.append('frameId', input.frameId);
   formData.append('filter', input.filter);
   formData.append('photoIds', JSON.stringify(input.photoIds));
+  formData.append('slotTransforms', JSON.stringify(input.slotTransforms));
   formData.append('image', input.composedImage, 'composition.jpg');
 
   // Note: don't set Content-Type manually — axios/browser will set it
