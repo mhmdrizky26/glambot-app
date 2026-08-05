@@ -13,18 +13,30 @@ const tabs: { id: TabType; label: string }[] = [
   { id: 'filter', label: 'Filter' },
 ];
 
-// Static filter list — keep order in sync with `lib/filters.ts` getFiltersByType
-const FILTER_OPTIONS: { id: FilterType; name: string }[] = [
-  { id: 'original', name: 'Original' },
-  { id: 'warm', name: 'Warm' },
-  { id: 'cool', name: 'Cool' },
-  { id: 'vintage', name: 'Vintage' },
-  { id: 'dramatic', name: 'Dramatic' },
-  { id: 'mono', name: 'Mono' },
-  { id: 'sepia', name: 'Sepia' },
-  { id: 'vivid', name: 'Vivid' },
-  { id: 'soft', name: 'Soft' },
-  { id: 'film', name: 'Film' },
+// Static filter list — keep order in sync with `lib/filters.ts` getFiltersByType.
+// `swatch` = dua warna gradasi yang mewakili tone filter, dipakai kotak info
+// warna di sisi kanan tiap baris (bukan hasil render asli, hanya petunjuk cepat).
+const FILTER_OPTIONS: {
+  id: FilterType;
+  name: string;
+  swatch: [string, string];
+}[] = [
+  { id: 'original', name: 'Original', swatch: ['#F9F7F7', '#B0B7C3'] },
+  { id: 'warm', name: 'Warm', swatch: ['#FFD9A0', '#F0A868'] },
+  { id: 'cool', name: 'Cool', swatch: ['#A9D6F5', '#5B8FD1'] },
+  { id: 'vintage', name: 'Vintage', swatch: ['#D9C4A0', '#A98B63'] },
+  { id: 'dramatic', name: 'Dramatic', swatch: ['#6E7B8B', '#1F2933'] },
+  { id: 'mono', name: 'Mono', swatch: ['#FFFFFF', '#2B2B2B'] },
+  { id: 'sepia', name: 'Sepia', swatch: ['#E4C9A0', '#8A6A44'] },
+  { id: 'vivid', name: 'Vivid', swatch: ['#FF8A5B', '#4FC3F7'] },
+  { id: 'soft', name: 'Soft', swatch: ['#F3E9E4', '#CBBFC0'] },
+  { id: 'film', name: 'Film', swatch: ['#DCCFC0', '#8E8578'] },
+  { id: 'noir', name: 'Noir', swatch: ['#EDEDED', '#0B0B0B'] },
+  { id: 'sunset', name: 'Sunset', swatch: ['#FFB07C', '#E0587B'] },
+  { id: 'mint', name: 'Mint', swatch: ['#C8F4E4', '#6FC9B0'] },
+  { id: 'pastel', name: 'Pastel', swatch: ['#FFE3EC', '#CDE7F0'] },
+  { id: 'blush', name: 'Blush', swatch: ['#FFDCE0', '#F2A5B0'] },
+  { id: 'moody', name: 'Moody', swatch: ['#7A8B99', '#22303C'] },
 ];
 
 interface FrameSelectionPanelProps {
@@ -199,9 +211,19 @@ export default function FrameSelectionPanel({
                   aria-pressed={isSelected}
                 >
                   <span className="text-sm font-medium">{filter.name}</span>
-                  {isSelected && (
-                    <span className="ml-auto w-2 h-2 rounded-full bg-[#3F72AF] shrink-0" />
-                  )}
+                  {/* Kotak info warna — gradasi tone filter, di sisi kanan baris. */}
+                  <span
+                    className={`ml-auto w-9 h-9 rounded-lg shrink-0 border transition-all duration-150
+                      ${
+                        isSelected
+                          ? 'border-[#3F72AF] ring-2 ring-[#3F72AF]/60'
+                          : 'border-[#F9F7F7]/20'
+                      }`}
+                    style={{
+                      backgroundImage: `linear-gradient(135deg, ${filter.swatch[0]} 0%, ${filter.swatch[1]} 100%)`,
+                    }}
+                    aria-hidden="true"
+                  />
                 </button>
               );
             })}

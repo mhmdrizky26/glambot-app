@@ -12,6 +12,7 @@ import { useLiveGifAvailability } from '@/features/public/photo-download/api/get
 import { GIFPreview } from '@/features/public/photo-download/components/GIFPreview';
 import { useFramedPhotos } from '@/features/public/photo-editor/api/getPhotos';
 import { useAppConfig } from '@/shared/api/config';
+import { useGetSession } from '@/shared/api/session';
 import { playBackendAudio, playBackendAudioAfterCurrent } from '@/lib/audio';
 import { toAbsoluteUrl } from '@/lib/api-client';
 
@@ -20,6 +21,8 @@ import { toAbsoluteUrl } from '@/lib/api-client';
 const STRIP_POLL_MS = 1200; // interval cek framed strip / ketersediaan GIF
 const STRIP_WAIT_MS = 15000; // berhenti menunggu sumber, lanjut apa adanya
 const STRIP_PRELOAD_CAP_MS = 20000; // batas menunggu gambar/GIF selesai load
+const STRIP_PRELOAD_RETRIES = 4; // percobaan preload sebelum menyerah
+const STRIP_PRELOAD_RETRY_MS = 1500; // jeda antar percobaan preload
 const STRIP_HARD_CAP_MS = 32000; // jaring pengaman paling luar
 
 interface GetPhotosScreenProps {
@@ -57,7 +60,6 @@ export function GetPhotosScreen({
     // Sengaja setState di effect: `window` tak tersedia saat SSR, jadi URL baru
     // bisa dihitung setelah mount. Melakukannya di initializer akan memicu
     // hydration mismatch (server '' vs client URL asli).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setDownloadUrl(`${base}/download-photos/${sessionId}`);
   }, [sessionId]);
 
@@ -67,9 +69,15 @@ export function GetPhotosScreen({
   const driveActive = drive?.enabled === true;
   const driveReady = drive?.ready === true;
 
+  // Sesi Digital tidak lewat photo editor → tidak pernah punya strip framed,
+  // jadi Live Strip GIF mustahil ada untuk mereka. Preview-nya diganti GIF
+  // slideshow ("Live Photos") yang sudah ada — foto sesi diputar bergantian.
+  const { data: session } = useGetSession({ sessionId });
+  const isDigital = !!session && session.packageCode !== 'vip';
+
   // Strip preview: pakai hasil sesi yang sebenarnya, bukan gambar statis.
   // Prioritas: Live Strip GIF (animasi, paling menarik) → strip framed final →
-  // fallback ke ilustrasi statis kalau keduanya belum ada.
+  // GIF slideshow sebagai "Live Photos" (sesi Digital, atau kalau strip gagal).
   //
   // PENTING: layar ini dibuka TEPAT setelah compose, jadi saat mount backend
   // biasanya BELUM selesai menulis framed strip / menyiapkan live GIF. Kalau
@@ -97,10 +105,11 @@ export function GetPhotosScreen({
   const framedStrip = framedPhotos?.[0];
   const isLiveStripAvailable = liveGifAvailability?.available ?? false;
 
-  // Sumber preview sudah pasti — live GIF siap, atau framed strip sudah ada,
-  // atau kita sudah menunggu terlalu lama dan lanjut dengan apa adanya.
+  // Sumber preview sudah pasti — live GIF siap, framed strip sudah ada, sesi
+  // Digital (sumbernya pasti GIF slideshow, tak perlu ditunggu), atau kita
+  // sudah menunggu terlalu lama dan lanjut dengan apa adanya.
   const stripSourceResolved =
-    isLiveStripAvailable || !!framedStrip || stripWaitExpired;
+    isLiveStripAvailable || !!framedStrip || isDigital || stripWaitExpired;
 
   // Batas aman: kalau link Drive belum siap setelah 45 detik (mis. upload gagal
   // / sangat lambat), jangan biarkan loading menggantung — lanjut ke QR dengan
@@ -133,43 +142,62 @@ export function GetPhotosScreen({
   useEffect(() => {
     if (stripPreloadRef.current) return;
     // Tunggu status ketersediaan diketahui dulu agar sumber yang dipilih benar
-    // (live strip vs framed vs statis). undefined = query belum selesai.
+    // (live strip vs framed vs live photos). undefined = query belum selesai.
     if (liveGifAvailability === undefined || framedPhotos === undefined) return;
     // Masih mungkin berubah (backend belum selesai menulis strip / GIF) →
     // biarkan polling jalan dulu, jangan putuskan sumbernya sekarang.
     if (!stripSourceResolved) return;
     stripPreloadRef.current = true;
 
-    let src: string | null = null;
+    let src: string;
     if (isLiveStripAvailable) {
       src = toAbsoluteUrl(`/api/photo/session/${sessionId}/gif-live?inline=1`);
     } else if (framedStrip?.url) {
       src = framedStrip.url;
-    }
-    // Fallback statis (tidak ada strip nyata) → tak perlu ditunggu.
-    if (!src) {
-      // Sinkron di dalam effect preload ini disengaja; effect di-guard sekali
-      // jalan (stripPreloadRef) jadi tidak memicu cascading render.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setStripReady(true);
-      return;
+    } else {
+      // Tidak ada strip (sesi Digital) → "Live Photos" = GIF slideshow. Sesi
+      // Digital tidak lewat compose, jadi GIF-nya belum pernah di-pre-generate;
+      // request preload inilah yang memicu generasi di backend.
+      src = toAbsoluteUrl(`/api/photo/session/${sessionId}/gif?inline=1`);
     }
 
     let done = false;
+    let retryTimer: ReturnType<typeof setTimeout> | undefined;
+    let attempt = 0;
     const finish = () => {
       if (!done) {
         done = true;
         setStripReady(true);
       }
     };
-    const img = new Image();
-    img.onload = finish;
-    img.onerror = finish; // jangan hang kalau GIF gagal — biar GIFPreview handle
-    img.src = src;
+
+    // Error saat preload biasanya BUKAN gagal permanen: request pertama yang
+    // memicu generate bisa balas 404/500 kalau backend belum selesai menulis
+    // file. Coba ulang beberapa kali dulu — kalau langsung menyerah, layar QR
+    // muncul dengan kartu preview "not available yet".
+    const load = () => {
+      const img = new Image();
+      img.onload = finish;
+      img.onerror = () => {
+        if (done) return;
+        attempt++;
+        if (attempt >= STRIP_PRELOAD_RETRIES) {
+          finish(); // menyerah — biar GIFPreview yang handle tampilan errornya
+          return;
+        }
+        retryTimer = setTimeout(load, STRIP_PRELOAD_RETRY_MS);
+      };
+      img.src = src;
+    };
+    load();
+
     // Hard-cap: GIF live bisa perlu beberapa detik saat generate; setelah
     // batas ini tetap lanjut supaya loading tidak menggantung.
     const t = setTimeout(finish, STRIP_PRELOAD_CAP_MS);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      clearTimeout(retryTimer);
+    };
   }, [
     stripSourceResolved,
     liveGifAvailability,
@@ -179,7 +207,18 @@ export function GetPhotosScreen({
     sessionId,
   ]);
 
-  const isLoading = !minSplashDone || waitingForDrive || !stripReady;
+  // Nilai QR: link Drive kalau aktif & siap; kalau timeout tanpa siap atau Drive
+  // tidak aktif, pakai URL halaman download lokal sebagai cadangan.
+  const useDrive = driveActive && (driveReady || !driveTimedOut);
+  const qrValue = useDrive ? (drive?.url ?? '') : downloadUrl;
+  const isPreparing = useDrive && !driveReady;
+
+  // Loading baru selesai kalau DUA-DUANYA siap: QR sudah punya nilai (bukan
+  // placeholder kosong) DAN preview GIF/strip sudah selesai di-preload. Tanpa
+  // syarat `qrValue`, layar hasil sempat muncul dengan kotak QR berdenyut
+  // karena URL download lokal baru dihitung setelah mount.
+  const isLoading =
+    !minSplashDone || waitingForDrive || !qrValue || !stripReady;
 
   // Suara "scan QR untuk ambil foto" — main sekali saat loading selesai & QR
   // tampil (deklarasi sebelum early-return loading, patuh Rules of Hooks).
@@ -191,12 +230,6 @@ export function GetPhotosScreen({
       playBackendAudioAfterCurrent('scanQr.mp3');
     }
   }, [isLoading]);
-
-  // Nilai QR: link Drive kalau aktif & siap; kalau timeout tanpa siap atau Drive
-  // tidak aktif, pakai URL halaman download lokal sebagai cadangan.
-  const useDrive = driveActive && (driveReady || !driveTimedOut);
-  const qrValue = useDrive ? (drive?.url ?? '') : downloadUrl;
-  const isPreparing = useDrive && !driveReady;
 
   // Loading state
   if (isLoading) {
@@ -243,7 +276,9 @@ export function GetPhotosScreen({
             strokeWidth={1.5}
             fill="currentColor"
           />
-          {/* Photo strip — hasil sesi nyata (live strip / framed), bukan statis */}
+          {/* Photo strip — hasil sesi nyata (live strip / framed), bukan statis.
+              Sesi Digital tidak punya strip → tampilkan GIF slideshow foto
+              sesi sebagai "Live Photos". */}
           <div className="w-90 -rotate-3 drop-shadow-xl">
             {isLiveStripAvailable ? (
               <GIFPreview
@@ -259,8 +294,11 @@ export function GetPhotosScreen({
                 className="w-full rounded-xl"
               />
             ) : (
-              /* eslint-disable-next-line @next/next/no-img-element */
-              <img src="/Frame 158.svg" alt="Photo strip" className="w-full" />
+              <GIFPreview
+                endpoint={`/api/photo/session/${sessionId}/gif`}
+                alt="Your live photos"
+                aspectClass="aspect-[464/696]"
+              />
             )}
           </div>
         </div>

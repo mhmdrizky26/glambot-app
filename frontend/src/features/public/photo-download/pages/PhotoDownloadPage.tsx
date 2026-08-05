@@ -176,12 +176,15 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
             </div>
             <div className="flex-1 flex flex-col gap-3 justify-between">
               <div className="flex flex-col gap-1 text-center sm:text-left">
+                {/* Sesi Digital tidak punya strip (jadi tidak ada Live Strip);
+                    GIF yang sama ini yang jadi "Live Photos" mereka. */}
                 <p className="text-white font-semibold text-sm sm:text-base">
-                  Photo Slideshow
+                  {framed.length > 0 ? 'Photo Slideshow' : 'Live Photos'}
                 </p>
                 <p className="text-white/60 text-xs sm:text-sm">
-                  Selected photos looped one by one — perfect for your story /
-                  WhatsApp status.
+                  {framed.length > 0
+                    ? 'Selected photos looped one by one — perfect for your story / WhatsApp status.'
+                    : 'All your photos looped one by one — perfect for your story / WhatsApp status.'}
                 </p>
               </div>
               <Button
@@ -198,7 +201,9 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
                     ? 'Saved ✓'
                     : gifState === 'error'
                       ? 'Failed, try again'
-                      : 'Download GIF'}
+                      : framed.length > 0
+                        ? 'Download GIF'
+                        : 'Download Live Photos'}
               </Button>
             </div>
           </GlassCard>

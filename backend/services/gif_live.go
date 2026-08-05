@@ -11,6 +11,7 @@ import (
 	"image/gif"
 	"image/png"
 	"log"
+	"math"
 	"os"
 	"path/filepath"
 	"photobooth/config"
@@ -18,6 +19,7 @@ import (
 	"strings"
 
 	xdraw "golang.org/x/image/draw"
+	"golang.org/x/image/math/f64"
 )
 
 // GIF #2 ("animated strip"): framed strip sebagai layer dasar + burst frames
@@ -48,6 +50,59 @@ type LiveStripSlot struct {
 	Shape string `json:"shape"`
 }
 
+// LiveStripSlotTransform zoom/rotate/geser satu slot hasil editan user di
+// photo editor, dinyatakan RELATIF terhadap cover-fit slot (bukan pixel
+// sumber). Lihat collectSlotTransforms di frontend untuk sisi penghasilnya.
+//
+// Kenapa relatif: burst frame adalah liveview mentah yang resolusi & aspect-nya
+// beda dari foto DSLR yang diedit user. Dengan basis cover-fit, generator cukup
+// cover-fit burst dulu lalu terapkan angka di bawah — framing-nya cocok tanpa
+// perlu tahu dimensi asli foto yang diedit.
+type LiveStripSlotTransform struct {
+	Scale   float64 `json:"scale"`   // 1 = persis cover, 2 = zoom 2×
+	Angle   float64 `json:"angle"`   // derajat, searah jarum jam
+	OffsetX float64 `json:"offsetX"` // geser pusat, dalam satuan lebar slot
+	OffsetY float64 `json:"offsetY"` // geser pusat, dalam satuan tinggi slot
+}
+
+// identityTransform = foto pas cover di tengah slot, tanpa rotasi. Dipakai
+// untuk sesi lama yang belum menyimpan slot_transforms.
+var identityTransform = LiveStripSlotTransform{Scale: 1}
+
+// normalized mengembalikan salinan yang aman dipakai: nilai non-finite atau
+// skala <= 0 (JSON rusak / sesi lama) jatuh balik ke identitas supaya matriks
+// affine-nya tidak pernah singular.
+func (t LiveStripSlotTransform) normalized() LiveStripSlotTransform {
+	if math.IsNaN(t.Scale) || math.IsInf(t.Scale, 0) || t.Scale <= 0 {
+		return identityTransform
+	}
+	if math.IsNaN(t.Angle) || math.IsInf(t.Angle, 0) {
+		t.Angle = 0
+	}
+	if math.IsNaN(t.OffsetX) || math.IsInf(t.OffsetX, 0) {
+		t.OffsetX = 0
+	}
+	if math.IsNaN(t.OffsetY) || math.IsInf(t.OffsetY, 0) {
+		t.OffsetY = 0
+	}
+	return t
+}
+
+// ParseSlotTransformsJSON decode slot_transforms dari kolom sessions. Kolom
+// kosong / JSON rusak bukan error fatal — caller lanjut tanpa transform
+// (cover-fit polos, perilaku lama).
+func ParseSlotTransformsJSON(raw string) []LiveStripSlotTransform {
+	if strings.TrimSpace(raw) == "" {
+		return nil
+	}
+	var out []LiveStripSlotTransform
+	if err := json.Unmarshal([]byte(raw), &out); err != nil {
+		log.Printf("⚠️  slot_transforms invalid, pakai cover-fit: %v", err)
+		return nil
+	}
+	return out
+}
+
 // LiveStripOptions parameter generator GIF #2.
 type LiveStripOptions struct {
 	SessionID       string
@@ -59,6 +114,10 @@ type LiveStripOptions struct {
 	CanvasHeight int // dari frames.canvas_height (mis. 696)
 	Slots        []LiveStripSlot
 	Photos       []LiveStripPhoto // urut sesuai position; len harus match Slots
+	// Transforms hasil editan user per slot, urut slot. Boleh kosong (sesi lama
+	// / user tidak mengubah apa-apa) → tiap slot pakai cover-fit polos. Kalau
+	// panjangnya tidak match Slots, entri yang kurang juga jatuh ke cover-fit.
+	Transforms []LiveStripSlotTransform
 	// Filter strip yang dipilih user (mis. "warm", "mono"). Diterapkan ke tiap
 	// burst frame supaya animasi konsisten dengan hasil akhir. "" / "original"
 	// = tanpa filter.
@@ -77,13 +136,13 @@ func ParseSlotsJSON(raw []byte) ([]LiveStripSlot, error) {
 	return slots, nil
 }
 
-// LiveStripOutputPath path file GIF #2. Nama file di-versioned (v13) supaya
+// LiveStripOutputPath path file GIF #2. Nama file di-versioned (v14) supaya
 // cache dari logic compositing lama otomatis di-skip — naikkan suffix-nya tiap
 // kali cara compositing berubah.
 func LiveStripOutputPath(sessionID string) string {
 	return filepath.Join(
 		config.App.StoragePath,
-		"sessions", sessionID, "animation-live-v13.gif",
+		"sessions", sessionID, "animation-live-v14.gif",
 	)
 }
 
@@ -222,7 +281,13 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 			if i < len(slotShapes) {
 				shape = slotShapes[i]
 			}
-			drawBurstMasked(canvas, slot, shape, frames[idx], frameOverlay)
+			// Zoom/rotate/geser yang user set di editor untuk slot ini; slot di
+			// luar jangkauan Transforms pakai cover-fit polos.
+			tf := identityTransform
+			if i < len(opts.Transforms) {
+				tf = opts.Transforms[i].normalized()
+			}
+			drawBurstMasked(canvas, slot, shape, frames[idx], frameOverlay, tf)
 		}
 
 		// Pasang frame design di atas burst supaya dekorasi frame (border,
@@ -268,13 +333,13 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 // drawBurstMasked menggambar burst hanya di pixel tempat frameOverlay
 // transparan (lubang foto), jadi burst selalu di BELAKANG dekorasi frame
 // apa pun bentuk lubangnya.
-func drawBurstMasked(dst *image.RGBA, rect image.Rectangle, shape string, src image.Image, overlay *image.RGBA) {
+func drawBurstMasked(dst *image.RGBA, rect image.Rectangle, shape string, src image.Image, overlay *image.RGBA, tf LiveStripSlotTransform) {
 	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return
 	}
 	// Render burst ke buffer sementara seukuran rect.
 	tmp := image.NewRGBA(rect)
-	drawCover(tmp, rect, src)
+	drawCoverTransformed(tmp, rect, src, tf)
 
 	// Slot oval/lingkaran → burst dibatasi ke dalam elips (pakai persamaan
 	// elips ternormalisasi), supaya tidak nyembul ke sudut rect.
@@ -296,16 +361,38 @@ func drawBurstMasked(dst *image.RGBA, rect image.Rectangle, shape string, src im
 				}
 			}
 			// Overlay transparan di sini = lubang foto → boleh gambar burst.
-			if overlay.RGBAAt(x, y).A < 128 {
-				dst.SetRGBA(x, y, tmp.RGBAAt(x, y))
+			if overlay.RGBAAt(x, y).A >= 128 {
+				continue
 			}
+			// Burst yang dirotasi/di-geser bisa menyisakan pixel kosong atau
+			// setengah-transparan di pinggir. Hanya pixel yang benar-benar solid
+			// yang boleh menimpa; sisanya biarkan foto final dari framed strip
+			// yang terlihat — jauh lebih rapi daripada fringe gelap 1px.
+			px := tmp.RGBAAt(x, y)
+			if px.A < 250 {
+				continue
+			}
+			dst.SetRGBA(x, y, px)
 		}
 	}
 }
 
-// drawCover scale src image ke dst di rect tertentu pakai "cover" semantics
-// (penuhi rect, crop bagian yang melebar). Mirip object-fit: cover di CSS.
-func drawCover(dst *image.RGBA, rect image.Rectangle, src image.Image) {
+// drawCoverTransformed gambar src ke rect dengan "cover" semantics (penuhi
+// rect, crop yang melebar — mirip object-fit: cover di CSS), lalu terapkan
+// zoom/rotate/geser hasil editan user DI ATAS cover itu.
+//
+// Basis cover ini yang bikin transform dari editor tetap valid walau burst
+// frame (liveview) resolusi & aspect-nya beda dari foto DSLR yang diedit:
+// keduanya sama-sama diukur dari titik "pas menutupi slot".
+//
+// tf identitas (Scale 1, sisanya 0) menghasilkan cover-fit polos — perilaku
+// lama sebelum fitur ini, dipakai sesi yang belum punya slot_transforms.
+func drawCoverTransformed(
+	dst *image.RGBA,
+	rect image.Rectangle,
+	src image.Image,
+	tf LiveStripSlotTransform,
+) {
 	if rect.Dx() <= 0 || rect.Dy() <= 0 {
 		return
 	}
@@ -314,24 +401,49 @@ func drawCover(dst *image.RGBA, rect image.Rectangle, src image.Image) {
 		return
 	}
 
-	// Skala biar src menutupi rect.
-	rectAspect := float64(rect.Dx()) / float64(rect.Dy())
-	srcAspect := float64(sb.Dx()) / float64(sb.Dy())
+	rectW := float64(rect.Dx())
+	rectH := float64(rect.Dy())
+	srcW := float64(sb.Dx())
+	srcH := float64(sb.Dy())
 
-	var srcCrop image.Rectangle
-	if srcAspect > rectAspect {
-		// src lebih lebar → crop horizontal
-		newW := int(float64(sb.Dy()) * rectAspect)
-		offX := sb.Min.X + (sb.Dx()-newW)/2
-		srcCrop = image.Rect(offX, sb.Min.Y, offX+newW, sb.Max.Y)
-	} else {
-		// src lebih tinggi → crop vertical
-		newH := int(float64(sb.Dx()) / rectAspect)
-		offY := sb.Min.Y + (sb.Dy()-newH)/2
-		srcCrop = image.Rect(sb.Min.X, offY, sb.Max.X, offY+newH)
+	// Skala cover: src harus menutupi rect di kedua sumbu.
+	cover := math.Max(rectW/srcW, rectH/srcH)
+
+	// Rotasi butuh src lebih besar supaya sudut rect tidak bocor. Rumusnya sama
+	// dengan minCoverScale di frontend (slotTransform.ts): untuk menutupi rect
+	// w×h pada sudut θ, src harus menutupi bounding box rect yang diputar balik.
+	rad := tf.Angle * math.Pi / 180
+	cos, sin := math.Abs(math.Cos(rad)), math.Abs(math.Sin(rad))
+	needCover := math.Max(
+		(rectW*cos+rectH*sin)/srcW,
+		(rectW*sin+rectH*cos)/srcH,
+	)
+	scale := math.Max(cover*tf.Scale, needCover)
+
+	// Titik tengah tujuan = tengah rect + geseran user (offset dalam satuan
+	// dimensi slot, jadi dikali lebar/tinggi rect di ruang output).
+	cx := float64(rect.Min.X) + rectW/2 + tf.OffsetX*rectW
+	cy := float64(rect.Min.Y) + rectH/2 + tf.OffsetY*rectH
+
+	// Matriks affine src→dst: translate ke titik tengah src, skala, rotasi,
+	// lalu pindahkan ke (cx, cy). Ditulis sudah dalam bentuk terkomposisi.
+	sc, ss := math.Cos(rad), math.Sin(rad)
+	a := scale * sc
+	b := -scale * ss
+	c := scale * ss
+	d := scale * sc
+	// Offset supaya titik tengah src mendarat tepat di (cx, cy).
+	scx := srcW/2 + float64(sb.Min.X)
+	scy := srcH/2 + float64(sb.Min.Y)
+	m := f64.Aff3{
+		a, b, cx - (a*scx + b*scy),
+		c, d, cy - (c*scx + d*scy),
 	}
 
-	xdraw.CatmullRom.Scale(dst, rect, src, srcCrop, xdraw.Over, nil)
+	// dst di sini adalah buffer per-slot yang bounds-nya persis rect, jadi
+	// Transform otomatis ter-clip ke slot — burst yang di-zoom besar tidak
+	// mungkin menodai slot tetangga.
+	xdraw.CatmullRom.Transform(dst, m, src, sb, xdraw.Src, nil)
 }
 
 // frameEmbeddedPNGRe menangkap base64 PNG di dalam SVG frame

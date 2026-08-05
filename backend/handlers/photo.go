@@ -251,6 +251,12 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	if !services.StripFilters[stripFilter] {
 		stripFilter = "original"
 	}
+	// Zoom/rotate/geser per slot dari photo editor (urut slot, sejajar photoIds).
+	// Sama seperti filter: hasil akhir sudah baked-in di canvas export, tapi burst
+	// GIF live mentah → generator butuh angkanya untuk membingkai burst sama.
+	slotTransformsJSON := firstNonEmpty(
+		r.FormValue("slotTransforms"), r.FormValue("slot_transforms"),
+	)
 
 	if sessionID == "" {
 		respondError(w, http.StatusBadRequest, "session_id wajib diisi")
@@ -346,11 +352,24 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	// slot→foto untuk GIF live supaya burst tidak bergeser slot.
 	slotPhotoIDsJSON, _ := json.Marshal(photoIDs)
 
+	// Transform per slot hanya berguna kalau jumlahnya sama dengan jumlah slot
+	// (generator memetakannya lewat index). Panjang beda = klien lama atau
+	// payload rusak → simpan kosong, generator fallback ke cover-fit polos.
+	// Sengaja tidak menolak request: strip fisik & foto customer lebih penting
+	// daripada animasi GIF yang framing-nya kurang pas.
+	if parsed := services.ParseSlotTransformsJSON(slotTransformsJSON); len(parsed) != len(photoIDs) {
+		if slotTransformsJSON != "" {
+			log.Printf("ℹ️  compose %s: slot_transforms (%d) tidak match jumlah slot (%d) — diabaikan",
+				sessionID, len(parsed), len(photoIDs))
+		}
+		slotTransformsJSON = ""
+	}
+
 	// Update sesi: frame_id + filter strip + assignment slot + status completed.
 	// completed_at diisi di sini (sebelumnya kolomnya tidak pernah ditulis).
 	if _, err := database.DB.Exec(
-		`UPDATE sessions SET frame_id = ?, strip_filter = ?, slot_photo_ids = ?, status = 'completed', completed_at = NOW() WHERE id = ?`,
-		frameID, stripFilter, string(slotPhotoIDsJSON), sessionID,
+		`UPDATE sessions SET frame_id = ?, strip_filter = ?, slot_photo_ids = ?, slot_transforms = ?, status = 'completed', completed_at = NOW() WHERE id = ?`,
+		frameID, stripFilter, string(slotPhotoIDsJSON), slotTransformsJSON, sessionID,
 	); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal memperbarui sesi")
 		return
@@ -749,13 +768,21 @@ func collectLiveStripSources(sessionID string) (services.LiveStripOptions, error
 	// WAJIB pakai slot_photo_ids (satu entri per slot, urut slot): men-derive
 	// dari photos.selected/position meng-collapse foto yang dipakai di beberapa
 	// slot → jumlah foto < jumlah slot → slot bergeser.
-	var slotJSON string
+	var slotJSON, transformsJSON string
 	_ = database.DB.QueryRow(
-		`SELECT COALESCE(slot_photo_ids, '') FROM sessions WHERE id = ?`, sessionID,
-	).Scan(&slotJSON)
+		`SELECT COALESCE(slot_photo_ids, ''), COALESCE(slot_transforms, '')
+		 FROM sessions WHERE id = ?`, sessionID,
+	).Scan(&slotJSON, &transformsJSON)
 	var slotPhotoIDs []string
 	if slotJSON != "" {
 		_ = json.Unmarshal([]byte(slotJSON), &slotPhotoIDs)
+	}
+
+	// Zoom/rotate/geser hasil editan user. Hanya dipakai kalau jumlahnya sama
+	// dengan jumlah slot frame — kalau tidak (sesi lama, atau frame diganti
+	// setelah transform tersimpan), biarkan nil → burst pakai cover-fit polos.
+	if tf := services.ParseSlotTransformsJSON(transformsJSON); len(tf) == len(opts.Slots) {
+		opts.Transforms = tf
 	}
 
 	if len(slotPhotoIDs) == len(opts.Slots) && len(slotPhotoIDs) > 0 {

@@ -101,6 +101,11 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		// photoId urut slot (boleh duplikat) — sumber kebenaran slot→foto untuk
 		// GIF live; photos.selected/position tak bisa wakili 1 foto di N slot.
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS slot_photo_ids TEXT NOT NULL DEFAULT ''`,
+		// Zoom/rotate/geser per slot dari photo editor, urut slot (sejajar
+		// slot_photo_ids). Hasil akhir sudah baked-in di canvas export, tapi
+		// burst GIF live mentah → generator butuh angkanya untuk membingkai
+		// burst sama persis. Kosong = sesi lama, generator fallback cover-fit.
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS slot_transforms TEXT NOT NULL DEFAULT ''`,
 		// Penanda foto raw yang sudah naik ke Drive (upload streaming per-capture)
 		// — cegah dobel-upload, finalize tinggal kirim sisanya.
 		`ALTER TABLE photos ADD COLUMN IF NOT EXISTS drive_uploaded BOOLEAN NOT NULL DEFAULT FALSE`,

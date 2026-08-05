@@ -24,6 +24,13 @@ import { useAppConfig } from '@/shared/api/config';
  * ikut ter-highlight — jadi user mendengar sekaligus melihat apa yang dimaksud.
  * `highlight` kosong = narasi umum, tidak menyorot apa pun.
  */
+/**
+ * Jeda antar narasi di halaman instruksi. Tanpa ini cue berikutnya menempel
+ * persis di ekor cue sebelumnya dan terdengar buru-buru — user tidak sempat
+ * melihat bagian yang baru disorot.
+ */
+const CUE_GAP_MS = 1000;
+
 const STEP_CUES: Record<
   InstructionStep['type'],
   { file: string; highlight?: InstructionHighlight }[]
@@ -108,6 +115,15 @@ export default function InstructionPage() {
     if (!cues) return;
 
     let cancelled = false;
+    let gapTimer = 0;
+
+    // Jeda CUE_GAP_MS sebelum tiap cue — termasuk sebelum cue pertama (kartu
+    // sempat terbaca dulu) dan sebelum tombol Next dibuka di akhir rangkaian.
+    const schedule = (index: number) => {
+      if (cancelled) return;
+      gapTimer = window.setTimeout(() => playFrom(index), CUE_GAP_MS);
+    };
+
     const playFrom = (index: number) => {
       if (cancelled) return;
       if (index >= cues.length) {
@@ -121,17 +137,18 @@ export default function InstructionPage() {
       // Cue pertama step get-ready menunggu "pembayaranBerhasil" (dari halaman
       // payment) selesai dulu; sisanya menyambung lewat callback onEnded, jadi
       // tidak ada dua narasi yang menumpuk.
-      const next = () => playFrom(index + 1);
+      const next = () => schedule(index + 1);
       if (index === 0 && stepType === 'get-ready') {
         playBackendAudioAfterCurrent(cue.file, next);
       } else {
         playBackendAudio(cue.file, next);
       }
     };
-    playFrom(0);
+    schedule(0);
 
     return () => {
       cancelled = true;
+      window.clearTimeout(gapTimer);
     };
   }, [stepType]);
 

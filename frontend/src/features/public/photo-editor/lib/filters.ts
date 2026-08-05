@@ -26,7 +26,13 @@ export type FilterType =
   | 'sepia'
   | 'vivid'
   | 'soft'
-  | 'film';
+  | 'film'
+  | 'noir'
+  | 'sunset'
+  | 'mint'
+  | 'pastel'
+  | 'blush'
+  | 'moody';
 
 /**
  * Get Fabric.js filter array for given filter type.
@@ -113,6 +119,75 @@ export const getFiltersByType = (
           ],
         }),
         new fabric.Image.filters.Noise({ noise: 25 }),
+      ];
+
+    case 'noir':
+      return [
+        new fabric.Image.filters.Grayscale(),
+        new fabric.Image.filters.Contrast({ contrast: 0.35 }),
+        new fabric.Image.filters.Brightness({ brightness: -0.05 }),
+      ];
+
+    case 'sunset':
+      return [
+        new fabric.Image.filters.ColorMatrix({
+          matrix: [
+            1.15, 0, 0, 0, 0.06, // dorong merah/oranye
+            0, 0.95, 0, 0, 0,    // tekan hijau
+            0, 0, 1.0, 0, 0.02,  // sedikit magenta di highlight
+            0, 0, 0, 1, 0,
+          ],
+        }),
+        new fabric.Image.filters.Saturation({ saturation: 0.2 }),
+      ];
+
+    case 'mint':
+      return [
+        new fabric.Image.filters.ColorMatrix({
+          matrix: [
+            0.92, 0, 0, 0, 0,    // tekan merah
+            0, 1.06, 0, 0, 0.02, // dorong hijau
+            0, 0, 1.02, 0, 0.02, // sedikit biru → nuansa mint
+            0, 0, 0, 1, 0,
+          ],
+        }),
+        new fabric.Image.filters.Brightness({ brightness: 0.04 }),
+      ];
+
+    case 'pastel':
+      return [
+        new fabric.Image.filters.Saturation({ saturation: -0.25 }),
+        new fabric.Image.filters.Brightness({ brightness: 0.1 }),
+        new fabric.Image.filters.Contrast({ contrast: -0.18 }),
+      ];
+
+    case 'blush':
+      return [
+        new fabric.Image.filters.ColorMatrix({
+          matrix: [
+            1.08, 0, 0, 0, 0.05, // kulit lebih hangat kemerahan
+            0, 0.96, 0, 0, 0.01,
+            0, 0, 1.0, 0, 0.03,
+            0, 0, 0, 1, 0,
+          ],
+        }),
+        new fabric.Image.filters.Brightness({ brightness: 0.05 }),
+        new fabric.Image.filters.Saturation({ saturation: -0.05 }),
+      ];
+
+    case 'moody':
+      return [
+        new fabric.Image.filters.Saturation({ saturation: -0.3 }),
+        new fabric.Image.filters.Contrast({ contrast: 0.22 }),
+        new fabric.Image.filters.Brightness({ brightness: -0.06 }),
+        new fabric.Image.filters.ColorMatrix({
+          matrix: [
+            0.95, 0, 0, 0, 0,    // bayangan lebih dingin
+            0, 0.98, 0, 0, 0,
+            0, 0, 1.06, 0, 0.02,
+            0, 0, 0, 1, 0,
+          ],
+        }),
       ];
 
     default:
