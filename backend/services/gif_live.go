@@ -311,19 +311,13 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 		delays = append(delays, delay)
 	}
 
-	out, err := os.Create(outPath)
-	if err != nil {
-		return "", fmt.Errorf("create gif: %w", err)
-	}
-	defer out.Close()
-
 	anim := &gif.GIF{
 		Image:     images,
 		Delay:     delays,
 		LoopCount: 0,
 	}
-	if err := gif.EncodeAll(out, anim); err != nil {
-		return "", fmt.Errorf("encode gif: %w", err)
+	if err := writeGIFAtomic(outPath, anim); err != nil {
+		return "", err
 	}
 
 	log.Printf("🎞️  Live strip GIF for session %s (%d frames, %d burst sources) → %s",

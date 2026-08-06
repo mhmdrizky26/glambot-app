@@ -27,12 +27,19 @@
     build sukses; kalau sidik jarinya sama persis, build dilewati dan langsung
     `npm run start`.
 
-        .\start.ps1                 build kalau ada perubahan, lalu start + kiosk
+    Sebelum service nyala, skrip menarik update dari origin/main dulu supaya
+    kiosk tidak jalan pakai kode kemarin. Langkah ini SELALU fail-soft: offline,
+    fetch lambat, ada perubahan lokal yang belum di-commit, atau merge bentrok --
+    semuanya cuma jadi peringatan, start tetap lanjut pakai kode yang ada.
+    Repo tidak akan pernah ditinggal dalam keadaan setengah ter-merge.
+
+        .\start.ps1                 update dari main, build kalau perlu, start + kiosk
         .\start.ps1 -Dev            pakai `npm run dev` (HMR) buat ngoding
         .\start.ps1 -Rebuild        paksa build walau tidak ada perubahan
         .\start.ps1 -Clean          + hapus frontend\.next dulu (build dari nol)
         .\start.ps1 -NoRobot        dobot jalan tanpa hardware (--no-robot)
         .\start.ps1 -NoBrowser      jangan buka Chrome
+        .\start.ps1 -NoPull         jangan ambil update dari main
 
     Parameter -Service dipakai internal: tiap pane manggil balik skrip ini
     dengan -Service backend|frontend|dobot. Jangan dipanggil manual.
@@ -47,7 +54,8 @@ param(
     [switch] $NoRobot,
     [switch] $Dev,
     [switch] $Rebuild,
-    [switch] $NoBrowser
+    [switch] $NoBrowser,
+    [switch] $NoPull
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,6 +65,10 @@ $BackendDir   = Join-Path $Root 'backend'
 $FrontendDir  = Join-Path $Root 'frontend'
 $DobotDir     = Join-Path $Root 'dobot'
 $ProfileDir   = Join-Path $env:TEMP 'glambot-kiosk-profile'
+
+# Batas tunggu `git fetch`. Di venue yang internetnya mati, git bisa
+# menggantung menit-menitan -- kiosk tidak boleh telat nyala gara-gara itu.
+$GitFetchTimeoutSec = 25
 
 # ---------------------------------------------------------------- helpers ---
 
@@ -193,6 +205,138 @@ function Get-FrontendFingerprint {
         return [System.BitConverter]::ToString($sha.Hash).Replace('-', '')
     } finally {
         $sha.Dispose()
+    }
+}
+
+# Tarik update dari origin/main sebelum service nyala.
+#
+# Aturan mainnya: START TIDAK BOLEH GAGAL GARA-GARA GIT. Kiosk yang jalan pakai
+# kode kemarin masih melayani customer; kiosk yang tidak nyala karena repo
+# setengah ter-merge tidak. Jadi tiap cabang di bawah ujungnya `return` dengan
+# peringatan, bukan `exit`.
+#
+# Urutannya juga sengaja dari yang paling aman:
+#   1. tidak ada commit baru        -> tidak ngapa-ngapain
+#   2. ada perubahan lokal          -> dilewati, kerjaan yang belum di-commit
+#                                      tidak boleh disentuh
+#   3. bisa fast-forward            -> tarik, tanpa commit merge
+#   4. branch punya commit sendiri  -> merge beneran; kalau bentrok, --abort
+function Sync-FromMain {
+    # git nulis progress ke stderr; dengan ErrorActionPreference 'Stop' itu bisa
+    # dianggap error terminating padahal exit code-nya 0.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+
+    try {
+        if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+            Write-Host '      git tidak ada di PATH - update dilewati' -ForegroundColor DarkGray
+            return
+        }
+
+        & git -C "$Root" rev-parse --is-inside-work-tree 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-Host '      bukan repo git - update dilewati' -ForegroundColor DarkGray
+            return
+        }
+
+        # Job + timeout, bukan panggilan langsung: `git fetch` tidak punya
+        # opsi timeout dan bisa diam menunggu jaringan selamanya.
+        Write-Host '      ambil info terbaru dari origin/main...' -ForegroundColor DarkGray
+        $job = Start-Job -ScriptBlock {
+            param($dir)
+            & git -C $dir fetch --quiet origin main 2>&1 | Out-Null
+            $LASTEXITCODE
+        } -ArgumentList $Root
+
+        $finished = Wait-Job $job -Timeout $GitFetchTimeoutSec
+        $fetchCode = if ($finished) { @(Receive-Job $job)[-1] } else { $null }
+        if (-not $finished) { Stop-Job $job -ErrorAction SilentlyContinue }
+        Remove-Job $job -Force -ErrorAction SilentlyContinue
+
+        if (-not $finished) {
+            Write-Host ("      [!] fetch lewat {0} detik (internet lambat/mati)" -f $GitFetchTimeoutSec) -ForegroundColor Yellow
+            Write-Host '          lanjut pakai kode lokal.' -ForegroundColor Yellow
+            return
+        }
+        if ($fetchCode -ne 0) {
+            Write-Host '      [!] fetch gagal (offline? remote/kredensial?) - lanjut pakai kode lokal' -ForegroundColor Yellow
+            return
+        }
+
+        # Semua commit main sudah ada di sini -> tidak ada yang perlu ditarik.
+        & git -C "$Root" merge-base --is-ancestor origin/main HEAD 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host '      sudah paling baru - tidak ada perubahan di main' -ForegroundColor Green
+            return
+        }
+
+        $behind = @(& git -C "$Root" rev-list --count HEAD..origin/main 2>$null)[0]
+        Write-Host ("      ada {0} commit baru di main" -f $behind) -ForegroundColor White
+
+        # Ada yang belum di-commit -> jangan disentuh sama sekali. Merge di atas
+        # working tree kotor gampang bikin kerjaan orang hilang.
+        if (& git -C "$Root" status --porcelain 2>$null) {
+            Write-Host '      [!] ada perubahan lokal yang belum di-commit - pull DILEWATI' -ForegroundColor Yellow
+            Write-Host '          commit atau stash dulu kalau mau ikut update main.' -ForegroundColor Yellow
+            return
+        }
+
+        $before = @(& git -C "$Root" rev-parse HEAD 2>$null)[0]
+
+        # Fast-forward: paling aman, tidak bikin commit merge.
+        & git -C "$Root" merge --ff-only origin/main 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host '      update terpasang (fast-forward)' -ForegroundColor Green
+            Show-UpdateImpact -Before $before
+            return
+        }
+
+        # Branch ini punya commit sendiri yang tidak ada di main -> perlu merge
+        # beneran. Kalau bentrok, batalkan: lebih baik jalan pakai kode kemarin
+        # daripada berhenti di repo yang setengah ter-merge.
+        & git -C "$Root" merge --no-edit origin/main 2>$null | Out-Null
+        if ($LASTEXITCODE -eq 0) {
+            Write-Host '      update terpasang (merge ke branch ini)' -ForegroundColor Green
+            Show-UpdateImpact -Before $before
+            return
+        }
+
+        & git -C "$Root" merge --abort 2>$null | Out-Null
+        Write-Host '      [!] main bentrok dengan branch ini - merge DIBATALKAN' -ForegroundColor Yellow
+        Write-Host '          repo dikembalikan seperti semula, start lanjut pakai kode lokal.' -ForegroundColor Yellow
+        Write-Host '          selesaikan manual nanti: git merge origin/main' -ForegroundColor Yellow
+    } finally {
+        $ErrorActionPreference = $prevEap
+    }
+}
+
+# Sesudah update masuk: kasih tahu kalau ada yang butuh langkah manual. Kode Go
+# dan Next.js otomatis ke-rebuild oleh pane masing-masing, TAPI dependency
+# (npm/pip) dan skema .env tidak -- itu yang perlu diomongin, bukan didiamkan
+# sampai service-nya error dengan pesan yang tidak nyambung.
+function Show-UpdateImpact {
+    param([string] $Before)
+
+    $changed = @(& git -C "$Root" diff --name-only $Before HEAD 2>$null)
+    if (-not $changed) { return }
+
+    $notes = @()
+    if ($changed -match '^frontend/package(-lock)?\.json$') {
+        $notes += 'dependency frontend berubah -> cd frontend; npm install'
+    }
+    if ($changed -match '^dobot/requirements\.txt$') {
+        $notes += 'dependency dobot berubah -> dobot\venv\Scripts\pip install -r dobot\requirements.txt'
+    }
+    if ($changed -match '^backend/go\.(mod|sum)$') {
+        $notes += 'dependency backend berubah -> `go build` bakal narik module baru (butuh internet)'
+    }
+    if ($changed -match '\.env\.example$') {
+        $notes += 'ada .env.example yang berubah -> cek key baru di file .env kamu'
+    }
+
+    Write-Host ("      {0} file berubah" -f $changed.Count) -ForegroundColor DarkGray
+    foreach ($n in $notes) {
+        Write-Host "      [!] $n" -ForegroundColor Yellow
     }
 }
 
@@ -348,9 +492,19 @@ Write-Host '  GLAMBOT PHOTO BOOTH' -ForegroundColor White
 Write-Host ("  backend :{0}   frontend :{1}   dobot :{2}" -f $BackendPort, $FrontendPort, $DobotPort) -ForegroundColor DarkGray
 Write-Host ''
 
-# --- 1. preflight: gagal cepat dengan pesan jelas, bukan 3 pane yang diam-diam mati
+# --- 1. update kode dari main (sebelum apa pun, biar preflight & build lihat
+#        kode yang paling baru)
 
-Write-Host '[1/5] cek prasyarat' -ForegroundColor Cyan
+Write-Host '[1/6] update kode dari main' -ForegroundColor Cyan
+if ($NoPull) {
+    Write-Host '      -NoPull: update dilewati' -ForegroundColor DarkGray
+} else {
+    Sync-FromMain
+}
+
+# --- 2. preflight: gagal cepat dengan pesan jelas, bukan 3 pane yang diam-diam mati
+
+Write-Host '[2/6] cek prasyarat' -ForegroundColor Cyan
 $problems = @()
 
 foreach ($tool in @('go', 'npm')) {
@@ -386,16 +540,16 @@ if ($problems.Count -gt 0) {
 }
 Write-Host '      semua ada.' -ForegroundColor Green
 
-# --- 2. bunuh sisa proses yang masih pegang port
+# --- 3. bunuh sisa proses yang masih pegang port
 
-Write-Host '[2/5] bersihin port nyangkut' -ForegroundColor Cyan
+Write-Host '[3/6] bersihin port nyangkut' -ForegroundColor Cyan
 Stop-Port -Port $BackendPort  -Label 'backend'
 Stop-Port -Port $FrontendPort -Label 'frontend'
 Stop-Port -Port $DobotPort    -Label 'dobot'
 
-# --- 3. cache
+# --- 4. cache
 
-Write-Host '[3/5] bersihin cache' -ForegroundColor Cyan
+Write-Host '[4/6] bersihin cache' -ForegroundColor Cyan
 
 # __pycache__ dobot: murah, aman dihapus tiap start.
 $pycache = Get-ChildItem -Path $DobotDir -Filter '__pycache__' -Recurse -Directory -ErrorAction SilentlyContinue |
@@ -422,9 +576,9 @@ if ($Clean) {
     Write-Host '      frontend\.next dipertahankan (build incremental; -Clean buat dari nol)' -ForegroundColor DarkGray
 }
 
-# --- 4. spawn pane
+# --- 5. spawn pane
 
-Write-Host '[4/5] nyalain service' -ForegroundColor Cyan
+Write-Host '[5/6] nyalain service' -ForegroundColor Cyan
 Write-Host '      urutan: backend -> dobot -> frontend (tiap pane nunggu gilirannya)' -ForegroundColor DarkGray
 if (-not $Dev) {
     Write-Host '      next build jalan duluan barengan, tidak ikut antre' -ForegroundColor DarkGray
@@ -464,10 +618,10 @@ if ($wt) {
     }
 }
 
-# --- 5. tunggu frontend benar-benar melayani, lalu buka kiosk
+# --- 6. tunggu frontend benar-benar melayani, lalu buka kiosk
 
 if ($NoBrowser) {
-    Write-Host '[5/5] -NoBrowser: browser tidak dibuka' -ForegroundColor Cyan
+    Write-Host '[6/6] -NoBrowser: browser tidak dibuka' -ForegroundColor Cyan
     Write-Host ("`n      buka manual: http://localhost:{0}`n" -f $FrontendPort) -ForegroundColor White
     exit 0
 }
@@ -476,7 +630,7 @@ if ($NoBrowser) {
 # menjawab. Kalau tidak ada perubahan, build dilewati dan ini cuma hitungan
 # detik; kalau ada, `npm run build` harus kelar dulu baru servernya nyala.
 $waitSec = if ($Dev) { 240 } elseif ($Clean) { 900 } else { 600 }
-Write-Host ("[5/5] tunggu frontend siap (batas {0} menit)" -f [math]::Round($waitSec / 60)) -ForegroundColor Cyan
+Write-Host ("[6/6] tunggu frontend siap (batas {0} menit)" -f [math]::Round($waitSec / 60)) -ForegroundColor Cyan
 if (-not $Dev) {
     Write-Host '      kalau ada perubahan, next build jalan dulu - wajar kalau lama' -ForegroundColor DarkGray
 }

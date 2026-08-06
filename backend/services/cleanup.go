@@ -149,6 +149,7 @@ func cleanupSession(sessionID string) error {
 	// di package services tidak terus bertumbuh seiring waktu.
 	ForgetGifSession(sessionID)
 	ForgetBurstSession(sessionID)
+	ForgetDriveSession(sessionID)
 
 	log.Printf("🗑️  Sesi %s berhasil dihapus", sessionID)
 	return nil

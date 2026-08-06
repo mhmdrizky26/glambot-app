@@ -57,8 +57,9 @@ func main() {
 		log.Printf("⚠️  Canon camera tidak terdeteksi (cek digiCamControl)")
 	}
 
-	// ─── 5. Jalankan cleanup job di background ────────────────────────────────
+	// ─── 5. Jalankan job background (cleanup + penyusul upload Drive) ─────────
 	services.StartCleanupJob()
+	handlers.StartDriveRetryJob()
 
 	// ─── 6. Setup router ──────────────────────────────────────────────────────
 	handler := routes.Setup(config.App.StoragePath)
