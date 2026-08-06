@@ -470,10 +470,32 @@ Urutannya:
 1. **Cek prasyarat** — `go`/`npm` di PATH, `backend/.env`, `dobot/.env`, `frontend/.env.local`, `dobot/venv/`, `frontend/node_modules/`. Kalau ada yang kurang, langsung berhenti sambil menyebut mana yang kurang dan cara memperbaikinya.
 2. **Bunuh proses yang masih pegang port** 8080 / 3000 / 5001. Ini yang paling sering jadi biang "gagal bind tanpa pesan jelas" — `go run .` di Windows spawn child exe yang tidak ikut mati waktu terminalnya ditutup paksa. Perlu diingat: skripnya tidak pilih-pilih, **apa pun** yang pegang ketiga port itu dimatikan tanpa nanya. Kalau kamu lagi jalanin project lain di `:3000`, matikan dulu.
 3. **Bersihin cache ringan** — `__pycache__` dobot dihapus, profil browser di-reset. `frontend/.next` **tidak** dihapus supaya `next build` bisa incremental; pakai `-Clean` kalau memang butuh build dari nol.
-4. **Nyalakan service.** Backend di-`go build` ke `bin/photobooth.exe` lalu dijalankan langsung (satu proses, Ctrl+C bersih, build berikutnya incremental). Frontend `npm run build` lalu `npm run start`. Dobot menunggu `:8080` siap dulu supaya tuning robot yang dipakai benar-benar dari DB, bukan fallback `.env`.
+4. **Nyalakan service secara berantai** — `backend → dobot → frontend`, detailnya di bawah.
 5. **Buka kiosk** dengan `--user-data-dir` temp yang dibuang tiap start, jadi cache browser selalu bersih.
 
 Skripnya nunggu sampai `http://localhost:3000` benar-benar merespons — bukan cuma sampai portnya kebuka — baru Chrome dilaunch, jadi kiosk tidak pernah kebuka ke halaman yang belum jadi. Batas tunggunya 10 menit (15 menit kalau `-Clean`, 4 menit kalau `-Dev`); itu batas atas, bukan lama tunggu.
+
+#### Urutan start & saling tunggu
+
+Ketiga service tidak dinyalakan barengan begitu saja. Tiap pane nunggu gilirannya sendiri dengan cara ngecek port pendahulunya:
+
+```
+backend    ──────────────────────────▶  langsung jalan (go build, lalu listen :8080)
+                │
+dobot           └─ nunggu :8080 ─────▶  python main.py, listen :5001
+                                  │
+frontend   ── next build ─────────┴───▶ nunggu :8080 + :5001, baru npm run start
+           (jalan duluan, tidak antre)
+```
+
+Kuncinya ada di baris ketiga: **`next build` sengaja dijalankan di awal tanpa nunggu siapa pun.** Build tidak butuh backend maupun dobot, dan dia bagian yang paling lama — jadi dia dibiarkan overlap dengan boot backend + dobot. Waktu build kelar, dua-duanya biasanya sudah siap dan frontend lanjut tanpa jeda. Yang benar-benar diantre cuma `npm run start`-nya. Kalau build dilewati (tidak ada perubahan), frontend langsung masuk antrean.
+
+Kenapa urutannya harus begitu:
+
+- **Dobot nunggu backend** bukan cuma biar rapi. Dobot narik tuning robot (speed, timing yang diatur admin) dari `/api/robot-settings` saat boot lewat `apply_backend_overrides()` di [`main.py`](dobot/main.py). Dia punya retry sendiri, tapi kalau backend sudah siap duluan, fetch pertamanya langsung kena — jadi nilai yang dipakai benar-benar dari DB, bukan fallback `.env`.
+- **Frontend nunggu dua-duanya** supaya halaman pertama yang dibuka kiosk tidak ketemu API yang belum listen.
+
+Kalau ada yang tidak nyala sampai batas waktu (backend 3 menit, dobot 4 menit), service berikutnya **tetap distart** sambil nampilin peringatan di pane-nya. Ini disengaja: kiosk yang blank jauh lebih susah didiagnosa daripada kiosk yang nyala dengan satu fitur error, dan dashboard admin tetap kepakai penuh walau dobot mati.
 
 Flag yang tersedia:
 
