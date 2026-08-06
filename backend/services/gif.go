@@ -33,34 +33,45 @@ type GenerateAnimationOptions struct {
 	SelectedRawPaths []string // path absolut ke foto raw terpilih (urut posisi)
 }
 
-// gifGenLocks per-session mutex registry. Memastikan generasi GIF untuk
-// satu sessionID tidak race (request kedua menunggu request pertama).
+// gifGenLocks registry mutex per (sesi, artefak). Memastikan generasi satu
+// artefak tidak race — request kedua menunggu yang pertama, lalu memakai cache.
 // gifGenLocksM melindungi akses ke map itu sendiri.
 var (
 	gifGenLocks  = map[string]*sync.Mutex{}
 	gifGenLocksM sync.Mutex
 )
 
-func sessionLock(sessionID string) *sync.Mutex {
+// Kunci artefak. Slideshow & live strip DIKUNCI TERPISAH walau satu sesi:
+// keduanya menulis file berbeda, jadi menyatukan lock-nya cuma bikin request
+// /gif-live dari HP antre di belakang generasi slideshow yang tidak ia butuhkan.
+const (
+	lockKindAnim = "|anim"
+	lockKindLive = "|live"
+)
+
+func sessionLock(key string) *sync.Mutex {
 	gifGenLocksM.Lock()
 	defer gifGenLocksM.Unlock()
-	mu, ok := gifGenLocks[sessionID]
+	mu, ok := gifGenLocks[key]
 	if !ok {
 		mu = &sync.Mutex{}
-		gifGenLocks[sessionID] = mu
+		gifGenLocks[key] = mu
 	}
 	return mu
 }
 
-// ForgetGifSession menghapus session lock dari peta supaya tidak menumpuk
-// di memori seiring banyak sesi (kioskdi pakai berbulan-bulan).
+// ForgetGifSession menghapus lock milik sesi dari peta supaya tidak menumpuk
+// di memori seiring banyak sesi (kiosk dipakai berbulan-bulan).
 // Dipanggil setelah session benar-benar selesai.
 func ForgetGifSession(sessionID string) {
 	if sessionID == "" {
 		return
 	}
 	gifGenLocksM.Lock()
-	delete(gifGenLocks, sessionID)
+	// Satu sesi punya beberapa lock (satu per artefak) — buang semuanya.
+	for _, kind := range []string{lockKindAnim, lockKindLive} {
+		delete(gifGenLocks, sessionID+kind)
+	}
 	gifGenLocksM.Unlock()
 }
 
@@ -83,7 +94,7 @@ func GenerateSessionGIF(opts GenerateAnimationOptions) (string, error) {
 		return "", fmt.Errorf("tidak ada foto raw untuk di-animate")
 	}
 
-	mu := sessionLock(opts.SessionID)
+	mu := sessionLock(opts.SessionID + lockKindAnim)
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -189,14 +200,142 @@ func scaleToCanvas(src image.Image) *image.RGBA {
 	return canvas
 }
 
+// palLUTBits bit per kanal untuk tabel lookup warna (6 → kubus 64³ = 256 KB).
+//
+// 5 bit sempat dicoba dan terlalu kasar di ujung skala: bucket paling bawah
+// berpusat di 4, yang tetangga terdekatnya (6,6,6) dari grayscale ramp — bukan
+// hitam pekat — jadi area hitam solid berubah jadi abu-abu gelap. 6 bit
+// memberi pusat bucket 2, dan hitam kembali memetakan ke hitam.
+const palLUTBits = 6
+const palLUTSide = 1 << palLUTBits
+
+var (
+	palLUT     []uint8   // kubus RGB → index palet
+	palRGB     [][3]int32 // index palet → komponen RGB (hindari type assert per pixel)
+	palLUTOnce sync.Once
+)
+
+// paletteLUT membangun (sekali) tabel warna→index palet.
+//
+// Alasannya: color.Palette.Index memindai LINEAR seluruh 256 entri untuk SETIAP
+// pixel. Pada frame GIF live 448×672 itu ~77 juta perbandingan per frame, dan
+// GIF live punya 30 frame — jadi konversi palet sendirian memakan detik-detikan,
+// jauh melampaui biaya menggambar burst-nya. Dengan tabel ini biayanya jadi
+// satu indexing per pixel.
+func paletteLUT() ([]uint8, [][3]int32) {
+	palLUTOnce.Do(func() {
+		pal := standardPalette()
+
+		palRGB = make([][3]int32, len(pal))
+		for i, c := range pal {
+			r, g, b, _ := c.RGBA()
+			palRGB[i] = [3]int32{int32(r >> 8), int32(g >> 8), int32(b >> 8)}
+		}
+
+		const step = 256 / palLUTSide
+		lut := make([]uint8, palLUTSide*palLUTSide*palLUTSide)
+		i := 0
+		for r := 0; r < palLUTSide; r++ {
+			for g := 0; g < palLUTSide; g++ {
+				for b := 0; b < palLUTSide; b++ {
+					// Pusat bucket, bukan tepinya — separuh error kuantisasi.
+					lut[i] = uint8(pal.Index(color.RGBA{
+						R: uint8(r*step + step/2),
+						G: uint8(g*step + step/2),
+						B: uint8(b*step + step/2),
+						A: 255,
+					}))
+					i++
+				}
+			}
+		}
+		palLUT = lut
+	})
+	return palLUT, palRGB
+}
+
+func clamp255(v int32) int32 {
+	if v < 0 {
+		return 0
+	}
+	if v > 255 {
+		return 255
+	}
+	return v
+}
+
 // paletted mengkonversi RGBA ke *image.Paletted (256 colors) yang dibutuhkan
 // oleh image/gif. Pakai Floyd-Steinberg dithering biar gradasi (kulit, langit)
 // tidak banding parah.
+//
+// Ditulis manual (bukan xdraw.FloydSteinberg) semata demi kecepatan: algoritma
+// difusi errornya sama persis, yang diganti hanya cara mencari warna terdekat —
+// lewat paletteLUT, bukan pemindaian linear 256 entri per pixel.
+//
+// Asumsi: src opaque. Semua frame GIF di sini memang begitu (slideshow mengisi
+// background dulu; kanvas GIF live berbasis framed strip yang opaque).
 func paletted(src *image.RGBA) *image.Paletted {
 	bounds := src.Bounds()
 	pal := standardPalette()
 	dst := image.NewPaletted(bounds, pal)
-	xdraw.FloydSteinberg.Draw(dst, bounds, src, bounds.Min)
+
+	w, h := bounds.Dx(), bounds.Dy()
+	if w <= 0 || h <= 0 {
+		return dst
+	}
+	lut, rgb := paletteLUT()
+
+	// Dua baris akumulator error (baris berjalan & berikutnya), 3 kanal per
+	// pixel. Diberi padding 1 pixel di kiri-kanan supaya difusi ke x-1 / x+1
+	// di tepi baris tidak perlu dicek batasnya.
+	stride := (w + 2) * 3
+	cur := make([]int32, stride)
+	next := make([]int32, stride)
+
+	for y := 0; y < h; y++ {
+		srcOff := src.PixOffset(bounds.Min.X, bounds.Min.Y+y)
+		dstOff := dst.PixOffset(bounds.Min.X, bounds.Min.Y+y)
+
+		for x := 0; x < w; x++ {
+			i := (x + 1) * 3
+			p := srcOff + x*4
+
+			r := clamp255(int32(src.Pix[p+0]) + cur[i+0])
+			g := clamp255(int32(src.Pix[p+1]) + cur[i+1])
+			b := clamp255(int32(src.Pix[p+2]) + cur[i+2])
+
+			const shift = 8 - palLUTBits
+			pi := lut[(r>>shift)<<(2*palLUTBits)|(g>>shift)<<palLUTBits|(b>>shift)]
+			dst.Pix[dstOff+x] = pi
+
+			pc := rgb[pi]
+			er, eg, eb := r-pc[0], g-pc[1], b-pc[2]
+
+			// Floyd-Steinberg: 7/16 kanan, 3/16 kiri-bawah, 5/16 bawah,
+			// 1/16 kanan-bawah.
+			cur[i+3] += er * 7 / 16
+			cur[i+4] += eg * 7 / 16
+			cur[i+5] += eb * 7 / 16
+
+			next[i-3] += er * 3 / 16
+			next[i-2] += eg * 3 / 16
+			next[i-1] += eb * 3 / 16
+
+			next[i+0] += er * 5 / 16
+			next[i+1] += eg * 5 / 16
+			next[i+2] += eb * 5 / 16
+
+			next[i+3] += er / 16
+			next[i+4] += eg / 16
+			next[i+5] += eb / 16
+		}
+
+		cur, next = next, cur
+		for i := range next {
+			next[i] = 0
+		}
+	}
+
 	return dst
 }
 

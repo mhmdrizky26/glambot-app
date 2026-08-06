@@ -453,7 +453,78 @@ Lalu copy file `frame-custom.svg` ke `backend/storage/frames/`.
 
 ## Menjalankan Aplikasi
 
-### Dev mode (2 terminal)
+### Satu perintah (disarankan)
+
+```powershell
+.\start.ps1
+```
+
+Atau double-click `start.bat`. Skrip [`start.ps1`](start.ps1) menyalakan ketiga service sekaligus di **satu window Windows Terminal, 3 pane** (backend kiri, frontend kanan-atas, dobot kanan-bawah), lalu membuka Chrome kiosk ke `http://localhost:3000` setelah frontend benar-benar melayani request.
+
+> **Frontend jalan mode production**, bukan dev: `npm run build` dulu lalu `npm run start`. Tidak ada HMR dan perubahan kode baru kelihatan setelah start ulang — tukarannya navigasi antar halaman instan karena tidak ada compile-on-demand, yang memang yang dimau di kiosk. Kalau lagi ngoding dan butuh HMR, pakai `-Dev`.
+>
+> **Build cuma jalan kalau ada yang berubah.** Start kedua dan seterusnya tanpa ngedit apa pun langsung `npm run start` — hitungan detik, bukan menit.
+
+Urutannya:
+
+1. **Cek prasyarat** — `go`/`npm` di PATH, `backend/.env`, `dobot/.env`, `frontend/.env.local`, `dobot/venv/`, `frontend/node_modules/`. Kalau ada yang kurang, langsung berhenti sambil menyebut mana yang kurang dan cara memperbaikinya.
+2. **Bunuh proses yang masih pegang port** 8080 / 3000 / 5001. Ini yang paling sering jadi biang "gagal bind tanpa pesan jelas" — `go run .` di Windows spawn child exe yang tidak ikut mati waktu terminalnya ditutup paksa. Perlu diingat: skripnya tidak pilih-pilih, **apa pun** yang pegang ketiga port itu dimatikan tanpa nanya. Kalau kamu lagi jalanin project lain di `:3000`, matikan dulu.
+3. **Bersihin cache ringan** — `__pycache__` dobot dihapus, profil browser di-reset. `frontend/.next` **tidak** dihapus supaya `next build` bisa incremental; pakai `-Clean` kalau memang butuh build dari nol.
+4. **Nyalakan service.** Backend di-`go build` ke `bin/photobooth.exe` lalu dijalankan langsung (satu proses, Ctrl+C bersih, build berikutnya incremental). Frontend `npm run build` lalu `npm run start`. Dobot menunggu `:8080` siap dulu supaya tuning robot yang dipakai benar-benar dari DB, bukan fallback `.env`.
+5. **Buka kiosk** dengan `--user-data-dir` temp yang dibuang tiap start, jadi cache browser selalu bersih.
+
+Skripnya nunggu sampai `http://localhost:3000` benar-benar merespons — bukan cuma sampai portnya kebuka — baru Chrome dilaunch, jadi kiosk tidak pernah kebuka ke halaman yang belum jadi. Batas tunggunya 10 menit (15 menit kalau `-Clean`, 4 menit kalau `-Dev`); itu batas atas, bukan lama tunggu.
+
+Flag yang tersedia:
+
+| Flag | Efek |
+|---|---|
+| `-Dev` | Frontend pakai `npm run dev` (HMR) — buat ngoding, bukan kiosk |
+| `-Rebuild` | Paksa `next build` walau tidak ada perubahan |
+| `-Clean` | Hapus `frontend/.next` dulu — build dari nol, bukan incremental |
+| `-NoRobot` | Dobot jalan `--no-robot` (vision saja, tanpa hardware) |
+| `-NoBrowser` | Jangan buka Chrome, cuma nyalakan service |
+
+#### Kapan `next build` jalan, kapan dilewati
+
+Sesudah build sukses, skrip menyimpan sidik jari SHA-256 dari semua input build ke `frontend/.next/.glambot-build-stamp`. Di start berikutnya sidik jari itu dihitung ulang (~0,5 detik) dan dibandingkan — kalau sama persis, build dilewati.
+
+Yang ikut dihitung: seluruh isi `src/` dan `public/`, lalu `package.json`, `package-lock.json`, `next.config.ts`, `tsconfig.json`, `postcss.config.mjs`, `components.json`, `eslint.config.mjs`, dan **`.env` / `.env.local` / `.env.production`**.
+
+> File `.env*` sengaja ikut dan ini bagian yang paling penting. Semua `NEXT_PUBLIC_*` di-**inline ke bundle klien saat build**, bukan dibaca waktu runtime. Kalau `NEXT_PUBLIC_API_URL` diganti (misal dari `localhost` ke IP LAN untuk akses HP) tapi build-nya dilewati, bundle lama tetap dipakai dan kiosk masih nembak API yang lama — gagalnya diam-diam, halaman kelihatan normal tapi datanya tidak masuk.
+
+Yang **tidak** ikut: `node_modules/` (sudah terwakili `package-lock.json`), `.next/`, dan `*.tsbuildinfo` — dua terakhir itu output, bukan input.
+
+Yang dibandingkan **isi file**, bukan timestamp. Jadi `git checkout`/`git pull` yang nulis ulang file dengan isi identik tidak memicu rebuild percuma, sementara edit sekecil apa pun tetap kedeteksi. Build juga dipaksa kalau `.next/BUILD_ID` tidak ada — penanda itu cuma dibuat `next build`, jadi ketiadaannya berarti `.next` bukan hasil build production dan `npm run start` bakal nolak jalan.
+
+Port dibaca otomatis dari `APP_PORT` (backend/.env) dan `PORT` (dobot/.env), jadi kalau diubah di `.env` skripnya ikut menyesuaikan. Kalau Windows Terminal tidak terpasang, otomatis fallback ke 3 window console terpisah.
+
+#### Nyalain & matiin
+
+**Nyalain:** double-click `start.bat`, atau `.\start.ps1` dari PowerShell di root repo. Tunggu sampai Chrome kiosk kebuka sendiri — itu tandanya ketiganya sudah siap.
+
+**Matiin — urutannya begini:**
+
+1. **Keluar dari kiosk:** `Alt+F4`. Mode kiosk tidak punya title bar jadi tidak ada tombol X.
+2. **Matiin service:** klik salah satu pane di Windows Terminal, tekan `Ctrl+C`, ulangi untuk dua pane lainnya. Pane-nya sengaja tidak langsung nutup (`-NoExit`) supaya log terakhirnya masih kebaca.
+3. **Tutup window-nya:** `Alt+F4` atau klik X. Windows Terminal akan konfirmasi karena masih ada 3 pane — iyakan saja.
+
+Pakai `Ctrl+C`, jangan langsung tutup window, karena ketiganya punya rutinitas bersih-bersih yang cuma jalan kalau dapat sinyal interrupt:
+
+- **Backend** — `srv.Shutdown()` nunggu request yang lagi jalan selesai (maks 10 detik) lalu nutup koneksi DB ([`main.go`](backend/main.go)). Kalau dikill paksa saat lagi compose foto, hasilnya bisa setengah jadi.
+- **Dobot** — blok `finally: runtime.stop()` ([`main.py`](dobot/main.py)) melepas handle kamera dan men-disable lengan robot. Kalau dikill paksa, kamera bisa ke-lock (`CAMERA_INDEX` gagal dibuka di run berikutnya) dan lengan ditinggal dalam keadaan enabled.
+- **Frontend** — paling tidak rewel, tapi `npm` di Windows kadang ninggalin proses `node` yatim yang masih pegang `:3000`.
+
+Kalau terlanjur ketutup paksa atau ada yang nyangkut, **tidak usah dibersihin manual** — `start.ps1` selalu kill apa pun yang megang port 8080/3000/5001 di awal, jadi tinggal jalankan lagi.
+
+Ngecek masih ada yang jalan atau nggak:
+
+```powershell
+Get-NetTCPConnection -LocalPort 8080,3000,5001 -State Listen -ErrorAction SilentlyContinue |
+    Select-Object LocalPort, @{n='Proses';e={(Get-Process -Id $_.OwningProcess).ProcessName}}
+```
+
+### Dev mode manual (2 terminal)
 
 **Terminal 1 — Backend:**
 ```bash

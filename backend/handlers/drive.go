@@ -162,18 +162,37 @@ func UploadSessionToDrive(sessionID string) {
 	ctx, cancel := services.DriveContext()
 	defer cancel()
 
-	for _, f := range files {
-		if err := services.UploadFileToFolder(ctx, folderID, f.DriveUpload); err != nil {
-			log.Printf("⚠️  drive upload gagal (%s, %s): %v", sessionID, f.Name, err)
-			continue
-		}
-		// Tandai foto raw yang tadinya belum terkirim.
-		if f.PhotoID != "" {
-			_, _ = database.DB.Exec(`UPDATE photos SET drive_uploaded = TRUE WHERE id = ?`, f.PhotoID)
-		}
-	}
+	// Upload paralel: satu-per-satu bikin total waktu = jumlah semua file,
+	// padahal tiap upload didominasi latensi jaringan, bukan CPU. Dibatasi
+	// beberapa slot saja supaya koneksi kiosk (dan kuota API Drive) tidak
+	// dibanjiri — strip + 2 GIF + sisa foto raw biasanya cuma segelintir file.
+	const driveUploadWorkers = 4
 
-	log.Printf("✅ drive finalize selesai (%s)", sessionID)
+	sem := make(chan struct{}, driveUploadWorkers)
+	var wg sync.WaitGroup
+
+	// files[0] adalah strip framed (lihat collectFinalDriveFiles) — artefak
+	// paling penting buat customer, jadi ia yang pertama merebut slot.
+	for _, f := range files {
+		wg.Add(1)
+		go func(f finalDriveFile) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			if err := services.UploadFileToFolder(ctx, folderID, f.DriveUpload); err != nil {
+				log.Printf("⚠️  drive upload gagal (%s, %s): %v", sessionID, f.Name, err)
+				return
+			}
+			// Tandai foto raw yang tadinya belum terkirim.
+			if f.PhotoID != "" {
+				_, _ = database.DB.Exec(`UPDATE photos SET drive_uploaded = TRUE WHERE id = ?`, f.PhotoID)
+			}
+		}(f)
+	}
+	wg.Wait()
+
+	log.Printf("✅ drive finalize selesai (%s, %d file)", sessionID, len(files))
 }
 
 // finalDriveFile satu file untuk tahap finalize. PhotoID diisi hanya untuk foto
