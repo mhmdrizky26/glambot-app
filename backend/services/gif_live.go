@@ -162,9 +162,10 @@ func GenerateLiveStripGIF(opts LiveStripOptions) (string, error) {
 		return "", fmt.Errorf("slots kosong")
 	}
 
-	// Lock per-session (reuse mutex dari gif.go) supaya tidak race dengan
-	// GIF #1 generator yang menulis ke folder yang sama.
-	mu := sessionLock(opts.SessionID)
+	// Lock khusus artefak live strip (bukan per-sesi): GIF #1 menulis file
+	// berbeda, jadi keduanya boleh jalan bersamaan. Menyatukan lock-nya bikin
+	// request /gif-live dari HP antre di belakang generasi slideshow.
+	mu := sessionLock(opts.SessionID + lockKindLive)
 	mu.Lock()
 	defer mu.Unlock()
 
@@ -425,16 +426,61 @@ func drawCoverTransformed(
 	cx := float64(rect.Min.X) + rectW/2 + tf.OffsetX*rectW
 	cy := float64(rect.Min.Y) + rectH/2 + tf.OffsetY*rectH
 
+	// Pusat src — dipakai dua jalur di bawah.
+	scx := srcW/2 + float64(sb.Min.X)
+	scy := srcH/2 + float64(sb.Min.Y)
+
+	// ── JALUR CEPAT: tanpa rotasi ────────────────────────────────────────
+	// Tanpa rotasi ini cuma skala + geser, dan itu tugasnya Scale yang
+	// separable (dua pass 1-D). Kernel.Transform di x/image TIDAK punya
+	// fast-path ke Scale — matriks tanpa rotasi pun tetap lewat jalur
+	// non-separable yang jauh lebih mahal. Zoom & geser jauh lebih sering
+	// dipakai daripada rotate, jadi jalur ini yang menanggung mayoritas frame.
+	if math.Mod(tf.Angle, 360) == 0 {
+		// Balik arah pemetaan: dst = (src - pusatSrc)·scale + (cx, cy),
+		// jadi src = (dst - (cx, cy))/scale + pusatSrc.
+		toSrcX := func(dx float64) float64 { return (dx-cx)/scale + scx }
+		toSrcY := func(dy float64) float64 { return (dy-cy)/scale + scy }
+		toDstX := func(sx float64) float64 { return (sx-scx)*scale + cx }
+		toDstY := func(sy float64) float64 { return (sy-scy)*scale + cy }
+
+		// Crop WAJIB di dalam bounds src. Lewat satu pixel saja — gampang
+		// terjadi hanya gara-gara pembulatan — x/image membuang jalur
+		// per-tipe-nya dan jatuh ke scaleX_Image generic yang ~4× lebih lambat.
+		//
+		// Jadi crop di-clamp, DAN rect tujuannya dipetakan ulang dari crop yang
+		// sudah ter-clamp. Meng-clamp crop saja akan menggepengkan gambar;
+		// memetakan keduanya menjaga skala tetap benar. Sisa dst yang tak
+		// tergambar tetap transparan → ditambal guard alpha di pemanggil.
+		sx0 := math.Max(toSrcX(float64(rect.Min.X)), float64(sb.Min.X))
+		sy0 := math.Max(toSrcY(float64(rect.Min.Y)), float64(sb.Min.Y))
+		sx1 := math.Min(toSrcX(float64(rect.Max.X)), float64(sb.Max.X))
+		sy1 := math.Min(toSrcY(float64(rect.Max.Y)), float64(sb.Max.Y))
+
+		crop := image.Rect(
+			int(math.Round(sx0)), int(math.Round(sy0)),
+			int(math.Round(sx1)), int(math.Round(sy1)),
+		).Intersect(sb)
+		dr := image.Rect(
+			int(math.Round(toDstX(sx0))), int(math.Round(toDstY(sy0))),
+			int(math.Round(toDstX(sx1))), int(math.Round(toDstY(sy1))),
+		).Intersect(rect)
+
+		if crop.Dx() > 0 && crop.Dy() > 0 && dr.Dx() > 0 && dr.Dy() > 0 {
+			xdraw.CatmullRom.Scale(dst, dr, src, crop, xdraw.Src, nil)
+			return
+		}
+	}
+
+	// ── JALUR ROTASI ─────────────────────────────────────────────────────
 	// Matriks affine src→dst: translate ke titik tengah src, skala, rotasi,
-	// lalu pindahkan ke (cx, cy). Ditulis sudah dalam bentuk terkomposisi.
+	// lalu pindahkan ke (cx, cy). Ditulis sudah dalam bentuk terkomposisi;
+	// kolom ketiga bikin titik tengah src mendarat tepat di (cx, cy).
 	sc, ss := math.Cos(rad), math.Sin(rad)
 	a := scale * sc
 	b := -scale * ss
 	c := scale * ss
 	d := scale * sc
-	// Offset supaya titik tengah src mendarat tepat di (cx, cy).
-	scx := srcW/2 + float64(sb.Min.X)
-	scy := srcH/2 + float64(sb.Min.Y)
 	m := f64.Aff3{
 		a, b, cx - (a*scx + b*scy),
 		c, d, cy - (c*scx + d*scy),

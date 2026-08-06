@@ -14,6 +14,7 @@ import (
 	"photobooth/models"
 	"photobooth/services"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -388,18 +389,34 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	// Pre-generate kedua varian GIF di background supaya saat user buka
 	// halaman download di HP, file sudah siap (tidak perlu wait beberapa
 	// detik di first hit).
+	//
+	// Keduanya jalan PARALEL: artefaknya beda file dan sejak lock-nya dipecah
+	// per-artefak tidak lagi saling menunggu. Ini penting karena layar QR
+	// menahan loading sampai GIF live selesai — dulu ia harus menunggu
+	// slideshow kelar dulu padahal tidak memerlukannya sama sekali.
 	go func(sid string) {
-		if opts, err := collectAnimationSources(sid); err != nil {
-			log.Printf("⚠️  gif pre-generate skip (%s): %v", sid, err)
-		} else if _, err := services.GenerateSessionGIF(opts); err != nil {
-			log.Printf("⚠️  gif pre-generate failed (%s): %v", sid, err)
-		}
+		var wg sync.WaitGroup
+		wg.Add(2)
 
-		if opts, err := collectLiveStripSources(sid); err != nil {
-			log.Printf("ℹ️  gif-live pre-generate skip (%s): %v", sid, err)
-		} else if _, err := services.GenerateLiveStripGIF(opts); err != nil {
-			log.Printf("⚠️  gif-live pre-generate failed (%s): %v", sid, err)
-		}
+		go func() {
+			defer wg.Done()
+			if opts, err := collectLiveStripSources(sid); err != nil {
+				log.Printf("ℹ️  gif-live pre-generate skip (%s): %v", sid, err)
+			} else if _, err := services.GenerateLiveStripGIF(opts); err != nil {
+				log.Printf("⚠️  gif-live pre-generate failed (%s): %v", sid, err)
+			}
+		}()
+
+		go func() {
+			defer wg.Done()
+			if opts, err := collectAnimationSources(sid); err != nil {
+				log.Printf("⚠️  gif pre-generate skip (%s): %v", sid, err)
+			} else if _, err := services.GenerateSessionGIF(opts); err != nil {
+				log.Printf("⚠️  gif pre-generate failed (%s): %v", sid, err)
+			}
+		}()
+
+		wg.Wait()
 
 		// Setelah strip + GIF siap, upload semua aset sesi ke Google Drive
 		// supaya QR di halaman download bisa mengarah ke folder publik (no-op
