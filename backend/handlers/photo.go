@@ -340,6 +340,9 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Gagal menulis file hasil")
 		return
 	}
+	// Tutup sekarang (defer di atas tinggal jadi jaring pengaman) supaya file
+	// benar-benar utuh sebelum ada yang membacanya untuk diunggah ke Drive.
+	dst.Close()
 
 	// Tandai foto yang dipilih (kalau ada)
 	if len(photoIDs) > 0 {
@@ -369,7 +372,9 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 	// Update sesi: frame_id + filter strip + assignment slot + status completed.
 	// completed_at diisi di sini (sebelumnya kolomnya tidak pernah ditulis).
 	if _, err := database.DB.Exec(
-		`UPDATE sessions SET frame_id = ?, strip_filter = ?, slot_photo_ids = ?, slot_transforms = ?, status = 'completed', completed_at = NOW() WHERE id = ?`,
+		// drive_synced di-reset: strip & GIF versi baru belum tentu sudah naik ke
+		// Drive, jadi sesi ini harus kembali masuk radar retry job sampai lengkap.
+		`UPDATE sessions SET frame_id = ?, strip_filter = ?, slot_photo_ids = ?, slot_transforms = ?, status = 'completed', completed_at = NOW(), drive_synced = FALSE WHERE id = ?`,
 		frameID, stripFilter, string(slotPhotoIDsJSON), slotTransformsJSON, sessionID,
 	); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal memperbarui sesi")
@@ -385,6 +390,16 @@ func ComposeFrame(w http.ResponseWriter, r *http.Request) {
 		respondError(w, http.StatusInternalServerError, "Gagal menyimpan metadata hasil")
 		return
 	}
+
+	// Compose (ulang) berarti strip & GIF sesi ini punya versi baru — lepas
+	// penanda "sudah dikirim" dari compose sebelumnya supaya yang naik ke Drive
+	// adalah versi terbaru, bukan versi lama yang terlanjur dianggap beres.
+	services.ForgetDriveSession(sessionID)
+
+	// Strip framed = artefak yang paling dicari customer. Kirim ke Drive
+	// sekarang juga (non-blocking), tidak usah antre di belakang encoding GIF
+	// di bawah. Finalize memakai nama file yang sama, jadi tidak akan dobel.
+	EnqueueFramedStripUpload(sessionID, framedFullPath)
 
 	// Pre-generate kedua varian GIF di background supaya saat user buka
 	// halaman download di HP, file sudah siap (tidak perlu wait beberapa

@@ -112,24 +112,48 @@ func GenerateSessionGIF(opts GenerateAnimationOptions) (string, error) {
 		return "", fmt.Errorf("tidak ada frame yang berhasil di-decode")
 	}
 
-	out, err := os.Create(outPath)
-	if err != nil {
-		return "", fmt.Errorf("create gif: %w", err)
-	}
-	defer out.Close()
-
 	anim := &gif.GIF{
 		Image:     frames.images,
 		Delay:     frames.delays,
 		LoopCount: 0, // 0 = loop forever
 	}
-	if err := gif.EncodeAll(out, anim); err != nil {
-		return "", fmt.Errorf("encode gif: %w", err)
+	if err := writeGIFAtomic(outPath, anim); err != nil {
+		return "", err
 	}
 
 	log.Printf("🎞️  GIF generated for session %s (%d frames) → %s",
 		opts.SessionID, len(frames.images), outPath)
 	return outPath, nil
+}
+
+// writeGIFAtomic menulis GIF lewat file sementara lalu rename. Menulis langsung
+// ke path final bikin ada jendela beberapa detik dimana file cuma separuh jadi —
+// dan di jendela itu uploader Drive (atau HP customer) bisa saja membacanya,
+// lalu yang tersimpan/terkirim adalah GIF rusak. Rename bersifat atomik, jadi
+// pembaca selalu dapat versi lama yang utuh atau versi baru yang utuh.
+func writeGIFAtomic(outPath string, anim *gif.GIF) error {
+	tmpPath := outPath + ".tmp"
+
+	out, err := os.Create(tmpPath)
+	if err != nil {
+		return fmt.Errorf("create gif: %w", err)
+	}
+
+	if err := gif.EncodeAll(out, anim); err != nil {
+		out.Close()
+		os.Remove(tmpPath)
+		return fmt.Errorf("encode gif: %w", err)
+	}
+	if err := out.Close(); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("close gif: %w", err)
+	}
+
+	if err := os.Rename(tmpPath, outPath); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("rename gif: %w", err)
+	}
+	return nil
 }
 
 type frameSet struct {

@@ -94,6 +94,14 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		// kosong = upload belum selesai/tidak aktif.
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS drive_url TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS drive_folder_id TEXT NOT NULL DEFAULT ''`,
+		// drive_synced: semua artefak sesi (strip + GIF + foto) sudah dipastikan
+		// ada di Drive. FALSE = masih ada yang gagal → retry job menyusulkannya.
+		// DEFAULT-nya sengaja TRUE dulu lalu diturunkan ke FALSE: baris lama
+		// (sebelum kolom ini ada) ikut ter-backfill TRUE dalam satu langkah,
+		// jadi retry job tidak memborong ulang seluruh riwayat saat pertama
+		// kali versi ini jalan. Sesi baru tetap mulai dari FALSE.
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS drive_synced BOOLEAN NOT NULL DEFAULT TRUE`,
+		`ALTER TABLE sessions ALTER COLUMN drive_synced SET DEFAULT FALSE`,
 		// Filter strip yang dipilih user saat compose. Disimpan supaya GIF live
 		// bisa menerapkan filter yang sama ke burst frame (frontend bake-in filter
 		// ke hasil akhir, tapi burst mentah perlu difilter ulang server-side).
