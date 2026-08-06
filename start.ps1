@@ -5,6 +5,18 @@
     satu window Windows Terminal (3 pane), lalu buka Chrome kiosk ke frontend
     dengan profil browser yang baru tiap start.
 
+    Urutannya berantai -- backend -> dobot -> frontend -- dan tiap pane nunggu
+    gilirannya sendiri dengan cara ngecek port pendahulunya:
+
+        backend    langsung jalan
+        dobot      nunggu :APP_PORT   -> baru python main.py
+        frontend   nunggu :APP_PORT + :PORT(dobot) -> baru npm run start
+
+    Kecuali `next build`: itu dijalankan di awal tanpa nunggu siapa pun, karena
+    build tidak butuh service mana pun dan dia bagian yang paling lama. Jadi
+    build overlap dengan boot backend + dobot; antriannya praktis gratis.
+    Yang diantre cuma `npm run start`-nya.
+
     Frontend defaultnya production: `npm run build` lalu `npm run start`. Tidak
     ada HMR, dan perubahan kode BARU kelihatan setelah start ulang -- tukarannya
     navigasi antar halaman instan (tidak ada compile-on-demand kayak dev mode),
@@ -268,6 +280,30 @@ if ($Service) {
                 Write-Host '  build selesai.' -ForegroundColor Green
             }
 
+            # --- baru nunggu giliran -------------------------------------
+            # Frontend paling belakang di rantai (backend -> dobot -> frontend),
+            # TAPI build-nya sengaja dijalankan duluan di atas tanpa nunggu:
+            # `next build` tidak butuh service mana pun, dan dia bagian yang
+            # paling lama. Dijalankan barengan boot backend + dobot, jadi
+            # antriannya gratis -- pas build kelar, dua-duanya biasanya sudah
+            # siap dan lanjut langsung.
+            Write-Host '  nunggu giliran:' -ForegroundColor DarkGray
+            $notReady = @()
+            if (-not (Wait-Port -Port $BackendPort -Label 'backend' -TimeoutSec 180)) { $notReady += 'backend' }
+            if (-not (Wait-Port -Port $DobotPort   -Label 'dobot'   -TimeoutSec 240)) { $notReady += 'dobot' }
+
+            if ($notReady.Count -gt 0) {
+                # Sengaja tetap lanjut, bukan berhenti. Kalau dobot mati (kamera
+                # kepakai app lain, robot tidak terjangkau), kiosk yang blank
+                # jauh lebih susah didiagnosa daripada kiosk yang nyala dengan
+                # satu fitur error. Dashboard admin juga tetap kepakai penuh.
+                Write-Host ''
+                Write-Host ("  [!] {0} belum nyala sampai batas waktu." -f ($notReady -join ' & ')) -ForegroundColor Yellow
+                Write-Host '      Frontend tetap distart -- cek pane-nya, fitur yang' -ForegroundColor Yellow
+                Write-Host '      butuh service itu bakal error.' -ForegroundColor Yellow
+                Write-Host ''
+            }
+
             Write-Host '  starting server...' -ForegroundColor DarkGray
             & npm run start
         }
@@ -276,11 +312,18 @@ if ($Service) {
             Set-Location $DobotDir
             Write-Host "=== DOBOT (Python) :$DobotPort ===" -ForegroundColor Yellow
 
-            # Dobot narik tuning robot dari backend saat boot (app/config +
-            # apply_backend_overrides). Dia memang punya retry, tapi kalau kita
-            # tunggu backend siap dulu, fetch pertamanya langsung kena -> nilai
-            # dari DB yang kepakai, bukan fallback .env.
-            [void] (Wait-Port -Port $BackendPort -Label 'backend' -TimeoutSec 60)
+            # Mata rantai kedua: backend -> DOBOT -> frontend.
+            #
+            # Bukan cuma soal urutan rapi. Dobot narik tuning robot (speed,
+            # timing) dari backend saat boot lewat apply_backend_overrides().
+            # Dia memang punya retry sendiri, tapi kalau backend sudah siap
+            # duluan, fetch pertamanya langsung kena -> nilai yang dipakai
+            # benar-benar dari DB, bukan fallback .env.
+            Write-Host '  nunggu giliran:' -ForegroundColor DarkGray
+            if (-not (Wait-Port -Port $BackendPort -Label 'backend' -TimeoutSec 180)) {
+                Write-Host '  [!] backend belum nyala. Dobot tetap distart (retry-nya' -ForegroundColor Yellow
+                Write-Host '      sendiri masih jalan), tapi tuning bisa jatuh ke .env.' -ForegroundColor Yellow
+            }
 
             $py = Join-Path $DobotDir 'venv\Scripts\python.exe'
             if ($NoRobot) {
@@ -382,6 +425,10 @@ if ($Clean) {
 # --- 4. spawn pane
 
 Write-Host '[4/5] nyalain service' -ForegroundColor Cyan
+Write-Host '      urutan: backend -> dobot -> frontend (tiap pane nunggu gilirannya)' -ForegroundColor DarkGray
+if (-not $Dev) {
+    Write-Host '      next build jalan duluan barengan, tidak ikut antre' -ForegroundColor DarkGray
+}
 
 $self  = $PSCommandPath
 $flags = ''
