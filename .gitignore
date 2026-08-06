@@ -7,7 +7,7 @@ Thumbs.db
 .vscode/
 .idea/
 *.iml
-
+#
 # ─── Environment files (NEVER commit secrets) ────────────────────────────────
 .env
 .env.*

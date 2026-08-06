@@ -275,7 +275,8 @@ function Sync-FromMain {
 
         # Ada yang belum di-commit -> jangan disentuh sama sekali. Merge di atas
         # working tree kotor gampang bikin kerjaan orang hilang.
-        if (& git -C "$Root" status --porcelain 2>$null) {
+        $dirty = @(& git -C "$Root" status --porcelain 2>$null)
+        if ($dirty.Count -gt 0) {
             Write-Host '      [!] ada perubahan lokal yang belum di-commit - pull DILEWATI' -ForegroundColor Yellow
             Write-Host '          commit atau stash dulu kalau mau ikut update main.' -ForegroundColor Yellow
             return
