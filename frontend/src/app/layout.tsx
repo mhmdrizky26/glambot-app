@@ -35,7 +35,7 @@ export const metadata: Metadata = {
     default: 'Glambot',
     template: '%s | Glambot',
   },
-  description: 'Control the camera with your gestures',
+  description: 'Kendalikan kamera dengan gerakan tanganmu',
   icons: {
     icon: '/robot%201.svg',
     shortcut: '/robot%201.svg',
@@ -50,7 +50,7 @@ export default function RootLayout({
 }>) {
   return (
     <html
-      lang="en"
+      lang="id"
       className={`${spaceGrotesk.variable} ${changaOne.variable} ${inter.variable} ${publicSans.variable} h-full antialiased`}
     >
       <body className="h-full">

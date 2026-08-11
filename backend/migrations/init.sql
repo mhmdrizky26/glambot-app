@@ -60,6 +60,11 @@ CREATE TABLE IF NOT EXISTS sessions (
   print_unit_price INTEGER NOT NULL DEFAULT 0,
   price INTEGER NOT NULL,
   discount INTEGER NOT NULL DEFAULT 0,
+  -- Snapshot kode voucher yang dipakai sesi. Sengaja disimpan di sini, bukan
+  -- dibaca dari voucher_usage, karena cleanup menghapus baris voucher_usage
+  -- saat sesi expired — sedangkan riwayat transaksi admin harus tetap bisa
+  -- menampilkan voucher apa yang dipakai. '' = tidak pakai voucher.
+  voucher_code TEXT NOT NULL DEFAULT '',
   final_price INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending_payment'
     CHECK (status IN ('pending_payment', 'paid', 'shooting', 'completed', 'expired')),
@@ -136,11 +141,11 @@ CREATE INDEX IF NOT EXISTS idx_voucher_usage_session_id ON voucher_usage (sessio
 -- di compatibility migration. Install baru cukup pakai DEFAULT 0 dari CREATE TABLE.
 INSERT INTO packages (code, name, description, base_price, duration_secs, print_count, image_src, is_popular, is_active, sort_order)
 VALUES
-  ('regular', 'Digital Package',
-   'HD photos & slow-motion video delivered to your phone via WhatsApp',
+  ('regular', 'Paket Digital',
+   'Foto HD & video gerak lambat, tinggal pindai QR untuk unduh dari Google Drive',
    45000, 300, 3, '/storage/packages/digital.svg', 0, 1, 1),
-  ('vip', 'Print Package',
-   'Printed photos with premium frame & digital copies included',
+  ('vip', 'Paket Cetak',
+   'Foto cetak dengan frame premium, sudah termasuk salinan digital',
    65000, 300, 3, '/storage/packages/print.svg', 1, 1, 2)
 -- Insert-only: seed hanya mengisi default pada install baru. Pakai DO NOTHING
 -- (BUKAN DO UPDATE) supaya edit admin TIDAK ditimpa kembali ke nilai seed setiap

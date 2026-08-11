@@ -377,10 +377,10 @@ function PreviewAreaInner(
     <div className="relative h-full w-full flex flex-col p-2">
       <p className="gradient-text text-center text-[16px] leading-5 tracking[1.33px] mb-3">
         {isDragging
-          ? 'Drop onto a slot'
+          ? 'Jatuhkan ke slot'
           : armedPhoto
-            ? 'Tap a slot to place your photo'
-            : 'Drag a photo in — pinch to zoom'}
+            ? 'Tap slot untuk menaruh fotomu'
+            : 'Seret foto ke sini — cubit untuk zoom'}
       </p>
 
       <div

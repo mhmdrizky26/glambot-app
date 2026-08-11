@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   ChevronRight,
@@ -23,46 +23,54 @@ interface PhotoEditorOnboardingProps {
   onClose: () => void;
 }
 
+/**
+ * Jeda diam sebelum step tutorial pindah sendiri, dihitung sejak tombol
+ * "Lanjut" muncul (narasi step selesai). Berlaku untuk SEMUA step — di step
+ * terakhir artinya tutorial menutup sendiri, jadi intro bisa jalan sampai
+ * habis tanpa disentuh sama sekali. Menyentuh dialog mengulang hitungan.
+ */
+const AUTO_NEXT_MS = 5000;
+
 // `audio` = narasi yang diputar saat step tampil (satu file per step).
 const STEPS = [
   {
     id: 1,
-    title: '1. Pick Frame Layout',
-    description: 'Select your preferred frame template from the right panel.',
+    title: '1. Pilih Layout Frame',
+    description: 'Pilih template frame yang kamu suka di panel sebelah kanan.',
     icon: LayoutTemplate,
-    panelName: 'Frame Panel',
+    panelName: 'Panel Frame',
     audio: 'sentuhFrame.mp3',
   },
   {
     id: 2,
-    title: '2. Place Photos in Slots',
-    description: 'Drag a photo from the left panel or tap to place it into a slot. To replace a photo, simply drop a new photo over it to overwrite.',
+    title: '2. Taruh Foto ke Slot',
+    description: 'Seret foto dari panel kiri, atau tap untuk menaruhnya ke slot. Mau ganti foto? Cukup jatuhkan foto baru di atasnya.',
     icon: Hand,
-    panelName: 'Photo Panel',
+    panelName: 'Panel Foto',
     audio: 'seretFoto.mp3',
   },
   {
     id: 3,
-    title: '3. Adjust & Zoom Directly',
-    description: 'Tap any photo slot directly. Drag with 1 finger to move/pan, or pinch with 2 fingers to zoom.',
+    title: '3. Atur & Zoom Langsung',
+    description: 'Tap slot fotonya langsung. Geser dengan 1 jari untuk menggeser, atau cubit dengan 2 jari untuk zoom.',
     icon: ZoomIn,
-    panelName: 'Direct Canvas Touch',
+    panelName: 'Sentuh Langsung',
     audio: 'seretZoom.mp3',
   },
   {
     id: 4,
-    title: '4. Select Color Filter',
-    description: 'Switch to the Filter tab on the right panel to choose color presets for your photo strip.',
+    title: '4. Pilih Filter Warna',
+    description: 'Buka tab Filter di panel kanan untuk memilih warna buat photo strip-mu.',
     icon: Sparkles,
-    panelName: 'Filter Tab',
+    panelName: 'Tab Filter',
     audio: 'filter.mp3',
   },
   {
     id: 5,
-    title: '5. Confirm & Print',
-    description: 'When all slots are filled, tap the Confirm Print button at the bottom right!',
+    title: '5. Cetak Hasilnya',
+    description: 'Kalau semua slot sudah terisi, tap tombol Cetak Sekarang di kanan bawah!',
     icon: Sparkles,
-    panelName: 'Confirm Print',
+    panelName: 'Cetak Sekarang',
     audio: 'pilihCetakFoto.mp3',
   },
 ];
@@ -79,6 +87,9 @@ export default function PhotoEditorOnboarding({
   // tidak ada tombol Skip dan dialog tidak bisa ditutup dari luar. Skip baru
   // tersedia kalau user membuka ulang tutorial lewat tombol bantuan.
   const [replay, setReplay] = useState(false);
+  // Dinaikkan tiap dialog disentuh — dipakai HANYA sebagai pemicu ulang
+  // hitungan auto-lanjut (nilainya sendiri tidak dibaca).
+  const [touchNonce, setTouchNonce] = useState(0);
 
   // Tutorial dibuka ulang → mulai lagi dari step 1. Disetel saat render (pola
   // "adjust state on prop change") supaya effect narasi di bawah langsung
@@ -89,6 +100,30 @@ export default function PhotoEditorOnboarding({
     setWasOpen(isOpen);
     if (isOpen) setCurrentStep(0);
   }
+
+  // Sekali tutorial ditutup (Skip / "Paham! Mulai Edit"), bukaan berikutnya
+  // dianggap replay → Skip boleh muncul.
+  // Didefinisikan SEBELUM effect di bawah karena auto-lanjut memakainya untuk
+  // menutup tutorial di step terakhir.
+  const closeTutorial = () => {
+    // Skip di tengah narasi → suaranya ikut berhenti, jangan menyusul di
+    // editor. Disapu seluruh clip tutorial (murah, dan tidak bergantung pada
+    // step mana yang terakhir diputar); narasi di luar tutorial — mis.
+    // peringatan waktu editor — sengaja tidak ikut dihentikan.
+    STEPS.forEach((s) => stopBackendAudioFile(s.audio));
+    setReplay(true);
+    onClose();
+  };
+
+  // `closeTutorial` ditahan di ref supaya effect auto-lanjut tidak perlu
+  // memasukkannya ke deps. `onClose` dari parent adalah arrow inline yang
+  // identitasnya berubah TIAP parent re-render (PhotoEditorPage sering
+  // re-render karena timer & state kanvas) — kalau ikut deps, hitungan 5 detik
+  // ter-reset terus dan auto-lanjut tidak akan pernah kejadian.
+  const closeTutorialRef = useRef(closeTutorial);
+  useEffect(() => {
+    closeTutorialRef.current = closeTutorial;
+  });
 
   // Narasi per step — diputar saat tutorial dibuka dan tiap kali step berganti
   // (termasuk lompat lewat dot). Satu channel: step baru menghentikan narasi
@@ -111,22 +146,35 @@ export default function PhotoEditorOnboarding({
     };
   }, [isOpen, currentStep]);
 
+  // Auto-lanjut SEMUA step. Hitungan mulai saat `audioDone` naik (tombol
+  // "Lanjut" muncul) dan dibersihkan sendiri kalau step berganti duluan —
+  // entah karena user menekan tombol, menekan dot navigasi, atau auto-lanjut
+  // ini sendiri. `touchNonce` di deps membuat sentuhan apa pun pada dialog
+  // mengulang hitungan dari nol, jadi user yang sedang menyimak tidak
+  // ditinggal pindah.
+  //
+  // Berbeda dengan halaman intro/instruksi: di sini step TERAKHIR ikut
+  // auto-lanjut, dan itu berarti tutorial menutup diri. Aman karena menutup
+  // tutorial hanya membuka editor foto — tidak memulai apa pun seperti tombol
+  // "Ayo Mulai" yang menjalankan robot.
+  useEffect(() => {
+    if (!isOpen || !audioDone) return;
+
+    const id = window.setTimeout(() => {
+      if (currentStep < STEPS.length - 1) {
+        setCurrentStep((prev) => prev + 1);
+      } else {
+        closeTutorialRef.current();
+      }
+    }, AUTO_NEXT_MS);
+
+    return () => window.clearTimeout(id);
+  }, [isOpen, audioDone, currentStep, touchNonce]);
+
   if (!isOpen) return null;
 
   const step = STEPS[currentStep];
   const totalSteps = STEPS.length;
-
-  // Sekali tutorial ditutup (Skip / "Got it"), bukaan berikutnya dianggap
-  // replay → Skip boleh muncul.
-  const closeTutorial = () => {
-    // Skip di tengah narasi → suaranya ikut berhenti, jangan menyusul di
-    // editor. Disapu seluruh clip tutorial (murah, dan tidak bergantung pada
-    // step mana yang terakhir diputar); narasi di luar tutorial — mis.
-    // peringatan waktu editor — sengaja tidak ikut dihentikan.
-    STEPS.forEach((s) => stopBackendAudioFile(s.audio));
-    setReplay(true);
-    onClose();
-  };
 
   const handleNext = () => {
     if (currentStep < totalSteps - 1) {
@@ -169,7 +217,11 @@ export default function PhotoEditorOnboarding({
             variant="default"
             className="overflow-hidden border-2 border-white/75 shadow-[0px_5.38px_26.92px_0px_rgba(17,45,78,0.5)] rounded-[28px] flex flex-col bg-primary"
           >
-            <article className="flex flex-col w-full text-white">
+            <article
+              className="flex flex-col w-full text-white"
+              // User masih aktif → tunda auto-lanjut, hitung 5 detik dari awal.
+              onTouchStart={() => setTouchNonce((n) => n + 1)}
+            >
               {/* Header */}
               <header className="flex items-center justify-between px-8 py-5 border-b border-white/15 bg-[#112D4E]">
                 <div className="flex items-center gap-3.5">
@@ -184,7 +236,7 @@ export default function PhotoEditorOnboarding({
                       </span>
                     </Dialog.Title>
                     <Dialog.Description className="text-sm font-medium text-[#DBE2EF]/80">
-                      Step {currentStep + 1} of {totalSteps}
+                      Langkah {currentStep + 1} dari {totalSteps}
                     </Dialog.Description>
                   </div>
                 </div>
@@ -198,7 +250,7 @@ export default function PhotoEditorOnboarding({
                       size="sm"
                       className="h-10 px-5 text-sm font-bold hover:bg-white/20 border-white/40 text-white rounded-full transition-all"
                     >
-                      <span>Skip</span>
+                      <span>Lewati</span>
                     </Button>
                   </Dialog.Close>
                 )}
@@ -262,7 +314,7 @@ export default function PhotoEditorOnboarding({
                                   : {}
                               }
                             >
-                              <span>Photo</span>
+                              <span>Foto</span>
 
                               {/* STEP 3 ANIMATION: Pinch & Drag gesture indicators */}
                               {currentStep === 2 && (
@@ -288,7 +340,7 @@ export default function PhotoEditorOnboarding({
                         <div className="w-full h-1/2 rounded border border-dashed border-[#3F72AF]/70 bg-[#3F72AF]/20 flex items-center justify-center">
                           {currentStep >= 4 ? (
                             <div className="w-full h-full bg-[#3F72AF]/60 border border-white/30 flex items-center justify-center text-xs font-bold text-white">
-                              <span>Photo</span>
+                              <span>Foto</span>
                             </div>
                           ) : (
                             <span className="text-xs font-semibold text-white/50">Slot 2</span>
@@ -332,8 +384,8 @@ export default function PhotoEditorOnboarding({
                         </div>
                       ) : (
                         <div className="flex flex-col gap-1.5 mt-1">
-                          <div className="h-7 rounded-md bg-[#3F72AF] border-2 border-white/40 text-xs flex items-center justify-center font-bold text-white">Warm</div>
-                          <div className="h-7 rounded-md bg-white/10 border border-white/15 text-xs flex items-center justify-center text-white/70">Cool</div>
+                          <div className="h-7 rounded-md bg-[#3F72AF] border-2 border-white/40 text-xs flex items-center justify-center font-bold text-white">Hangat</div>
+                          <div className="h-7 rounded-md bg-white/10 border border-white/15 text-xs flex items-center justify-center text-white/70">Sejuk</div>
                         </div>
                       )}
                     </div>
@@ -364,7 +416,7 @@ export default function PhotoEditorOnboarding({
                     {/* Center Toolbar Mockup */}
                     <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-primary/80 border border-white/30 text-xs font-semibold text-white/80">
                       <span className="flex items-center gap-1"><ZoomIn className="w-3 h-3" /> Zoom</span>
-                      <span className="flex items-center gap-1"><RotateCw className="w-3 h-3" /> Rotate</span>
+                      <span className="flex items-center gap-1"><RotateCw className="w-3 h-3" /> Putar</span>
                       <span className="flex items-center gap-1"><RefreshCw className="w-3 h-3" /> Reset</span>
                     </div>
 
@@ -377,7 +429,7 @@ export default function PhotoEditorOnboarding({
                             : 'bg-white/10 text-white/40 border border-white/15'
                         }`}
                       >
-                        <span>Confirm Print</span>
+                        <span>Cetak Sekarang</span>
                       </div>
                     </div>
                   </div>
@@ -406,11 +458,11 @@ export default function PhotoEditorOnboarding({
                   className="h-10 px-5 text-sm font-bold gap-1 border-white/40 text-white hover:bg-white/10 disabled:opacity-30 rounded-full"
                 >
                   <ChevronLeft className="w-4 h-4" />
-                  <span>Back</span>
+                  <span>Kembali</span>
                 </Button>
 
                 {/* Navigation Step Dots */}
-                <nav className="flex items-center gap-2.5" aria-label="Onboarding Progress">
+                <nav className="flex items-center gap-2.5" aria-label="Progres panduan">
                   {STEPS.map((_, idx) => (
                     <button
                       key={idx}
@@ -437,7 +489,7 @@ export default function PhotoEditorOnboarding({
                     !audioDone && 'opacity-0 pointer-events-none',
                   )}
                 >
-                  <span>{currentStep === totalSteps - 1 ? 'Got it! Start Editing' : 'Next'}</span>
+                  <span>{currentStep === totalSteps - 1 ? 'Paham! Mulai Edit' : 'Lanjut'}</span>
                   <ChevronRight className="w-4 h-4" />
                 </Button>
               </footer>

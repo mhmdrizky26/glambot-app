@@ -33,7 +33,7 @@ export const useLiveStream = () => {
     setRetryCount((prev) => prev + 1);
   }, []);
 
-  const errorMessage = hasError ? 'Stream not available' : null;
+  const errorMessage = hasError ? 'Video tidak tersedia' : null;
 
   return {
     frameUrl,

@@ -35,6 +35,10 @@ export interface Transaction {
   qrisRawString?: string;
   paidAt?: string;
   createdAt: string;
+  // Nominal potongan (sessions.discount), selalu ada. Terpisah dari `voucher`
+  // karena transaksi lama bisa punya potongan tanpa kode voucher — kodenya
+  // sudah dihapus cleanup, nominalnya tidak.
+  discount: number;
 
   // Relational fields — joined by the backend
   package?: TransactionPackage;
@@ -89,6 +93,7 @@ export type BackendResponse = {
   qris_raw_string?: string;
   paid_at?: string;
   created_at: string;
+  discount?: number;
   voucher?: TransactionVoucher | null;
   package?: BackendPackage | null;
   frame?: BackendFrame | null;
@@ -104,6 +109,9 @@ export const normalizeTransaction = (data: BackendResponse): Transaction => ({
   qrisRawString: data.qris_raw_string,
   paidAt: data.paid_at,
   createdAt: data.created_at,
+  // Fallback ke voucher.discount supaya tetap benar kalau backend lama yang
+  // belum mengirim `discount` di level atas.
+  discount: data.discount ?? data.voucher?.discount ?? 0,
   voucher: data.voucher ?? undefined,
   package: data.package ?? undefined,
   frame: data.frame ?? undefined,

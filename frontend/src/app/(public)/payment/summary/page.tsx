@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import SummaryPage from '@/features/public/payment/pages/SummaryPage';
 
 export const metadata: Metadata = {
-  title: 'Order Summary',
-  description: 'Review your order before proceeding to payment',
+  title: 'Ringkasan Pesanan',
+  description: 'Periksa pesananmu sebelum lanjut ke pembayaran',
 };
 
 function SummaryFallback() {

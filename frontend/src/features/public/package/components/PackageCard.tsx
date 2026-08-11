@@ -29,7 +29,7 @@ export default function PackageCard({
         <img width={464} height={244} src={imageSrc} alt={title} />
         {isPopular && (
           <div className="absolute top-2 left-2 gradient-primary text-white px-3.5 py-1 m-2 rounded-full text-sm font-medium">
-            Popular
+            Populer
           </div>
         )}
       </div>

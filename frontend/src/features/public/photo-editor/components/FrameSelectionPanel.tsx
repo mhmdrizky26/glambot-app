@@ -16,20 +16,26 @@ const tabs: { id: TabType; label: string }[] = [
 // Static filter list — keep order in sync with `lib/filters.ts` getFiltersByType.
 // `swatch` = dua warna gradasi yang mewakili tone filter, dipakai kotak info
 // warna di sisi kanan tiap baris (bukan hasil render asli, hanya petunjuk cepat).
+//
+// PENTING: `id` adalah nilai yang disimpan ke sessions.strip_filter dan dipakai
+// backend saat me-render GIF — JANGAN diterjemahkan/diubah. Hanya `name` (label
+// yang dilihat user) yang boleh berubah. Nama filter yang sudah lazim dipakai
+// apa adanya di dunia fotografi (Vintage, Sepia, Noir, Mono, dll) sengaja
+// dibiarkan berbahasa Inggris.
 const FILTER_OPTIONS: {
   id: FilterType;
   name: string;
   swatch: [string, string];
 }[] = [
-  { id: 'original', name: 'Original', swatch: ['#F9F7F7', '#B0B7C3'] },
-  { id: 'warm', name: 'Warm', swatch: ['#FFD9A0', '#F0A868'] },
-  { id: 'cool', name: 'Cool', swatch: ['#A9D6F5', '#5B8FD1'] },
+  { id: 'original', name: 'Asli', swatch: ['#F9F7F7', '#B0B7C3'] },
+  { id: 'warm', name: 'Hangat', swatch: ['#FFD9A0', '#F0A868'] },
+  { id: 'cool', name: 'Sejuk', swatch: ['#A9D6F5', '#5B8FD1'] },
   { id: 'vintage', name: 'Vintage', swatch: ['#D9C4A0', '#A98B63'] },
   { id: 'dramatic', name: 'Dramatic', swatch: ['#6E7B8B', '#1F2933'] },
   { id: 'mono', name: 'Mono', swatch: ['#FFFFFF', '#2B2B2B'] },
   { id: 'sepia', name: 'Sepia', swatch: ['#E4C9A0', '#8A6A44'] },
   { id: 'vivid', name: 'Vivid', swatch: ['#FF8A5B', '#4FC3F7'] },
-  { id: 'soft', name: 'Soft', swatch: ['#F3E9E4', '#CBBFC0'] },
+  { id: 'soft', name: 'Lembut', swatch: ['#F3E9E4', '#CBBFC0'] },
   { id: 'film', name: 'Film', swatch: ['#DCCFC0', '#8E8578'] },
   { id: 'noir', name: 'Noir', swatch: ['#EDEDED', '#0B0B0B'] },
   { id: 'sunset', name: 'Sunset', swatch: ['#FFB07C', '#E0587B'] },
@@ -194,7 +200,7 @@ export default function FrameSelectionPanel({
         {/* Filter tab */}
         {activeTab === 'filter' && (
           <div className="p-4 flex flex-col gap-2 h-full overflow-y-auto scrollbar-none">
-            <p className="text-[#ffff]/40 text-[13px] mb-1">FILTER STYLE</p>
+            <p className="text-[#ffff]/40 text-[13px] mb-1">GAYA FILTER</p>
             {FILTER_OPTIONS.map((filter) => {
               const isSelected = selectedFilter === filter.id;
               return (

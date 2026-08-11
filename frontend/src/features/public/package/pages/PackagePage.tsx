@@ -68,10 +68,10 @@ export default function PackagePage() {
 
       <div className="py-3.5 text-center">
         <h1 className="font-bold text-primary text-[62px]">
-          Choose Your Package
+          Pilih Paketmu
         </h1>
         <p className="text-primary text-[24px] leading-6.25 mt-6">
-          Select the experience that suits you
+          Pilih pengalaman foto yang paling pas buatmu
         </p>
       </div>
 
@@ -87,7 +87,7 @@ export default function PackagePage() {
         )}
 
         {isError && (
-          <p className="text-red-500 text-xl">Failed to load packages</p>
+          <p className="text-red-500 text-xl">Gagal memuat paket</p>
         )}
 
         {!isPending &&
@@ -116,7 +116,7 @@ export default function PackagePage() {
 
       {createError && (
         <p className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-red-500/90 text-white px-6 py-3 rounded-lg text-sm">
-          {createError.message ?? 'Failed to create session. Please try again.'}
+          {createError.message ?? 'Gagal memulai sesi. Silakan coba lagi.'}
         </p>
       )}
     </main>

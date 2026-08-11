@@ -49,13 +49,16 @@ export function GestureDetectionPanel({
 
   const hasStream = !!streamUrl && reachable;
 
+  // CATATAN: `fsmState` (LOCKED/UNLOCKING/…) datang dari backend — itu nilai
+  // protokol, jangan diterjemahkan. Yang boleh diterjemahkan hanya label
+  // tampilan turunannya di bawah ini.
   const statusLabel = isMoving
-    ? 'Moving'
+    ? 'Bergerak'
     : isCooldown
-      ? 'Capturing'
+      ? 'Mengambil foto'
       : isLocked
-        ? 'Locked'
-        : 'Unlocked';
+        ? 'Terkunci'
+        : 'Siap';
 
   return (
     <div
@@ -72,7 +75,7 @@ export function GestureDetectionPanel({
         <img
           key={`${streamUrl}-${nonce}`}
           src={`${streamUrl}?k=${nonce}`}
-          alt="Robot hand-detection camera"
+          alt="Kamera pendeteksi tangan robot"
           className="absolute inset-0 w-full h-full object-cover bg-black"
           onError={() => {
             window.setTimeout(() => setNonce((n) => n + 1), 1500);
@@ -81,7 +84,7 @@ export function GestureDetectionPanel({
       ) : (
         <div className="absolute inset-0 flex items-center justify-center">
           <p className="text-white/30 text-xs">
-            {reachable ? 'Stream not available' : 'Robot camera offline'}
+            {reachable ? 'Video tidak tersedia' : 'Kamera robot tidak aktif'}
           </p>
         </div>
       )}
@@ -90,7 +93,7 @@ export function GestureDetectionPanel({
       {(isMoving || isCooldown) && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/40">
           <span className="text-white text-lg font-medium tracking-wide">
-            {isMoving ? 'Moving to position…' : 'Capturing…'}
+            {isMoving ? 'Menuju posisi…' : 'Mengambil foto…'}
           </span>
         </div>
       )}
@@ -126,7 +129,7 @@ export function GestureDetectionPanel({
             {gestureName
               ? gestureName
               : isLocked
-                ? 'Waiting…'
+                ? 'Menunggu…'
                 : `${Math.round(progressPercentage)}%`}
           </span>
         </div>

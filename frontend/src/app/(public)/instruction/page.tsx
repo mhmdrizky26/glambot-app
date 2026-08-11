@@ -1,8 +1,8 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'How to Use',
-  description: 'Learn how to control the camera with your gestures',
+  title: 'Cara Pakai',
+  description: 'Pelajari cara mengendalikan kamera dengan gerakan tanganmu',
 };
 
 export { default } from '@/features/public/instruction/pages/InstructionPage';

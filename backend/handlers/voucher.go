@@ -152,11 +152,14 @@ func ApplyVoucher(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// voucher_code ikut disimpan di sesi sebagai snapshot: baris voucher_usage
+	// dihapus cleanup saat sesi expired, sementara riwayat transaksi admin harus
+	// tetap menunjukkan voucher yang dipakai (lihat catatan di init.sql).
 	if _, err := tx.Exec(`
 		UPDATE sessions
-		SET discount = ?, final_price = ?
+		SET discount = ?, final_price = ?, voucher_code = ?
 		WHERE id = ?`,
-		discountAmount, finalPrice, req.SessionID,
+		discountAmount, finalPrice, v.Code, req.SessionID,
 	); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal menyimpan diskon")
 		return
@@ -251,9 +254,10 @@ func RemoveVoucher(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Reset diskon di sesi
+	// Reset diskon di sesi — voucher_code ikut dikosongkan supaya snapshot-nya
+	// tidak menyisakan voucher yang sudah dilepas.
 	if _, err := tx.Exec(`
-		UPDATE sessions SET discount = 0, final_price = ? WHERE id = ?`, getSessionTotalPrice(session), req.SessionID,
+		UPDATE sessions SET discount = 0, final_price = ?, voucher_code = '' WHERE id = ?`, getSessionTotalPrice(session), req.SessionID,
 	); err != nil {
 		respondError(w, http.StatusInternalServerError, "Gagal mereset diskon sesi")
 		return

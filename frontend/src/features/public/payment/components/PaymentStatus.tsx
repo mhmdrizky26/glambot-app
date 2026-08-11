@@ -27,8 +27,8 @@ function QrisPreview({ src }: { src: string }) {
     return (
       <div className="w-70 h-70 rounded-lg bg-slate-100 flex items-center justify-center px-6 text-center">
         <p className="text-slate-600 text-sm leading-6">
-          Failed to load QR image. Wait a few seconds then refresh or create a
-          new payment.
+          Gagal memuat gambar QR. Tunggu beberapa detik lalu muat ulang, atau
+          buat pembayaran baru.
         </p>
       </div>
     );
@@ -39,7 +39,7 @@ function QrisPreview({ src }: { src: string }) {
     // eslint-disable-next-line @next/next/no-img-element
     <img
       src={src}
-      alt="QRIS Payment"
+      alt="Kode QRIS pembayaran"
       width={280}
       height={280}
       className="rounded-lg block"
@@ -93,10 +93,10 @@ export default function PaymentStatus({
       <div className="p-8 flex flex-col items-center justify-center min-h-125">
         <StatusAnimation status="processing" />
         <h1 className="text-5xl font-bold text-primary leading-20 mb-1">
-          Processing payment...
+          Memproses pembayaran...
         </h1>
         <p className="text-primary/50 text-2xl leading-10">
-          Please wait a moment
+          Mohon tunggu sebentar
         </p>
       </div>
     );
@@ -108,10 +108,10 @@ export default function PaymentStatus({
       <div className="p-10 flex flex-col items-center text-center">
         <StatusAnimation status="success" />
         <h1 className="text-5xl font-bold text-primary leading-20 mb-1">
-          Payment Successful!
+          Pembayaran Berhasil!
         </h1>
         <p className="text-primary/50 text-2xl leading-10">
-          Let&apos;s begin your session!
+          Yuk, mulai sesi fotomu!
         </p>
       </div>
     );
@@ -123,15 +123,15 @@ export default function PaymentStatus({
       <div className="p-10 flex flex-col items-center text-center">
         <StatusAnimation status={status} />
         <h1 className="text-5xl font-bold text-primary leading-20 mb-1">
-          {status === 'expired' ? 'Payment Expired!' : 'Payment Failed!'}
+          {status === 'expired' ? 'Waktu Habis!' : 'Pembayaran Gagal!'}
         </h1>
         <p className="text-primary/50 text-2xl leading-10">
           {status === 'expired'
-            ? 'Time has run out, please try again'
-            : 'Please make the payment again'}
+            ? 'Waktu pembayaran sudah habis, silakan coba lagi'
+            : 'Silakan lakukan pembayaran ulang'}
         </p>
         <Button className="mt-20 w-full" onClick={onRetry}>
-          Back to payment
+          Kembali ke pembayaran
         </Button>
       </div>
     );
@@ -142,10 +142,10 @@ export default function PaymentStatus({
       <div className="p-8 flex flex-col items-center justify-center min-h-125">
         <StatusAnimation status="waiting" />
         <h1 className="text-5xl font-bold text-primary leading-20 mb-1">
-          Preparing payment...
+          Menyiapkan pembayaran...
         </h1>
         <p className="text-primary/50 text-2xl leading-10">
-          Please wait a moment
+          Mohon tunggu sebentar
         </p>
       </div>
     );
@@ -159,10 +159,10 @@ export default function PaymentStatus({
           {/* Header */}
           <div>
             <h1 className="text-[42.82px] font-bold leading-[1.1] text-white">
-              Scan to Pay
+              Pindai untuk Bayar
             </h1>
             <p className="mt-3 text-[19px] leading-7 text-white/40">
-              Use any QRIS-compatible payment app
+              Pakai aplikasi pembayaran apa pun yang mendukung QRIS
             </p>
           </div>
 
@@ -174,7 +174,7 @@ export default function PaymentStatus({
           ) : (
             <div className="rounded-2xl border border-white/15 bg-white/5 px-6 py-8 text-center">
               <p className="text-sm text-white">
-                QRIS is not ready yet. Payment is still processing, please wait.
+                QRIS belum siap. Pembayaran masih diproses, mohon tunggu.
               </p>
             </div>
           )}

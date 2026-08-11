@@ -26,7 +26,7 @@ type txFrame struct {
 	Category string `json:"category"`
 }
 
-// txVoucher — info voucher yang dipakai sesi (dari voucher_usage + sessions.discount).
+// txVoucher — info voucher yang dipakai sesi (dari sessions.voucher_code + discount).
 type txVoucher struct {
 	Code     string `json:"code"`
 	Discount int    `json:"discount"`
@@ -43,6 +43,11 @@ type transactionResponse struct {
 	QRISRawString   string     `json:"qris_raw_string,omitempty"`
 	PaidAt          *string    `json:"paid_at,omitempty"`
 	CreatedAt       string     `json:"created_at"`
+	// Discount selalu dikirim (sessions.discount), terpisah dari Voucher. Sesi
+	// lama yang kode vouchernya sudah tersapu cleanup masih punya nominal
+	// potongan di sini, jadi Subtotal−Potongan=Total tetap konsisten walau
+	// kodenya tak lagi diketahui.
+	Discount        int        `json:"discount"`
 	Voucher         *txVoucher `json:"voucher,omitempty"`
 	Package         *txPackage `json:"package,omitempty"`
 	Frame           *txFrame   `json:"frame,omitempty"`
@@ -71,16 +76,14 @@ func packageCodeToType(code string) string {
 	return "digital"
 }
 
-// Voucher diambil lewat correlated subquery (bukan JOIN) supaya SATU baris
-// transaksi tetap satu baris — voucher_usage.session_id tidak unik, jadi JOIN
-// bisa menggandakan baris & bikin list desync dengan COUNT(*) yang tak ikut join.
+// Voucher dibaca dari snapshot s.voucher_code, BUKAN dari voucher_usage:
+// cleanup menghapus baris voucher_usage begitu sesi expired (services/cleanup.go),
+// jadi riwayat transaksi lama akan kehilangan jejak vouchernya kalau bersumber
+// dari sana — padahal nominalnya sudah terlanjur terpotong di amount.
 const txSelect = `t.id, t.session_id, t.midtrans_order_id, t.amount, t.status,
 	COALESCE(t.qris_url, ''), COALESCE(t.qris_raw_string, ''), t.paid_at, t.created_at,
 	p.id, p.code, p.name, f.id, f.name, f.category,
-	s.expires_at, COALESCE(s.discount, 0),
-	(SELECT vu.voucher_code FROM voucher_usage vu
-	 WHERE vu.session_id = t.session_id
-	 ORDER BY vu.used_at DESC LIMIT 1)
+	s.expires_at, COALESCE(s.discount, 0), COALESCE(s.voucher_code, '')
 	FROM transactions t
 	LEFT JOIN sessions s ON s.id = t.session_id
 	LEFT JOIN packages p ON p.id = s.package_id
@@ -100,7 +103,7 @@ func scanTransaction(s interface{ Scan(...any) error }) (transactionResponse, er
 		frameCat    sql.NullString
 		expiresAt   sql.NullTime
 		discount    int
-		voucherCode sql.NullString
+		voucherCode string
 	)
 	err := s.Scan(&t.ID, &t.SessionID, &t.MidtransOrderID, &t.Amount, &dbStatus,
 		&t.QRISUrl, &t.QRISRawString, &paidAt, &createdAt,
@@ -131,8 +134,9 @@ func scanTransaction(s interface{ Scan(...any) error }) (transactionResponse, er
 	if frameID.Valid && frameID.String != "" {
 		t.Frame = &txFrame{ID: frameID.String, Name: frameName.String, Category: frameCat.String}
 	}
-	if voucherCode.Valid && voucherCode.String != "" {
-		t.Voucher = &txVoucher{Code: voucherCode.String, Discount: discount}
+	t.Discount = discount
+	if voucherCode != "" {
+		t.Voucher = &txVoucher{Code: voucherCode, Discount: discount}
 	}
 	return t, nil
 }

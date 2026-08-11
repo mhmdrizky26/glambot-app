@@ -53,7 +53,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           className="flex flex-col items-center text-center px-6 py-8 gap-4 max-w-sm"
         >
           <p className="text-white font-semibold text-base">
-            Invalid session ID.
+            ID sesi tidak valid.
           </p>
         </GlassCard>
       </main>
@@ -68,10 +68,10 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
       <main className="flex flex-col items-center justify-center min-h-full px-4 gap-4">
         <div
           role="status"
-          aria-label="Loading photos"
+          aria-label="Memuat foto"
           className="w-14 h-14 rounded-full border-4 border-primary/20 border-t-primary animate-spin"
         />
-        <p className="text-primary font-semibold text-base">Loading photos...</p>
+        <p className="text-primary font-semibold text-base">Memuat foto...</p>
       </main>
     );
   }
@@ -101,7 +101,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           className="flex flex-col items-center text-center px-6 py-8 gap-4 max-w-sm"
         >
           <p className="text-white font-semibold text-base">
-            No photos found for this session.
+            Tidak ada foto untuk sesi ini.
           </p>
         </GlassCard>
       </main>
@@ -113,7 +113,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
       {/* Header */}
       <header className="w-full max-w-2xl text-center flex flex-col items-center gap-1.5 sm:gap-2 pt-2">
         <h1 className="text-2xl sm:text-3xl font-bold text-primary leading-tight">
-          Download Your Photos
+          Unduh Fotomu
         </h1>
         <p className="text-primary/60 text-xs sm:text-sm">
           {framed.length > 0 && `${framed.length} strip results · `}
@@ -125,7 +125,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
       {framed.length > 0 && (
         <section className="w-full max-w-2xl flex flex-col gap-2 sm:gap-3">
           <h2 className="text-primary/80 text-xs sm:text-sm font-semibold uppercase tracking-wider px-1">
-            Strip Results
+            Hasil Strip
           </h2>
           <GlassCard
             variant="default"
@@ -153,12 +153,12 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
         </section>
       )}
 
-      {/* Animated GIF — dua varian: slideshow foto + live strip (kalau ada
+      {/* GIF Animasi — dua varian: slideshow foto + live strip (kalau ada
           burst frames). Tampil kalau ada minimal foto. */}
       {allPhotos.length > 0 && (
         <section className="w-full max-w-2xl flex flex-col gap-2 sm:gap-3">
           <h2 className="text-primary/80 text-xs sm:text-sm font-semibold uppercase tracking-wider px-1">
-            Animated GIF
+            GIF Animasi
           </h2>
 
           {/* GIF #1: Slideshow foto raw terpilih */}
@@ -170,7 +170,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
             <div className="w-full sm:w-32 shrink-0">
               <GIFPreview
                 endpoint={`/api/photo/session/${sessionId}/gif`}
-                alt="Preview slideshow GIF"
+                alt="Pratinjau GIF slideshow"
                 aspectClass="aspect-[2/3]"
               />
             </div>
@@ -179,12 +179,12 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
                 {/* Sesi Digital tidak punya strip (jadi tidak ada Live Strip);
                     GIF yang sama ini yang jadi "Live Photos" mereka. */}
                 <p className="text-white font-semibold text-sm sm:text-base">
-                  {framed.length > 0 ? 'Photo Slideshow' : 'Live Photos'}
+                  {framed.length > 0 ? 'Slideshow Foto' : 'Live Photo'}
                 </p>
                 <p className="text-white/60 text-xs sm:text-sm">
                   {framed.length > 0
-                    ? 'Selected photos looped one by one — perfect for your story / WhatsApp status.'
-                    : 'All your photos looped one by one — perfect for your story / WhatsApp status.'}
+                    ? 'Foto pilihanmu diputar bergantian — pas banget buat story / status WhatsApp.'
+                    : 'Semua fotomu diputar bergantian — pas banget buat story / status WhatsApp.'}
                 </p>
               </div>
               <Button
@@ -192,18 +192,18 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
                 size="default"
                 disabled={gifState === 'downloading'}
                 onClick={() => downloadGIF(sessionId)}
-                aria-label="Download slideshow GIF"
+                aria-label="Unduh GIF slideshow"
                 className="w-full sm:w-auto sm:self-start whitespace-nowrap"
               >
                 {gifState === 'downloading'
-                  ? 'Preparing...'
+                  ? 'Menyiapkan...'
                   : gifState === 'done'
                     ? 'Saved ✓'
                     : gifState === 'error'
-                      ? 'Failed, try again'
+                      ? 'Gagal, coba lagi'
                       : framed.length > 0
-                        ? 'Download GIF'
-                        : 'Download Live Photos'}
+                        ? 'Unduh GIF'
+                        : 'Unduh Live Photo'}
               </Button>
             </div>
           </GlassCard>
@@ -222,7 +222,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
               <div className="w-full sm:w-32 shrink-0">
                 <GIFPreview
                   endpoint={`/api/photo/session/${sessionId}/gif-live`}
-                  alt="Preview live strip GIF"
+                  alt="Pratinjau GIF live strip"
                   aspectClass="aspect-[2/3]"
                 />
               </div>
@@ -241,16 +241,16 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
                   size="default"
                   disabled={gifLiveState === 'downloading'}
                   onClick={() => downloadLiveGIF(sessionId)}
-                  aria-label="Download live strip GIF"
+                  aria-label="Unduh GIF live strip"
                   className="w-full sm:w-auto sm:self-start whitespace-nowrap"
                 >
                   {gifLiveState === 'downloading'
-                    ? 'Preparing...'
+                    ? 'Menyiapkan...'
                     : gifLiveState === 'done'
                       ? 'Saved ✓'
                       : gifLiveState === 'error'
-                        ? 'Not available yet'
-                        : 'Download Live Strip'}
+                        ? 'Belum tersedia'
+                        : 'Unduh Live Strip'}
                 </Button>
               </div>
             </GlassCard>
@@ -262,7 +262,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
       {raw.length > 0 && (
         <section className="w-full max-w-2xl flex flex-col gap-2 sm:gap-3">
           <h2 className="text-primary/80 text-xs sm:text-sm font-semibold uppercase tracking-wider px-1">
-            Raw Photos
+            Foto Asli
           </h2>
           <GlassCard
             variant="default"
@@ -285,7 +285,7 @@ export function PhotoDownloadPage({ sessionId }: PhotoDownloadPageProps) {
           size="default"
           className="w-full shadow-2xl"
           onClick={() => downloadAll(allPhotos)}
-          aria-label="Download all photos"
+          aria-label="Unduh semua foto"
         >
           Download All ({allPhotos.length})
         </Button>

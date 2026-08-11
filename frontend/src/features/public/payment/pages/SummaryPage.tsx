@@ -70,14 +70,14 @@ export default function SummaryPage() {
         <TimerIcon />
         <GlassCard className="p-8 max-w-174.75">
           <p className="text-white text-center text-xl mb-6">
-            Session not found
+            Sesi tidak ditemukan
           </p>
           <Button
             variant="outline"
             onClick={() => router.push('/package')}
             className="w-full"
           >
-            Back to Packages
+            Kembali ke Paket
           </Button>
         </GlassCard>
       </main>
@@ -109,7 +109,7 @@ export default function SummaryPage() {
       >
         {/* Title */}
         <h1 className="text-[48.46px] leading-[72.7px] font-bold text-white text-center mb-10.75">
-          Order Summary
+          Ringkasan Pesanan
         </h1>
 
         {/* Line Items */}
@@ -128,7 +128,7 @@ export default function SummaryPage() {
           {extraPrintCost > 0 && (
             <div className="flex justify-between items-center">
               <span className="text-blue-100/50 text-[22.8px] leading-8.5">
-                Print
+                Cetak
               </span>
               <span className="text-white text-[22.8px] leading-8.5">
                 Rp {formatRupiah(extraPrintCost)}
@@ -139,7 +139,7 @@ export default function SummaryPage() {
           {/* Discount */}
           {discount > 0 && (
             <div className="flex justify-between items-center">
-              <span className="text-green-400 text-base">Voucher discount</span>
+              <span className="text-green-400 text-base">Potongan voucher</span>
               <span className="text-green-400 text-base">
                 - Rp {formatRupiah(discount)}
               </span>
@@ -169,7 +169,7 @@ export default function SummaryPage() {
             />
             <Input
               type="text"
-              placeholder="Voucher code"
+              placeholder="Kode voucher"
               value={code}
               readOnly
               onFocus={() => !isValid && setKeyboardOpen(true)}
@@ -187,7 +187,7 @@ export default function SummaryPage() {
             disabled={loading || !code.trim() || isValid}
             className="px-6 py-3.5 text-white disabled:text-white/40 rounded-[18.85px]"
           >
-            {loading ? '...' : 'Apply'}
+            {loading ? '...' : 'Pakai'}
           </Button>
         </div>
 
@@ -208,7 +208,7 @@ export default function SummaryPage() {
           onClick={handleProceed}
           className="w-full py-[26.58px] px-[58.48px] rounded-[45.9px] text-[26.45px] leading-[39.7px] font-medium"
         >
-          Proceed to Payment
+          Lanjut ke Pembayaran
         </Button>
       </GlassCard>
 
@@ -227,8 +227,8 @@ export default function SummaryPage() {
             )}
           >
             <OnScreenKeyboard
-              title="Type in the voucher"
-              enterLabel="Apply"
+              title="Ketik kode voucher"
+              enterLabel="Pakai"
               onKeyPress={(char) => setCode((code + char).toUpperCase())}
               onBackspace={() => setCode(code.slice(0, -1))}
               onClear={() => setCode('')}
