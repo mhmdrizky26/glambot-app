@@ -101,7 +101,7 @@ export default function PhotoSelectionPanel({
     <GlassCard className="flex flex-col shadow-none h-full max-w-none rounded-[19.28px]">
       <div className="flex-1 overflow-y-auto min-h-0 p-3 scrollbar-none">
         <p className="text-[#ffff]/40 text-[13px] pl-3">
-          {armedPhotoId ? 'TAP A SLOT TO PLACE' : 'DRAG OR TAP A PHOTO'}
+          {armedPhotoId ? 'TAP SLOT UNTUK MENARUH' : 'SERET ATAU TAP FOTO'}
         </p>
         <div data-testid="photo-gallery" className="grid grid-cols-2 gap-2 p-2">
           {photos.map((photo) => (

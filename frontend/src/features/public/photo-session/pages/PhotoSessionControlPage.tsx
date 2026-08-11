@@ -58,7 +58,7 @@ export function PhotoSessionControlPage() {
         <p className="text-primary/40 text-2xl font-medium tracking-widest uppercase">
           Standby
         </p>
-        <p className="text-white/20 text-sm">Waiting for next session...</p>
+        <p className="text-white/20 text-sm">Menunggu sesi berikutnya...</p>
       </div>
     );
   }

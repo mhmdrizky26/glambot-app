@@ -127,14 +127,14 @@ export default function Home() {
       className="fixed inset-0 flex flex-col items-center justify-center cursor-pointer select-none"
     >
       <div className="flex flex-col items-center animate-float-y">
-        <p className="text-primary text-[34px] tracking-[13px]">Experience The</p>
+        <p className="text-primary text-[34px] tracking-[13px]">Rasakan Serunya</p>
 
         <h1 className="mt-5 font-changa text-[210px] leading-[0.9] font-black gradient-text">
           GLAMBOT
         </h1>
 
         <p className="mt-5 text-[#2b4260] text-[32px] font-medium tracking-[4px]">
-          Control the camera with your gestures
+          Kendalikan kamera dengan gerakan tanganmu
         </p>
       </div>
 

@@ -4,39 +4,43 @@ interface SessionGesture {
   fingers: string; // Description of finger gesture
 }
 
+// CATATAN: `icon` adalah path file SVG asli — JANGAN diterjemahkan. Selain
+// nama filenya memang begitu, GestureControlsGrid mencocokkan string
+// 'MOVELEFT' dari path ini untuk memutar ikon jempol.
+// Urutan array = urutan tampil di grid, jangan diubah.
 export const Gestures: SessionGesture[] = [
-  { name: 'Move Up', icon: '/finger/MOVE UP.svg', fingers: 'Index' },
-  { name: 'Move Left', icon: '/finger/MOVELEFT.svg', fingers: 'Thumb' },
+  { name: 'Geser Atas', icon: '/finger/MOVE UP.svg', fingers: 'Telunjuk' },
+  { name: 'Geser Kiri', icon: '/finger/MOVELEFT.svg', fingers: 'Jempol' },
   {
-    name: 'Move Forward',
+    name: 'Maju',
     icon: '/finger/FORWARD.svg',
-    fingers: 'Index + Middle',
+    fingers: 'Telunjuk + Tengah',
   },
   {
-    name: 'Move Backward',
+    name: 'Mundur',
     icon: '/finger/BACKWARD.svg',
-    fingers: 'Thumb + Index',
+    fingers: 'Jempol + Telunjuk',
   },
   {
-    name: 'Move Right',
+    name: 'Geser Kanan',
     icon: '/finger/RIGHT.svg',
-    fingers: 'Index + Middle + Ring',
+    fingers: 'Telunjuk + Tengah + Manis',
   },
   {
-    name: 'Rotate CW',
+    name: 'Putar Kanan',
     icon: '/finger/ROTATECW.svg',
-    fingers: 'Thumb + Index + Middle',
+    fingers: 'Jempol + Telunjuk + Tengah',
   },
   {
-    name: 'Move Down',
+    name: 'Geser Bawah',
     icon: '/finger/DOWN.svg',
-    fingers: 'Index + Middle + Ring + Pinky',
+    fingers: 'Telunjuk + Tengah + Manis + Kelingking',
   },
-  { name: 'Stop', icon: '/finger/STOP.svg', fingers: 'Open hand' },
+  { name: 'Berhenti', icon: '/finger/STOP.svg', fingers: 'Telapak terbuka' },
   {
-    name: 'Rotate CCW',
+    name: 'Putar Kiri',
     icon: '/finger/ROTATECCW.svg',
-    fingers: 'Thumb + Index + Middle + Ring',
+    fingers: 'Jempol + Telunjuk + Tengah + Manis',
   },
-  { name: 'Stop', icon: '/finger/STOP2.svg', fingers: 'Fist (No finger)' },
+  { name: 'Berhenti', icon: '/finger/STOP2.svg', fingers: 'Kepalan (tanpa jari)' },
 ];

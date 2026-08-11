@@ -37,7 +37,7 @@ export default function OnScreenKeyboard({
   onEnter,
   onClose,
   enterLabel = 'Apply',
-  title = 'On-screen keyboard',
+  title = 'Keyboard layar',
   className,
 }: OnScreenKeyboardProps) {
   return (
@@ -57,7 +57,7 @@ export default function OnScreenKeyboard({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Close keyboard"
+          aria-label="Tutup keyboard"
           className={cn(KEY_BASE, 'gradient-primary border border-white/40 h-11 w-11')}
         >
           <X size={22} />
@@ -86,7 +86,7 @@ export default function OnScreenKeyboard({
             <button
               type="button"
               onClick={onBackspace}
-              aria-label="Backspace"
+              aria-label="Hapus"
               className={cn(
                 KEY_BASE,
                 'bg-blue-100/15 border border-blue-100/85 h-16 px-6',

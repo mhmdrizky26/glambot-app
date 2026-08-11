@@ -330,7 +330,7 @@ export default function PhotoEditorPage() {
             console.error('Failed to save composition:', error);
             unlatchForRetry();
             if (silent) navigateToSessionEnd();
-            else alert('Failed to save composition. Please try again.');
+            else alert('Gagal menyimpan hasil edit. Silakan coba lagi.');
           },
         },
       );
@@ -338,7 +338,7 @@ export default function PhotoEditorPage() {
       console.error('Export failed:', error);
       unlatchForRetry();
       if (silent) navigateToSessionEnd();
-      else alert('Failed to export composition. Please try again.');
+      else alert('Gagal mengekspor hasil edit. Silakan coba lagi.');
     }
   };
 
@@ -544,10 +544,10 @@ export default function PhotoEditorPage() {
             <button
               onClick={() => setIsOnboardingOpen(true)}
               className="w-full px-8 py-4 rounded-[19.28px] text-[#ffff] border-2 border-white/60 bg-blue-100/34 hover:border-white/80 font-bold text-[22px] flex items-center justify-center gap-6 cursor-pointer transition active:scale-95"
-              title="How to Use"
+              title="Cara Pakai"
             >
               <HelpCircle className="w-6 h-6" />
-              <span>How to Use</span>
+              <span>Cara Pakai</span>
             </button>
           </div>
           <div className="flex-1 min-w-0 flex justify-center">

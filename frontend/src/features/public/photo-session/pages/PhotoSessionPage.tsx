@@ -516,7 +516,7 @@ export function PhotoSessionPage() {
         {/* Kiri — Preview Camera */}
         <div className="flex flex-1 flex-col gap-3 min-h-0 min-w-0">
           <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0 text-left">
-            Preview Camera
+            Pratinjau Kamera
           </h2>
           {/* Frame ring biru dipindah ke wrapper ini (bukan di CameraPreview)
               karena `overflow-hidden` — yang dibutuhkan agar panel gesture ter-
@@ -571,7 +571,7 @@ export function PhotoSessionPage() {
                 di liveview). */}
             <div className="flex shrink-0 flex-col gap-3">
               <h2 className="text-primary font-medium text-2xl tracking-[0.47px]">
-                Gesture Detection
+                Deteksi Gerakan
               </h2>
               <div
                 className={cn(
@@ -582,7 +582,7 @@ export function PhotoSessionPage() {
                 {/* Label progress + persen */}
                 <div className="flex items-center justify-between">
                   <span className="text-base font-medium text-white/80">
-                    {isLockedPhase ? 'Unlock progress' : 'Gesture progress'}
+                    {isLockedPhase ? 'Proses membuka' : 'Proses gerakan'}
                   </span>
                   <span className="text-lg font-bold tabular-nums text-white">
                     {Math.round(detectionPercent)}%
@@ -602,7 +602,7 @@ export function PhotoSessionPage() {
 
                 {/* Info preset / gesture terdeteksi */}
                 <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/55">Detected</span>
+                  <span className="text-white/55">Terdeteksi</span>
                   <span className="font-medium text-white">
                     {robotActivePreset
                       ? `Preset ${robotActivePreset}`
@@ -619,7 +619,7 @@ export function PhotoSessionPage() {
                 ajakan unlock; setelah unlock baru tampilkan semua preset. */}
             <div className="flex min-h-0 flex-1 flex-col gap-3">
               <h2 className="text-primary font-medium text-2xl tracking-[0.47px] shrink-0">
-                Gesture Controls
+                Kontrol Gerakan
               </h2>
               <div
                 className={cn(
@@ -647,16 +647,16 @@ export function PhotoSessionPage() {
                      saja" (samakan dengan guideline di halaman intro). */
                   <div className="flex min-h-0 flex-1 flex-col items-center justify-between px-6 py-8 text-center">
                     <p className="text-2xl 2xl:text-3xl font-semibold text-white/85">
-                      Only one person’s hand at a time
+                      Cukup satu tangan dari satu orang
                     </p>
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={PRESET_GESTURES[4]?.icon ?? '/finger/STOP.svg'}
-                      alt="Open palm to unlock"
+                      alt="Telapak terbuka untuk membuka kunci"
                       className="h-56 w-56 2xl:h-64 2xl:w-64 object-contain"
                     />
                     <p className="text-2xl 2xl:text-3xl font-semibold text-white/85">
-                      Show this gesture to unlock
+                      Tunjukkan gerakan ini untuk memulai
                     </p>
                   </div>
                 ) : (
@@ -718,7 +718,7 @@ export function PhotoSessionPage() {
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center backdrop-blur-lg">
           <StatusAnimation status="processing" className="w-32 h-32" />
           <p className="mt-4 text-xl font-medium text-white/80 animate-pulse">
-            Preparing your photos...
+            Menyiapkan fotomu...
           </p>
         </div>
       )}

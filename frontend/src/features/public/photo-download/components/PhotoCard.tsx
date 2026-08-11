@@ -45,7 +45,7 @@ export function PhotoCard({
           {downloadState === 'idle' && (
             <button
               onClick={() => onDownload(photo)}
-              aria-label={`Download Photo ${index + 1}`}
+              aria-label={`Unduh Foto ${index + 1}`}
               className="min-w-11 min-h-11 flex items-center justify-center rounded-full bg-white/15 backdrop-blur-sm border border-white/30 text-white hover:bg-white/30 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/60"
             >
               <Download className="w-5 h-5" aria-hidden="true" />
@@ -55,7 +55,7 @@ export function PhotoCard({
           {downloadState === 'downloading' && (
             <div
               role="status"
-              aria-label="Downloading"
+              aria-label="Sedang mengunduh"
               className="min-w-11 min-h-11 flex items-center justify-center rounded-full bg-white/15 backdrop-blur-sm border border-white/30"
             >
               <Loader2
@@ -68,7 +68,7 @@ export function PhotoCard({
           {downloadState === 'done' && (
             <div
               role="status"
-              aria-label="Download complete"
+              aria-label="Unduhan selesai"
               className="min-w-11 min-h-11 flex items-center justify-center rounded-full bg-green-500/30 backdrop-blur-sm border border-green-400/50"
             >
               <CheckCircle

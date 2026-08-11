@@ -49,7 +49,7 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
             fill="currentColor"
           />
           <h1 className="text-[128px] font-bold bg-linear-to-tl gradient-text ">
-            Thank You!
+            Terima Kasih!
           </h1>
         </div>
 
@@ -58,10 +58,10 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
           {/* Text */}
           <div className="flex flex-col">
             <p className="text-primary text-2xl font-medium leading-relaxed">
-              Your photos are ready on Google Drive.
+              Fotomu sudah siap di Google Drive.
             </p>
             <p className="text-primary text-2xl font-medium leading-relaxed">
-              See you in the next session!
+              Sampai jumpa di sesi berikutnya!
             </p>
           </div>
 
@@ -70,11 +70,11 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
             {/* eslint-disable-next-line @next/next/no-img-element -- aset SVG statik lokal; app sengaja pakai <img> (lihat next.config images) */}
             <img
               src="/qr-d.svg"
-              alt="Scan Feedback"
+              alt="Pindai untuk beri masukan"
               className="w-17.5 h-17.5"
             />
             <span className="text-lg bg-linear-to-b gradient-text">
-              Scan <br /> Feedback
+              Pindai <br /> Masukan
             </span>
           </div>
         </div>
@@ -82,7 +82,7 @@ export function DoneScreen({ onSessionEnd, sessionId }: DoneScreenProps) {
         <div className="flex  gap-2 bg-primary/8 border border-primary/15 px-4 py-2 rounded-full">
           <CloudDownload size={14} className="text-primary/50" />
           <span className="text-[12px] text-primary/60 font-medium">
-            Drive link valid for 3 days
+            Link Drive berlaku 3 hari
           </span>
         </div>
       </div>

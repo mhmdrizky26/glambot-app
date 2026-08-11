@@ -85,6 +85,19 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT ''`,
 		`ALTER TABLE sessions ALTER COLUMN category SET DEFAULT ''`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS discount INTEGER NOT NULL DEFAULT 0`,
+		// Snapshot kode voucher di sesi. voucher_usage dihapus cleanup saat sesi
+		// expired, jadi riwayat transaksi admin kehilangan jejak vouchernya kalau
+		// hanya bergantung ke tabel itu. Backfill di bawah menyelamatkan sesi lama
+		// yang baris voucher_usage-nya masih ada (yang sudah ke-cleanup memang
+		// tidak bisa dipulihkan — datanya sudah hilang permanen).
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS voucher_code TEXT NOT NULL DEFAULT ''`,
+		`UPDATE sessions s SET voucher_code = COALESCE((
+		   SELECT vu.voucher_code FROM voucher_usage vu
+		   WHERE vu.session_id = s.id
+		   ORDER BY vu.used_at DESC LIMIT 1
+		 ), '')
+		 WHERE COALESCE(s.voucher_code, '') = ''
+		   AND EXISTS (SELECT 1 FROM voucher_usage vu2 WHERE vu2.session_id = s.id)`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS final_price INTEGER NOT NULL DEFAULT 0`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS print_count INTEGER NOT NULL DEFAULT 3`,
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()`,
@@ -141,6 +154,30 @@ func applyCompatibilityMigrations(db *DBWrapper) error {
 		`UPDATE packages SET print_unit_price = 15000
 		   WHERE code = 'vip'
 		     AND NOT EXISTS (SELECT 1 FROM packages WHERE print_unit_price <> 0)`,
+
+		// Halaman user kini berbahasa Indonesia, jadi nama & deskripsi paket
+		// (yang tampil di kartu pilih paket) ikut diterjemahkan. Seed di
+		// init.sql bersifat DO NOTHING sehingga TIDAK menyentuh DB yang sudah
+		// jalan — update ini yang mengurusnya.
+		// WHERE dibatasi ke teks bawaan versi Inggris → idempoten dan TIDAK
+		// menimpa nama yang sudah diubah admin lewat dashboard.
+		`UPDATE packages SET name = 'Paket Digital' WHERE code = 'regular' AND name = 'Digital Package'`,
+		`UPDATE packages SET name = 'Paket Cetak'   WHERE code = 'vip'     AND name = 'Print Package'`,
+		`UPDATE packages SET description = 'Foto HD & video gerak lambat langsung dikirim ke HP-mu lewat WhatsApp'
+		   WHERE code = 'regular'
+		     AND description = 'HD photos & slow-motion video delivered to your phone via WhatsApp'`,
+		`UPDATE packages SET description = 'Foto cetak dengan frame premium, sudah termasuk salinan digital'
+		   WHERE code = 'vip'
+		     AND description = 'Printed photos with premium frame & digital copies included'`,
+
+		// Pengiriman hasil TIDAK lagi lewat WhatsApp — user memindai QR lalu
+		// mengunduh dari Google Drive (lihat GetPhotosScreen). Deskripsi paket
+		// yang masih menjanjikan WhatsApp karena itu diperbarui. Dijalankan
+		// SETELAH update bahasa di atas supaya DB versi Inggris maupun yang
+		// sudah Indonesia sama-sama sampai ke teks yang benar.
+		`UPDATE packages SET description = 'Foto HD & video gerak lambat, tinggal pindai QR untuk unduh dari Google Drive'
+		   WHERE code = 'regular'
+		     AND description = 'Foto HD & video gerak lambat langsung dikirim ke HP-mu lewat WhatsApp'`,
 
 		// Frames: UI admin butuh frame_code, category, description, file_size.
 		`ALTER TABLE frames ADD COLUMN IF NOT EXISTS frame_code TEXT NOT NULL DEFAULT ''`,

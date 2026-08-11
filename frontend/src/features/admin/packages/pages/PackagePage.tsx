@@ -1,10 +1,8 @@
 'use client';
 
 import * as React from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useSearchParams } from 'next/navigation';
 import { useListQueryParam } from '@/lib/useListQueryParam';
-import { PlusCircleIcon } from 'lucide-react';
-import { Button } from '@/components/admin/ui/button';
 import { DataPagination } from '@/components/admin/shared/DataPagination';
 import { PackageTable } from '../components/PackageTable';
 import { PackageFilters } from '../components/PackageFilters';
@@ -19,7 +17,6 @@ import { useGetPackages } from '../api/getPackages';
 import { useGetPackageStats } from '../api/getPackageStats';
 
 export function PackagePage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
 
   const search = searchParams.get('search') ?? '';
@@ -62,6 +59,15 @@ export function PackagePage() {
   return (
     <div className="flex flex-1 flex-col gap-4 p-4 md:gap-6 md:p-6">
       {/* Header */}
+      {/* Tombol "Add Package" sengaja DIHILANGKAN. Sistem ini dirancang untuk
+          dua paket tetap — 'regular' (digital) dan 'vip' (print) — yang sudah
+          dibuat oleh seed. packages.code UNIQUE, sementara form hanya menyediakan
+          dua code itu, jadi create SELALU gagal duplicate key. Selain itu banyak
+          logika lain bergantung ke dua nilai tersebut (alur cetak di
+          PhotoSessionPage/GetPhotosScreen, packageCodeToType di backend, aset
+          gambar di public/package/getPackages). Paket dikelola lewat Edit saja.
+          Kalau nanti paket mau benar-benar dinamis, itu perubahan tersendiri:
+          code jadi bebas + kolom eksplisit pengganti cek `code === 'vip'`. */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-foreground text-xl leading-7 md:text-2xl">
@@ -71,14 +77,6 @@ export function PackagePage() {
             Manage photo packages, prices, <br /> and package content details
           </p>
         </div>
-
-        <Button
-          onClick={() => router.push('/packages/add-photo-package')}
-          className="gap-2 rounded-[8px] text-[16px] leading-6"
-        >
-          Add Package
-          <PlusCircleIcon className="size-4" />
-        </Button>
       </div>
 
       {/* Stat Cards */}

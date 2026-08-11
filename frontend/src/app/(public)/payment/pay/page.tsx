@@ -3,8 +3,8 @@ import type { Metadata } from 'next';
 import PayPage from '@/features/public/payment/pages/PayPage';
 
 export const metadata: Metadata = {
-  title: 'Payment',
-  description: 'Complete your payment via QRIS',
+  title: 'Pembayaran',
+  description: 'Selesaikan pembayaranmu lewat QRIS',
 };
 
 function PayFallback() {

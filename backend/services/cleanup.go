@@ -122,6 +122,9 @@ func cleanupSession(sessionID string) error {
 	// tidak dihapus (catatan keuangan; sesi cuma ditandai 'expired'). Yang
 	// dihapus hanya `photos` (file sudah dibuang di atas) dan `voucher_usage`
 	// — tak memengaruhi nominal, dan bikin voucher tetap bisa dihapus admin.
+	// Jejak voucher untuk riwayat transaksi TIDAK ikut hilang karena kodenya
+	// sudah di-snapshot ke sessions.voucher_code saat voucher dipakai; jangan
+	// balik lagi membaca voucher_usage untuk keperluan tampilan riwayat.
 	tx, err := database.DB.Begin()
 	if err != nil {
 		return err

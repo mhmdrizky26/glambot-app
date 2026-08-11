@@ -31,6 +31,14 @@ import { useAppConfig } from '@/shared/api/config';
  */
 const CUE_GAP_MS = 1000;
 
+/**
+ * Jeda diam sebelum step pindah sendiri, dihitung sejak tombol "Lanjut" muncul
+ * (yaitu setelah seluruh narasi step selesai). Ini kiosk: kalau tidak ada yang
+ * menekan tombol, alurnya tetap harus jalan. Menyentuh layar mengulang hitungan
+ * dari nol — selama user masih aktif, halaman tidak akan berpindah sendiri.
+ */
+const AUTO_NEXT_MS = 5000;
+
 const STEP_CUES: Record<
   InstructionStep['type'],
   { file: string; highlight?: InstructionHighlight }[]
@@ -102,6 +110,9 @@ export default function InstructionPage() {
   const [audioDone, setAudioDone] = useState(false);
   // Bagian kartu yang sedang disorot mengikuti narasi yang berbunyi.
   const [highlight, setHighlight] = useState<InstructionHighlight | null>(null);
+  // Dinaikkan tiap layar disentuh — dipakai HANYA sebagai pemicu ulang hitungan
+  // auto-lanjut di bawah (nilainya sendiri tidak dipakai).
+  const [touchNonce, setTouchNonce] = useState(0);
 
   // Panduan suara per step — rangkaian cue diputar berurutan saat masuk step
   // (keyed stepType).
@@ -152,6 +163,25 @@ export default function InstructionPage() {
     };
   }, [stepType]);
 
+  // Auto-lanjut step 1 & 2. Hitungan mulai saat `audioDone` naik (tombol
+  // "Lanjut" muncul), dan di-cleanup otomatis kalau step berganti duluan —
+  // baik karena user menekan tombol, menggeser layar, maupun auto-lanjut ini
+  // sendiri. `touchNonce` di deps membuat sentuhan apa pun mengulang hitungan.
+  //
+  // Step terakhir (gesture-controls) SENGAJA tidak ikut: tombolnya memulai sesi
+  // foto — robot mulai bergerak dan timer sesi jalan — jadi itu harus keputusan
+  // sadar user, bukan karena diam 5 detik. Batas waktu untuk step terakhir
+  // sudah dipegang <Timer instructionTimeoutSecs> di bawah.
+  useEffect(() => {
+    if (!audioDone || isLast) return;
+
+    const id = window.setTimeout(() => {
+      setCurrentStep((prev) => prev + 1);
+    }, AUTO_NEXT_MS);
+
+    return () => window.clearTimeout(id);
+  }, [audioDone, isLast, currentStep, touchNonce]);
+
   if (!sessionId) return null;
 
   const goToPhotoSession = () => {
@@ -177,6 +207,8 @@ export default function InstructionPage() {
   // Swipe left/right to navigate between steps
   const handleTouchStart = (e: React.TouchEvent) => {
     touchStartX.current = e.touches[0].clientX;
+    // User masih aktif → tunda auto-lanjut, mulai hitung 5 detik dari awal.
+    setTouchNonce((n) => n + 1);
   };
 
   const handleTouchEnd = (e: React.TouchEvent) => {
@@ -207,7 +239,7 @@ export default function InstructionPage() {
 
       <div className="text-center py-3.5">
         <h1 className="font-bold text-primary text-[62px]">
-          Intro & Safety Instruction
+          Panduan & Keselamatan
         </h1>
       </div>
 
@@ -220,7 +252,7 @@ export default function InstructionPage() {
           <GetReadyCard
             step={step}
             onNext={handleNext}
-            buttonLabel="Next →"
+            buttonLabel="Lanjut →"
             buttonReady={audioDone}
             sessionDurationMinutes={sessionDurationMinutes}
             highlight={highlight}
@@ -229,7 +261,7 @@ export default function InstructionPage() {
           <SafetyRulesCard
             step={step}
             onNext={handleNext}
-            buttonLabel="Next →"
+            buttonLabel="Lanjut →"
             buttonReady={audioDone}
             highlight={highlight}
           />
@@ -237,7 +269,7 @@ export default function InstructionPage() {
           <GestureControlsCard
             step={step}
             onNext={handleNext}
-            buttonLabel="Got it, Let's Go!"
+            buttonLabel="Paham, Ayo Mulai!"
             highlight={highlight}
           />
         )}

@@ -78,8 +78,15 @@ axiosInstance.interceptors.response.use(
         window.location.href = '/login';
       }
     }
+    // Backend membalas error di field `error` (models.ErrorResponse), bukan
+    // `message`. Tanpa fallback ini semua pesan backend tertelan dan user cuma
+    // lihat "Request failed with status code 500" dari axios.
+    const body = error.response?.data as
+      | { message?: string; error?: string }
+      | undefined;
     const message =
-      (error.response?.data as { message?: string })?.message ??
+      body?.message ??
+      body?.error ??
       error.message ??
       'An error occurred. Please try again.';
     const apiError = new Error(message);

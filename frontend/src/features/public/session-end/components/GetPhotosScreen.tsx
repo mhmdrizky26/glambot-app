@@ -239,7 +239,7 @@ export function GetPhotosScreen({
           <Lottie animationData={loadingAnimation} loop={true} />
         </div>
         <p className="text-primary/60 text-lg font-medium tracking-wide animate-pulse">
-          Processing your photos...
+          Memproses fotomu...
         </p>
       </div>
     );
@@ -258,10 +258,10 @@ export function GetPhotosScreen({
       <div className="w-full flex items-center justify-center pt-10 pb-2 relative px-10">
         <div className="text-center">
           <h1 className="text-primary text-[60px] font-bold ">
-            Get Your Photos
+            Ambil Fotomu
           </h1>
           <p className="text-primary text-2xl mt-2 leading-6.75">
-            Scan the QR code below to download all your photos
+            Pindai kode QR di bawah untuk mengunduh semua fotomu
           </p>
         </div>
       </div>
@@ -283,20 +283,20 @@ export function GetPhotosScreen({
             {isLiveStripAvailable ? (
               <GIFPreview
                 endpoint={`/api/photo/session/${sessionId}/gif-live`}
-                alt="Your live photo strip"
+                alt="Live photo strip milikmu"
                 aspectClass="aspect-[464/696]"
               />
             ) : framedStrip ? (
               /* eslint-disable-next-line @next/next/no-img-element */
               <img
                 src={framedStrip.url}
-                alt="Your photo strip"
+                alt="Photo strip milikmu"
                 className="w-full rounded-xl"
               />
             ) : (
               <GIFPreview
                 endpoint={`/api/photo/session/${sessionId}/gif`}
-                alt="Your live photos"
+                alt="Live photo milikmu"
                 aspectClass="aspect-[464/696]"
               />
             )}
@@ -306,11 +306,11 @@ export function GetPhotosScreen({
         {/* Right — QR Code panel + dev link */}
         <div className="flex flex-col items-center gap-3">
           <div className="bg-primary/80 backdrop-blur-xl rounded-2xl p-6 flex flex-col items-center justify-center gap-3 min-w-95 h-100">
-            <h2 className="text-white text-xl font-bold">Scan to download</h2>
+            <h2 className="text-white text-xl font-bold">Pindai untuk mengunduh</h2>
             <p className="text-white/60 text-xs text-center">
               {isPreparing
-                ? 'Preparing Google Drive link...'
-                : "Point your phone's camera at this QR code."}
+                ? 'Menyiapkan link Google Drive...'
+                : 'Arahkan kamera HP-mu ke kode QR ini.'}
             </p>
             <div className="rounded-xl p-3 bg-white">
               {qrValue ? (
@@ -319,7 +319,7 @@ export function GetPhotosScreen({
                   size={240}
                   level="M"
                   marginSize={2}
-                  aria-label={`QR Code for ${qrValue}`}
+                  aria-label={`Kode QR untuk ${qrValue}`}
                 />
               ) : (
                 <div className="w-60 h-60 bg-white/10 rounded animate-pulse" />
@@ -332,7 +332,7 @@ export function GetPhotosScreen({
             href={`/download-photos/${sessionId}`}
             className="text-primary underline text-sm font-medium hover:text-primary/70 transition-colors"
           >
-            Open Download Page
+            Buka Halaman Unduh
           </Link> */}
         </div>
       </div>

@@ -2,6 +2,12 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { axiosInstance } from '@/lib/api-admin';
 import { type Package, type BackendResponse, normalizePackage, type PackageCode, type PackageStatus } from './types';
 
+// CATATAN: `useCreatePackage` sudah TIDAK dipakai UI — halaman Create Package
+// dinonaktifkan karena sistem dirancang untuk dua paket tetap ('regular' &
+// 'vip') dan packages.code UNIQUE, jadi create selalu gagal duplicate key
+// (alasan lengkap di PackagePage.tsx). File ini tetap ada karena tipe
+// `CreatePackageInput` dipakai PackageForm & updatePackage, dan supaya fitur
+// create gampang dihidupkan lagi kalau paket nanti dibuat dinamis.
 export type CreatePackageInput = {
   name: string;
   description?: string;

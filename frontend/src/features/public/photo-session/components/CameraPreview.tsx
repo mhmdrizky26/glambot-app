@@ -225,7 +225,7 @@ export function CameraPreview({
       {showError || !hasContent ? (
         <div className="w-full h-full flex flex-col items-center justify-center gap-3">
           <p className="text-white/40 text-sm">
-            {errorMessage ?? 'Stream not available'}
+            {errorMessage ?? 'Video tidak tersedia'}
           </p>
           {onRetry && (
             <button

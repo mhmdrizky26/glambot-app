@@ -28,13 +28,13 @@ export default function Error({
           </svg>
         </div>
         <h1 className="text-3xl font-bold text-white mb-2">
-          Something went wrong
+          Terjadi kesalahan
         </h1>
         <p className="text-white/60 text-base mb-8">
-          {error.message || 'An unexpected error occurred. Please try again.'}
+          {error.message || 'Ada kendala tak terduga. Silakan coba lagi.'}
         </p>
         <Button onClick={reset} className="w-full">
-          Try Again
+          Coba Lagi
         </Button>
       </GlassCard>
     </main>

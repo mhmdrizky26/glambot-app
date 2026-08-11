@@ -32,7 +32,7 @@ export function useVoucher(sessionId: string) {
         });
       },
       onError: () => {
-        setMessage('Failed to apply voucher');
+        setMessage('Gagal memakai voucher');
         setIsValid(false);
         playBackendAudio('voucherGagal.mp3');
       },

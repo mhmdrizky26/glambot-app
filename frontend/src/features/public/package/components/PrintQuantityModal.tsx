@@ -68,12 +68,12 @@ export default function PrintQuantityModal({
 
           {/* Title */}
           <h2 className="text-[35px] font-bold text-white mb-2 leading-[52.5px]">
-            Number of Prints
+            Jumlah Cetak
           </h2>
 
           {/* Subtitle */}
           <p className="text-[18px] leading-7 text-blue-100 mb-10">
-            Each additional print: Rp {formatPriceToK(pricePerPrint)}
+            Setiap tambahan cetak: Rp {formatPriceToK(pricePerPrint)}
           </p>
 
           {/* Quantity Selector */}
@@ -117,7 +117,7 @@ export default function PrintQuantityModal({
             onClick={() => onConfirm(quantity)}
             disabled={isConfirming}
           >
-            {isConfirming ? 'Processing...' : 'Confirm'}
+            {isConfirming ? 'Memproses...' : 'Konfirmasi'}
           </Button>
         </div>
       </GlassCard>

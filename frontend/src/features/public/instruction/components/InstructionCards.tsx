@@ -127,7 +127,7 @@ function DurationRing({ minutes }: { minutes: number }) {
           {minutes}:00
         </span>
         <span className="mt-3 text-[16px] font-semibold uppercase tracking-[0.35em] text-white/45">
-          Duration
+          Durasi
         </span>
       </div>
     </div>
@@ -282,7 +282,7 @@ export function SafetyRulesCard({
             <div className="flex items-center justify-center gap-3 mb-4">
               <ShieldCheck size={28} className="text-blue-100 shrink-0" />
               <span className="text-[26px] font-bold leading-7 text-white">
-                Do
+                Boleh
               </span>
             </div>
             <div className="flex flex-col gap-3.5">
@@ -302,7 +302,7 @@ export function SafetyRulesCard({
             <div className="flex items-center justify-center gap-3 mb-4">
               <CircleAlert size={28} className="text-red-400 shrink-0" />
               <span className="text-[26px] font-bold leading-7 text-red-400">
-                Don&apos;t
+                Jangan
               </span>
             </div>
             <div className="flex flex-col gap-3.5">
@@ -394,7 +394,7 @@ export function GestureControlsCard({
         )}
       >
         <h3 className="text-[36px] font-bold leading-[1.15] text-white">
-          Camera Movement
+          Gerakan Kamera
         </h3>
 
         {/* Robot arm 3D dengan DSLR terpasang di flange-nya. Kamera ikut

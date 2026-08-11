@@ -198,6 +198,15 @@ func AdminCreatePackage(w http.ResponseWriter, r *http.Request) {
 		printCount, printUnitPrice, imageSrc, boolToInt(isPopular), boolToInt(status == "active"), status,
 	).Scan(&id)
 	if err != nil {
+		// packages.code UNIQUE dan sistem ini memang dirancang untuk dua paket
+		// tetap ('regular' & 'vip') yang sudah ada sejak seed — lihat catatan di
+		// PackagePage.tsx. Jadi create SELALU menabrak sini; balas pesan yang
+		// menjelaskan, bukan 500 generik yang bikin bingung.
+		if isPGError(err, pgUniqueViolation) {
+			respondConflict(w, "create package", err,
+				"Package type '"+code+"' sudah ada. Sistem hanya mendukung paket 'regular' dan 'vip' — silakan edit paket yang ada.")
+			return
+		}
 		respondInternal(w, "create package", err)
 		return
 	}
@@ -275,6 +284,12 @@ func AdminUpdatePackage(w http.ResponseWriter, r *http.Request) {
 		query := "UPDATE packages SET " + strings.Join(sets, ", ") + " WHERE id = ?"
 		args = append(args, id)
 		if _, err := database.DB.Exec(query, args...); err != nil {
+			// Ganti code ke nilai yang sudah dipakai paket lain.
+			if isPGError(err, pgUniqueViolation) {
+				respondConflict(w, "update package", err,
+					"Package type tersebut sudah dipakai paket lain.")
+				return
+			}
 			respondInternal(w, "update package", err)
 			return
 		}
@@ -297,7 +312,15 @@ func AdminUpdatePackage(w http.ResponseWriter, r *http.Request) {
 func AdminDeletePackage(w http.ResponseWriter, r *http.Request) {
 	id := chi.URLParam(r, "id")
 	if _, err := database.DB.Exec(`DELETE FROM packages WHERE id = ?`, id); err != nil {
-		respondError(w, http.StatusInternalServerError, "Gagal menghapus package")
+		// sessions.package_id mereferensi packages(id) tanpa ON DELETE, jadi
+		// paket yang sudah pernah dipakai sesi memang tidak bisa dihapus —
+		// itu justru menjaga riwayat transaksi tetap utuh.
+		if isPGError(err, pgForeignKeyViolation) {
+			respondConflict(w, "delete package", err,
+				"Paket ini sudah dipakai di sesi/transaksi, jadi tidak bisa dihapus. Ubah statusnya jadi Inactive kalau ingin disembunyikan dari user.")
+			return
+		}
+		respondInternal(w, "delete package", err)
 		return
 	}
 	respondJSON(w, http.StatusOK, map[string]any{"success": true})

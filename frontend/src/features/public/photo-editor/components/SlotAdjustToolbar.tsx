@@ -46,25 +46,25 @@ export default function SlotAdjustToolbar({
 }: SlotAdjustToolbarProps) {
   return (
     <div className="flex items-center gap-1 rounded-full border-2 border-white/75 bg-primary/75 px-2 py-1.5 shadow-[0px_5.38px_26.92px_0px_rgba(17,45,78,0.5)] backdrop-blur-md">
-      <ToolButton label="Zoom out" onClick={onZoomOut}>
+      <ToolButton label="Perkecil" onClick={onZoomOut}>
         <ZoomOut className="h-6 w-6" />
       </ToolButton>
-      <ToolButton label="Zoom in" onClick={onZoomIn}>
+      <ToolButton label="Perbesar" onClick={onZoomIn}>
         <ZoomIn className="h-6 w-6" />
       </ToolButton>
 
       <span className="mx-1 h-7 w-px bg-white/25" />
 
-      <ToolButton label="Rotate left" onClick={onRotateLeft}>
+      <ToolButton label="Putar kiri" onClick={onRotateLeft}>
         <RotateCcw className="h-6 w-6" />
       </ToolButton>
-      <ToolButton label="Rotate right" onClick={onRotateRight}>
+      <ToolButton label="Putar kanan" onClick={onRotateRight}>
         <RotateCw className="h-6 w-6" />
       </ToolButton>
 
       <span className="mx-1 h-7 w-px bg-white/25" />
 
-      <ToolButton label="Reset" onClick={onReset}>
+      <ToolButton label="Atur ulang" onClick={onReset}>
         <RefreshCw className="h-6 w-6" />
       </ToolButton>
     </div>
